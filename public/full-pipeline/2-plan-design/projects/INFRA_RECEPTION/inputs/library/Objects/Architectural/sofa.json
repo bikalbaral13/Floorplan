@@ -1,0 +1,583 @@
+{
+  "version": 1,
+  "id": "sofa-with-math",
+  "title": "Sofa (mesh) — flared roll arms, piped box cushions, reclining back cushions, pillows",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Sofa",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 18v-2",
+        "M20 18v-2",
+        "M3 16h18v-4a2 2 0 00-2-2H5a2 2 0 00-2 2z",
+        "M6 10V7a2 2 0 012-2h8a2 2 0 012 2v3",
+        "M12 5v5"
+      ]
+    }
+  },
+  "description": "A parametric UPHOLSTERED SOFA on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE, A SEGMENT OR A SPACE. Against a wall segment the sofa takes the wall's direction and the BACK faces it; Flip side swaps which way it looks. At rotation 0 the back is at +y.\n\nWHAT IT BUILDS. A split upholstered base (one deck per seat, with a seam between), two flared pillow-top arms, a back frame, piped box seat cushions, plump piped back cushions reclining against the frame, a pillow propped in each arm corner, printed scatter cushions, and low dark block feet. Nine mesh rows, three materials: grey chenille, a teal-and-cream print on the scatter cushions, walnut on the feet.\n\nEVERY CUSHION IS ONE ROW OF A TABLE AND ONE GENERATOR. A cushion is a superellipse face outline carried along its thickness axis. A BOX cushion has a straight boxing strip between two domed faces and is piped on both seams; a KNIFE cushion has no strip, just two domes meeting at one seam. Each row carries its own frame as two angles: the direction its face looks in plan, and how far it leans back from vertical. So a seat lying flat, a back cushion reclining 13 degrees and a pillow propped at 28 degrees in a corner are the same code with different numbers. Scatter cushions are each turned a few degrees off square, because identical yaw on every pillow is as obvious as having none.\n\nTHE ARMS FLARE. Each arm is an eased, pillow-topped soft box, then sheared so only its OUTER face moves outward with height while the inner face stays plumb against the seat. That flare is the whole silhouette of a roll-arm sofa seen from the front.\n\nPIPING is a small circle swept along each seam outline, pushed a little outward along the outline's own normal, so it sits on the seam rather than inside the cushion.\n\nONE DETAIL DIAL sets every sample count: Blocky / Medium / Fine / Smooth. Edge character sets how round the cushion faces and arm tops are.\n\nDIMENSIONS AT THE DEFAULTS: 2.19 × 0.95 m including the arm flare, seat at 0.47 m, arms at 0.63 m, back cushions to 0.90 m.\n\nWHAT THIS CANNOT DO. Cushions are ideal soft solids, not simulated cloth: no creases where someone sat. The scatter print is a procedural material, not a specific textile design. Feet are blocks, not turned legs.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Overall length",
+              "type": "range",
+              "value": 2.15,
+              "min": 1.2,
+              "max": 3.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Overall depth",
+              "type": "range",
+              "value": 0.95,
+              "min": 0.75,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "seatHeight",
+              "name": "Seat height (top of cushion)",
+              "type": "range",
+              "value": 0.47,
+              "min": 0.38,
+              "max": 0.55,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "cushionThk",
+              "name": "Seat cushion thickness",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.08,
+              "max": 0.24,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "seats",
+              "name": "Seat cushions",
+              "type": "range",
+              "value": 2,
+              "min": 1,
+              "max": 5,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "armWidth",
+              "name": "Arm width (0 = armless)",
+              "type": "range",
+              "value": 0.22,
+              "min": 0,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "armTop",
+              "name": "Arm height (from floor)",
+              "type": "range",
+              "value": 0.63,
+              "min": 0.5,
+              "max": 0.8,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "armFlare",
+              "name": "Arm flare at the top",
+              "type": "range",
+              "value": 0.035,
+              "min": 0,
+              "max": 0.08,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "backDepth",
+              "name": "Back frame depth",
+              "type": "range",
+              "value": 0.2,
+              "min": 0.1,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backFrameTop",
+              "name": "Back frame height (from floor)",
+              "type": "range",
+              "value": 0.74,
+              "min": 0.55,
+              "max": 0.95,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backCushions",
+              "name": "Back cushions",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "backTop",
+              "name": "Back cushion top (from floor)",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.7,
+              "max": 1.1,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backCushionThk",
+              "name": "Back cushion thickness",
+              "type": "range",
+              "value": 0.2,
+              "min": 0.1,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backLean",
+              "name": "Back cushion lean (deg)",
+              "type": "range",
+              "value": 13,
+              "min": 0,
+              "max": 25,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "armPillows",
+              "name": "Pillows in the arm corners",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "scatterCushions",
+              "name": "Scatter cushions",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 4,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "scatterSize",
+              "name": "Scatter cushion size",
+              "type": "range",
+              "value": 0.45,
+              "min": 0.3,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "piping",
+              "name": "Piping on cushion seams",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "pipingDia",
+              "name": "Piping diameter (m)",
+              "type": "range",
+              "value": 0.008,
+              "min": 0.004,
+              "max": 0.016,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "legHeight",
+              "name": "Foot height",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 0.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Plump",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "mid-grey chenille upholstery with self piping, teal and cream abstract-print scatter cushions, dark walnut block feet",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "large contemporary two-seat sofa, flared pillow-top arms, split upholstered base, piped box cushions, plump reclining back cushions, arm pillows, patterned scatter cushions",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Fabric/chenille-grey.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Scatter=Fabric/print-teal.json; Legs=Finishes/walnut.json; *=Fabric/chenille-grey.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "SOFA — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\nlarge contemporary two-seat sofa, flared pillow-top arms, split upholstered base, piped box cushions, plump reclining back cushions, arm pillows, patterned scatter cushions\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Overall length: {length}\n- Overall depth: {depth}\n- Seat height (top of cushion): {seatHeight}\n- Seat cushion thickness: {cushionThk}\n- Seat cushions: {seats}\n- Arm width (0 = armless): {armWidth}\n- Arm height (from floor): {armTop}\n- Arm flare at the top: {armFlare}\n- Back frame depth: {backDepth}\n- Back frame height (from floor): {backFrameTop}\n- Back cushions: {backCushions}\n- Back cushion top (from floor): {backTop}\n- Back cushion thickness: {backCushionThk}\n- Back cushion lean (deg): {backLean}\n- Pillows in the arm corners: {armPillows}\n- Scatter cushions: {scatterCushions}\n- Scatter cushion size: {scatterSize}\n- Piping on cushion seams: {piping}\n- Piping diameter (m): {pipingDia}\n- Foot height: {legHeight}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Overall length = {length}\n- Overall depth = {depth}\n- Seat height (top of cushion) = {seatHeight}\n- Arm width (0 = armless) = {armWidth}\n- Back frame depth = {backDepth}\n- Scatter cushion size = {scatterSize}\n- Foot height = {legHeight}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame",
+              "color": "#8f8b86",
+              "layer": "Sofa",
+              "show": true
+            },
+            {
+              "id": "p2_arms",
+              "kind": "polygon",
+              "name": "Arms",
+              "color": "#9a9691",
+              "layer": "Sofa",
+              "show": true
+            },
+            {
+              "id": "p2_seat",
+              "kind": "polygon",
+              "name": "Seat cushions",
+              "color": "#a8a49f",
+              "layer": "Sofa",
+              "show": true
+            },
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Back",
+              "color": "#9a9691",
+              "layer": "Sofa",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_base",
+              "kind": "polyhedron",
+              "name": "Base",
+              "color": "#9a9691",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_arms",
+              "kind": "polyhedron",
+              "name": "Arms",
+              "color": "#9d9994",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_backframe",
+              "kind": "polyhedron",
+              "name": "Back frame",
+              "color": "#96928d",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_seat",
+              "kind": "polyhedron",
+              "name": "Seat cushions",
+              "color": "#a3a09b",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Back cushions",
+              "color": "#a09c97",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_armpillows",
+              "kind": "polyhedron",
+              "name": "Arm pillows",
+              "color": "#a6a29d",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_scatter",
+              "kind": "polyhedron",
+              "name": "Scatter cushions",
+              "color": "#2f5d62",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_piping",
+              "kind": "polyhedron",
+              "name": "Piping",
+              "color": "#8e8a85",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#3b2f27",
+              "layer": "Sofa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

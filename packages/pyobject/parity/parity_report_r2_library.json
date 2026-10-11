@@ -1,0 +1,26 @@
+{
+ "source": "R2 library/Objects (151 files, 138 six-node objects), 2026-10-11",
+ "cases": 2660,
+ "identical": 124,
+ "differ": {},
+ "refused": {
+  "Architectural/BOQ generator.v3.json": "not a spine object",
+  "Architectural/detect_all.json": "decode/encode block",
+  "Architectural/detect_boundary.json": "decode/encode block",
+  "Architectural/detect_doors.json": "decode/encode block",
+  "Architectural/detect_objects.json": "decode/encode block",
+  "Architectural/detect_rooms.json": "decode/encode block",
+  "Architectural/detect_walls.json": "decode/encode block",
+  "Architectural/detect_windows.json": "decode/encode block",
+  "Architectural/exterior-context.json": "canvas host (needs the picture / the whole drawing)",
+  "Architectural/ink-coverage.json": "image host (needs the picture / the whole drawing)",
+  "Architectural/plant.json": "unported: bezier",
+  "Architectural/render-look.json": "canvas host (needs the picture / the whole drawing)",
+  "Architectural/tessellation.json": "unported: intersect",
+  "Furniture/piano.json": "unported: mcyl",
+  "Miscellaneous/bansuri.json": "not a spine object",
+  "Site/plot-divider.json": "unported: msubtract"
+ },
+ "tolerance_m": 1e-06,
+ "max_cases_per_object": 24
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "wood.oak.plank-light",
+  "title": "Wood — pale oak plank floor",
+  "description": "Default floor for living rooms and bedrooms: pale, matt-lacquered oak in 180 mm planks with staggered end joints — the light Scandinavian floor of contemporary residential visualisation.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "X",
+      "waveProfile": "SIN",
+      "scale": 3.0,
+      "distortion": 9,
+      "detail": 3,
+      "detailScale": 1.1,
+      "detailRoughness": 0.5,
+      "phaseOffset": 0,
+      "colorA": "#ddc8a6",
+      "colorB": "#c9b08a",
+      "plankWidth": 0.18
+    }
+  },
+  "pbr": {
+    "baseColor": "#d5bf9b",
+    "roughness": 0.48,
+    "metallic": 0
+  },
+  "surface": {
+    "grain": {
+      "axis": "u",
+      "rotationDeg": 0,
+      "scaleU": 1,
+      "scaleV": 0.3
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.25,
+      "scale": 1
+    },
+    "coat": {
+      "weight": 0.15,
+      "roughness": 0.25,
+      "ior": 1.5
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#d5bf9b"
+  },
+  "dxf": {
+    "pattern": "AR-RROOF",
+    "scale": 0.5,
+    "angle": 0
+  }
+}

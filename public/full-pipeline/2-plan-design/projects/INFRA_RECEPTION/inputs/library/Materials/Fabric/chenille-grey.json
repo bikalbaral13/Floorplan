@@ -1,0 +1,54 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.chenille.grey",
+  "title": "Fabric — chenille, mid grey",
+  "description": "Soft crushed-pile chenille upholstery. A centimetre-scale noise gives the mottled light-and-dark patches a chenille shows where the pile lies in different directions; the silvery sheen is most of what reads as chenille rather than flat felt, which is why sheen carries more weight than the base colour here.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 90,
+      "detail": 6,
+      "roughness": 0.62,
+      "distortion": 0.8,
+      "colorA": "#8a8782",
+      "colorB": "#b0aca6"
+    }
+  },
+  "pbr": {
+    "baseColor": "#9d9994",
+    "roughness": 0.9,
+    "metallic": 0,
+    "sheen": 0.6,
+    "sheenTint": "#e6e4e0"
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.8,
+      "roughness": 0.3,
+      "tint": "#e8e8e8"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.6,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.08,
+      "scale": 30
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#9d9994"
+  },
+  "dxf": {
+    "pattern": "HOUND",
+    "scale": 0.05,
+    "angle": 0
+  }
+}

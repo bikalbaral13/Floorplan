@@ -1,5 +1,5 @@
 """Pipeline locations. A pipeline's root is the folder holding the PIPELINE_ROOT marker."""
-import json, os
+import hashlib, json, os
 
 def find_root(start, marker="PIPELINE_ROOT"):
     d = os.path.abspath(start)
@@ -14,11 +14,43 @@ def load_json(p, default=None):
         raise FileNotFoundError(p)
     with open(p, encoding="utf-8") as f: return json.load(f)
 
-def save_json(p, data, compact=False):
+def check_writable(p):
+    """Project inputs are read-only: refuse a write anywhere under projects/<CODE>/inputs/."""
+    parts = os.path.normpath(os.path.abspath(p)).split(os.sep)
+    if "projects" in parts:
+        i = len(parts) - 1 - parts[::-1].index("projects")
+        if len(parts) > i + 2 and parts[i + 2] == "inputs":
+            raise PermissionError(f"{p} is inside inputs/ (read-only). Write to the work dir or output/ instead.")
+
+def save_json(p, data, compact=False, newline=False, guard=False):
+    """newline: end the file with \n · guard: refuse writes into a project's inputs/ (check_writable)."""
+    if guard: check_writable(p)
     os.makedirs(os.path.dirname(os.path.abspath(p)), exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=None if compact else 1, separators=(",", ":") if compact else None)
+        if newline: f.write("\n")
     return p
+
+def save_text(p, text, guard=False):
+    if guard: check_writable(p)
+    os.makedirs(os.path.dirname(os.path.abspath(p)), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f: f.write(text)
+    return p
+
+def sha256(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""): h.update(chunk)
+    return h.hexdigest()
+
+def inputs_snapshot(pdir, sub="inputs"):
+    """{relative path: sha256} of every file under <pdir>/inputs (except .keep)."""
+    base = os.path.join(pdir, sub); out = {}
+    for dp, _, fs in os.walk(base):
+        for f in sorted(fs):
+            if f == ".keep": continue
+            full = os.path.join(dp, f); out[os.path.relpath(full, base).replace(os.sep, "/")] = sha256(full)
+    return dict(sorted(out.items()))
 
 class Layout:
     """Where a pipeline keeps things. `work_default` is the work dir used when project.json has no work_dir

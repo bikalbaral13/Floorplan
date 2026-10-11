@@ -1,0 +1,144 @@
+{
+ "schema": "standards/1",
+ "id": "DEFAULT",
+ "version": "1.0.0",
+ "date": "2026-10-06",
+ "about": "Firm-wide conventions used when a source is silent. Values used from here are tagged src=convention by the pipelines and listed in their reports. A project picks a set (project.json → standards); a set may 'extends' another and override keys. NOT authority rules — those are in library/Rules/.",
+ "units": "metres unless the key says otherwise",
+ "frames": {
+  "world": "X east, Y north, Z up; metres",
+  "asset": "built at the origin, Z up, front toward -Y",
+  "canvas": "pixels at settings.pixelsPerMeter, y DOWN (y_canvas = -Y·ppm)",
+  "rotation_rot_z": {
+   "S": 0,
+   "E": 90,
+   "N": 180,
+   "W": 270
+  },
+  "_src": "interior AGENTS.md §2, exterior AGENTS.md §2, tracer core/model.py"
+ },
+ "walls": {
+  "outer_t": 0.2286,
+  "inner_t": 0.1016,
+  "height": 2.7,
+  "_note": "9in outer, 4in inner",
+  "_src": "tracer standards/DEFAULT.json (Scribble skill defaults)"
+ },
+ "levels": {
+  "floor_to_floor": 3.0,
+  "ground_floor_plinth": 0.45,
+  "_src": "tracer DEFAULT + exterior RMD_EXT project.json"
+ },
+ "openings": {
+  "door_head": 2.1,
+  "door_leaf": 0.9,
+  "double_leaf_min": 1.2,
+  "window_sill": 0.9,
+  "toilet_ventilator_sill": 1.5,
+  "_src": "tracer DEFAULT"
+ },
+ "columns": {
+  "size": 0.3048,
+  "_note": "12in",
+  "_src": "tracer DEFAULT"
+ },
+ "stairs": {
+  "riser_target": 0.17,
+  "tread": 0.25,
+  "split": "dog-leg risers split evenly",
+  "fill_min": 0.85,
+  "_src": "tracer DEFAULT + Scribble skill place-staircase"
+ },
+ "ground_levels": {
+  "terrain": -0.06,
+  "terrain_roughness": 0.025,
+  "road": 0.0,
+  "yard": 0.12,
+  "kerb": 0.15,
+  "plot": 0.15,
+  "paving": 0.16,
+  "deck_top_over_basement": -0.2,
+  "_rule": "strictly ordered terrain < road < yard < kerb = plot < paving so no two surfaces z-fight",
+  "_src": "exterior RMD_EXT project.json → site.ground"
+ },
+ "set_out": {
+  "round": "1in",
+  "_src": "tracer DEFAULT"
+ },
+ "objects": {
+  "DOOR_HINGED": {
+   "width_ft": 3
+  },
+  "STAIR_DOGLEG": {
+   "max_riser_in": 7.5,
+   "tread_in": 10,
+   "flight_width_ft": 3
+  },
+  "_src": "program_pipeline standards (DEFAULT empty; values = typology defaults)"
+ },
+ "fixture_backs": {
+  "_about": "canvas-library rotation tables — backs MEASURED from baked footprints at rotation 0 (Floorplan Improver bake table). Only measured kinds belong here; others export with their raw rotation.",
+  "BACK": {
+   "bed": "-x",
+   "toilet": "-x",
+   "chair": "-x",
+   "washbasin": "-y",
+   "armchair": "-y",
+   "wardrobe": "+y",
+   "tv-unit": "+y",
+   "nightstand": "+y",
+   "sofa": "+y",
+   "cabinet": "+y",
+   "kitchen-sink": "+y",
+   "stove": "+y",
+   "refrigerator": "+y"
+  },
+  "TURN": {
+   "-x": {
+    "W": 0,
+    "N": 90,
+    "E": 180,
+    "S": 270
+   },
+   "-y": {
+    "N": 0,
+    "E": 90,
+    "S": 180,
+    "W": 270
+   },
+   "+y": {
+    "S": 0,
+    "W": 90,
+    "N": 180,
+    "E": 270
+   }
+  },
+  "_src": "canvas library rotation tables — measured backs (Floorplan Improver bake table); used by every canvas reader/writer"
+ },
+ "symbol_legend": {
+  "_source": "Floorplan Tracer skill — Indian developer brochure plans",
+  "striped rectangle on a wall": "wardrobe",
+  "rectangle with a V on a wall": "tv-unit",
+  "narrow rectangle with one diagonal": "dressing-table mirror (+ table, stool)",
+  "box with a dashed X": "duct / service shaft (a SPACE, not furniture)",
+  "circle beside a bed": "nightstand",
+  "oval in a white counter": "washbasin",
+  "four small circles in a counter": "stove (hob)",
+  "hatched square in a counter": "kitchen-sink",
+  "square with a smaller square inside (utility)": "washing-machine",
+  "quarter arc + leaf line": "hinged door (hinge = arc centre, swing = arc side)",
+  "two parallel thin lines in a wide gap, no arc": "sliding door (glazed)",
+  "thin double / triple line in an exterior wall": "window",
+  "small squares at junctions (sketch)": "columns — count the grid lines, not the squares",
+  "box with an arrow through it (sketch)": "stair, arrow = up"
+ },
+ "mesh_quality": {
+  "closed_solids": true,
+  "no_welding_between_touching_solids": true,
+  "uv0": "real-world, 1 unit = 1 m",
+  "uv1": "Smart UV lightmap, one 0–1 square per mesh",
+  "no_materials_in_geometry": true,
+  "mirror": "mirrored prototype, never negative scale",
+  "_src": "interior + exterior AGENTS.md §3"
+ }
+}

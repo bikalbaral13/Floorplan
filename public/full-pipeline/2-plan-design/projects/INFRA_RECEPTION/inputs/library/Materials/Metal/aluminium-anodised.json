@@ -1,0 +1,43 @@
+{
+  "schema": "material/1",
+  "category": "Metal",
+  "id": "metal.aluminium.anodised",
+  "title": "Metal — anodised aluminium",
+  "description": "LED channels, trims, track. Anodising is an oxide layer, not a paint: the metal stays metal and the finish is a fine directional satin, which is why this is metallic 1 with anisotropy rather than a grey powder coat.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "pbr": {
+    "baseColor": "#9fa4a8",
+    "roughness": 0.3,
+    "metallic": 1
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0005,
+      "samples": 4
+    },
+    "anisotropy": {
+      "strength": 0.6,
+      "rotationDeg": 0
+    },
+    "roughnessVariation": {
+      "amount": 0.04,
+      "scale": 45
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#9fa4a8"
+  },
+  "dxf": {
+    "pattern": "TRANS",
+    "scale": 1,
+    "angle": 0
+  }
+}

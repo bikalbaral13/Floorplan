@@ -1,0 +1,56 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "paint.eggshell",
+  "title": "Paint — eggshell on joinery",
+  "description": "Painted woodwork, which is NOT the same as a plastered wall even at the same colour. Paint on timber is flatter, slightly glossier and has a soft arris from the brush; plaster has tooth and a wider roughness spread. Reusing plaster for joinery is why painted doors read as drywall.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 60,
+      "detail": 3,
+      "roughness": 0.4,
+      "distortion": 0.2,
+      "colorA": "#f0ece5",
+      "colorB": "#e6e1d8"
+    }
+  },
+  "pbr": {
+    "baseColor": "#ebe7df",
+    "roughness": 0.38,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0018,
+      "samples": 4
+    },
+    "coat": {
+      "weight": 0.25,
+      "roughness": 0.12,
+      "ior": 1.5
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.12,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 16
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#ebe7df"
+  },
+  "dxf": {
+    "pattern": "TRANS",
+    "scale": 1,
+    "angle": 0
+  }
+}

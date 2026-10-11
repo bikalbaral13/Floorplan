@@ -1,0 +1,61 @@
+{
+  "schema": "material/1",
+  "category": "Metal",
+  "id": "metal.brass",
+  "title": "Metal — brushed brass",
+  "description": "Pulls, end caps, a pendant shade. The brushing is a fine wave along X feeding the colour, not the roughness — a roughness-anisotropy pass would be more correct and is invisible at every distance this library renders at.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "X",
+      "waveProfile": "SAW",
+      "scale": 900,
+      "distortion": 1.5,
+      "detail": 2,
+      "detailScale": 1,
+      "detailRoughness": 0.5,
+      "phaseOffset": 0,
+      "colorA": "#c9a45b",
+      "colorB": "#a9853f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#b08d57",
+    "roughness": 0.29,
+    "metallic": 1
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0008,
+      "samples": 4
+    },
+    "anisotropy": {
+      "strength": 0.55,
+      "rotationDeg": 0
+    },
+    "grain": {
+      "axis": "u",
+      "rotationDeg": 0,
+      "scaleU": 1,
+      "scaleV": 0.06
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 30
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 3,
+    "angle": 45,
+    "weight": 1,
+    "color": "#b08d57"
+  },
+  "dxf": {
+    "pattern": "BRASS",
+    "scale": 1,
+    "angle": 0
+  }
+}

@@ -1,0 +1,385 @@
+{
+ "id": "TOWNHOME_RENTAL",
+ "version": "0.2.0",
+ "title": "Town home rentals: 4 ground-floor units with a central open court and staircase",
+ "frame": "Feet. Site frame: x east from the west plot edge, y south from the road (north) edge. Planning depth = shorter of the west and east sides.",
+ "road_sides_supported": [
+  "N"
+ ],
+ "unit_count": 4,
+ "facings": [
+  "North",
+  "East"
+ ],
+ "applicability": {
+  "plot_width_ft": [
+   24,
+   60
+  ],
+  "plot_depth_ft": [
+   70,
+   160
+  ],
+  "_note": "4 units side by side need >= ~24 ft net width; stacked options need ~70 ft depth for 4 units plus court"
+ },
+ "planner": "planner/town_home_rental_planner.html",
+ "planner_fixed": [],
+ "objects": {
+  "stair": {
+   "object": "STAIR_DOGLEG",
+   "version": "0.1.0",
+   "params": {
+    "floor_height_ft": "floor_height_ft",
+    "max_riser_in": "max_riser_in",
+    "tread_in": "tread_in",
+    "flight_width_ft": "flight_width_ft",
+    "direction": "stair_first_flight",
+    "turn": "stair_turn"
+   }
+  },
+  "door": {
+   "object": "DOOR_HINGED",
+   "version": "0.1.0",
+   "instances": 4,
+   "params": {
+    "width_ft": "door_width_ft",
+    "position_pct": "door{n}_pct"
+   }
+  }
+ },
+ "parameters": {
+  "option": {
+   "type": "choice",
+   "default": "A",
+   "options": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J"
+   ],
+   "label": "Layout option"
+  },
+  "plot_width_ft": {
+   "type": "number",
+   "default": 36,
+   "min": 20,
+   "max": 60,
+   "unit": "ft",
+   "label": "Plot width (road frontage)"
+  },
+  "plot_west_ft": {
+   "type": "number",
+   "default": 106,
+   "min": 40,
+   "max": 160,
+   "unit": "ft",
+   "label": "West side length"
+  },
+  "plot_east_ft": {
+   "type": "number",
+   "default": 105.5,
+   "min": 40,
+   "max": 160,
+   "unit": "ft",
+   "label": "East side length"
+  },
+  "setback_west_ft": {
+   "type": "number",
+   "default": 0,
+   "min": 0,
+   "max": 6,
+   "unit": "ft",
+   "label": "West setback (0 or 3-6)"
+  },
+  "setback_east_ft": {
+   "type": "number",
+   "default": 6,
+   "min": 0,
+   "max": 6,
+   "unit": "ft",
+   "label": "East setback (0 or 3-6)"
+  },
+  "setback_front_ft": {
+   "type": "number",
+   "default": 10,
+   "min": 5,
+   "max": 20,
+   "unit": "ft",
+   "label": "Front setback (road side)"
+  },
+  "setback_rear_ft": {
+   "type": "number",
+   "default": 5,
+   "min": 3,
+   "max": 10,
+   "unit": "ft",
+   "label": "Rear setback"
+  },
+  "court_ft": {
+   "type": "number",
+   "default": 12,
+   "min": 0,
+   "max": 20,
+   "unit": "ft",
+   "label": "Central court depth"
+  },
+  "front_share_pct": {
+   "type": "number",
+   "default": 50,
+   "min": 35,
+   "max": 65,
+   "unit": "%",
+   "label": "Front row share of the unit depth"
+  },
+  "passage_ft": {
+   "type": "number",
+   "default": 4,
+   "min": 3,
+   "max": 6,
+   "unit": "ft",
+   "label": "Passage width (options B, G, H, I)"
+  },
+  "floor_height_ft": {
+   "from_object": "stair.floor_height_ft",
+   "label": "Floor-to-floor height"
+  },
+  "max_riser_in": {
+   "from_object": "stair.max_riser_in",
+   "label": "Maximum riser"
+  },
+  "tread_in": {
+   "from_object": "stair.tread_in",
+   "label": "Tread"
+  },
+  "flight_width_ft": {
+   "from_object": "stair.flight_width_ft",
+   "label": "Flight width"
+  },
+  "stair_position": {
+   "type": "choice",
+   "default": "E",
+   "options": [
+    "W",
+    "C",
+    "E"
+   ],
+   "label": "Stair position in the court"
+  },
+  "stair_first_flight": {
+   "from_object": "stair.direction",
+   "label": "First flight goes up towards"
+  },
+  "stair_turn": {
+   "from_object": "stair.turn",
+   "label": "Turn at landing"
+  },
+  "door1_pct": {
+   "from_object": "door.position_pct",
+   "label": "Unit 1 door position"
+  },
+  "door2_pct": {
+   "from_object": "door.position_pct",
+   "label": "Unit 2 door position"
+  },
+  "door3_pct": {
+   "from_object": "door.position_pct",
+   "label": "Unit 3 door position"
+  },
+  "door4_pct": {
+   "from_object": "door.position_pct",
+   "label": "Unit 4 door position"
+  },
+  "door_width_ft": {
+   "from_object": "door.width_ft",
+   "label": "Entrance door width"
+  },
+  "drawing_north": {
+   "type": "choice",
+   "default": "up",
+   "options": [
+    "up",
+    "down"
+   ],
+   "label": "Drawing orientation (presentation only)"
+  }
+ },
+ "site_params": {
+  "plot_width_ft": "width_ft",
+  "plot_west_ft": "west_ft",
+  "plot_east_ft": "east_ft"
+ },
+ "rule_params": {
+  "setback_front_ft": {
+   "min": "front_setback_min_ft"
+  },
+  "setback_rear_ft": {
+   "min": "rear_setback_min_ft"
+  },
+  "passage_ft": {
+   "min": "passage_min_ft"
+  },
+  "max_riser_in": {
+   "max": "stair_max_riser_in"
+  },
+  "tread_in": {
+   "min": "stair_min_tread_in"
+  },
+  "flight_width_ft": {
+   "min": "stair_min_flight_ft"
+  },
+  "door_width_ft": {
+   "min": "door_min_width_ft"
+  }
+ },
+ "options": {
+  "A": {
+   "title": "2 + 2, side lane",
+   "facing": "All north facing. Rear pair opens onto the court",
+   "units": "NNNN",
+   "needs": [
+    "court"
+   ]
+  },
+  "B": {
+   "title": "2 + 2, front passage",
+   "facing": "All north facing. Passage between front units to the court",
+   "units": "NNNN",
+   "needs": [
+    "court"
+   ]
+  },
+  "C": {
+   "title": "4 stacked",
+   "facing": "All east facing on the east lane",
+   "units": "EEEE",
+   "needs": [
+    "east_lane"
+   ]
+  },
+  "D": {
+   "title": "1 + 3 stacked",
+   "facing": "Unit 1 north facing, units 2 to 4 east facing",
+   "units": "NEEE",
+   "needs": [
+    "east_lane"
+   ]
+  },
+  "E": {
+   "title": "2 front + 2 stacked rear",
+   "facing": "Front pair north, rear pair east facing",
+   "units": "NNEE",
+   "needs": [
+    "east_lane"
+   ]
+  },
+  "F": {
+   "title": "2 stacked front + 2 rear",
+   "facing": "Front pair east, rear pair north onto the court",
+   "units": "EENN",
+   "needs": [
+    "east_lane",
+    "court"
+   ]
+  },
+  "G": {
+   "title": "Twin columns, spine passage",
+   "facing": "All east facing, west column on a central passage",
+   "units": "EEEE",
+   "needs": [
+    "east_lane"
+   ]
+  },
+  "H": {
+   "title": "2 front + rear twins",
+   "facing": "Front pair north, rear pair east on a rear passage",
+   "units": "NNEE",
+   "needs": [
+    "east_lane"
+   ]
+  },
+  "I": {
+   "title": "Stacked front + rear twins",
+   "facing": "All east facing, rear passage off the court",
+   "units": "EEEE",
+   "needs": [
+    "east_lane"
+   ]
+  },
+  "J": {
+   "title": "Mixed front + 2 rear",
+   "facing": "Front west north, front east east, rear pair north",
+   "units": "NENN",
+   "needs": [
+    "east_lane",
+    "court"
+   ]
+  }
+ },
+ "rule_defaults": {
+  "_note": "Draft values only. P3_RULES asks the user to confirm them against the local authority's rules before they are used.",
+  "authority": "",
+  "side_setback_min_ft": 3,
+  "side_setback_max_ft": 6,
+  "one_side_zero_allowed": true,
+  "front_setback_min_ft": 5,
+  "rear_setback_min_ft": 3,
+  "coverage_max_pct": 75,
+  "min_unit_area_sqft": 450,
+  "min_unit_dim_ft": 12,
+  "stair_max_riser_in": 7.5,
+  "stair_min_tread_in": 10,
+  "stair_min_flight_ft": 3,
+  "court_clear_min_ft": 3.5,
+  "two_wheeler_lane_min_ft": 4,
+  "passage_min_ft": 3,
+  "door_min_width_ft": 3
+ },
+ "brief_defaults": {
+  "unit_count": 4,
+  "facing_allowed": [
+   "North",
+   "East"
+  ],
+  "future_floors": true,
+  "options": [
+   "A",
+   "B",
+   "C",
+   "D",
+   "E",
+   "F",
+   "G",
+   "H",
+   "I",
+   "J"
+  ]
+ },
+ "stages": [
+  "P1_SITE",
+  "P2_BRIEF",
+  "P3_RULES",
+  "P4_OPTIONS",
+  "P5_SELECT",
+  "+P5b_STAIR_SCHEDULE",
+  "P6_HANDOFF",
+  "P7_QC"
+ ],
+ "stage_versions": {
+  "P1_SITE": "0.2",
+  "P2_BRIEF": "0.2",
+  "P3_RULES": "0.2",
+  "P4_OPTIONS": "0.2",
+  "P5_SELECT": "0.2",
+  "P6_HANDOFF": "0.2",
+  "P7_QC": "0.2"
+ },
+ "migrations": {
+  "0.1.0": "adds door_width_ft (object default 3 ft = the 0.1.0 fixed width); stair and door parameters now come from STAIR_DOGLEG / DOOR_HINGED"
+ }
+}

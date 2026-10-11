@@ -1,5 +1,5 @@
 /**
- * Program / Plan / Design / Build / Present toggle in the editor header.
+ * Program / Plan/Design / Build / Present toggle in the editor header.
  *
  * Records the chosen phase per browser (localStorage) and publishes it through `usePhase()`; LeftToolbar
  * switches its phase workflow buttons on it. The phase list and each pipeline's home phase live in
@@ -20,7 +20,7 @@ function read(): Phase {
     const v = localStorage.getItem(KEY);
     if (isPhase(v)) return v;
     const old = localStorage.getItem(LEGACY_KEY);
-    if (old === "build") return "design";
+    if (old === "build") return "plan";
     if (isPhase(old)) return old;
   } catch {
     /* storage blocked: fall back to the default */

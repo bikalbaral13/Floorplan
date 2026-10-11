@@ -1,0 +1,20 @@
+{
+ "STAIR_DOGLEG": {
+  "title": "Dog-legged staircase",
+  "version": "0.1.0",
+  "status": "tested",
+  "used_by": [
+   "TOWNHOME_RENTAL@0.2.0",
+   "VILLA_4BHK_G1@0.1.0"
+  ]
+ },
+ "DOOR_HINGED": {
+  "title": "Single-leaf hinged door on a wall",
+  "version": "0.1.0",
+  "status": "tested",
+  "used_by": [
+   "TOWNHOME_RENTAL@0.2.0",
+   "VILLA_4BHK_G1@0.1.0"
+  ]
+ }
+}

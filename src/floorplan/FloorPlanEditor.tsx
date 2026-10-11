@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 
 const FloorPlan3DCanvas = lazy(() => import("./three/FloorPlan3DCanvas"));
 import type { SnapshotApi, MeshHost } from "./three/FloorPlan3DCanvas";
-import { rowMaterialPath, type MaterialBinding } from "./three/materials3d";
+import { rowMaterialPath, type MaterialBinding } from "./three/materialBinding";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { designStamp, designVersion, fetchDesignText, watchDesign, type DesignWatch } from "./designLiveSync";
@@ -117,7 +117,7 @@ import type {
   WallMode,
   ImageAttachment,
 } from "./types";
-import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_LAYER_ID, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue, PATH_SPACE_ID_PREFIX } from "./types";
+import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_LAYER_ID, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, DISCIPLINES, disciplineOfLayer, gridCellValue, PATH_SPACE_ID_PREFIX } from "./types";
 import { compileFlow } from "./flow/compileFlow";
 import { FLOW_TOOLS_DIR, analyseFlowTool, flowToolInputs, listFlowToolNames, loadFlowTool, withFlowToolInputs, loadFlowTool as loadWorkflowTool, listAllFlowTools, isMcpFlow, mcpToolFor, flowToolGlyph, type McpToolDef, type FlowFile as FlowToolFile, type ImportedFlowTool, type ToolAttachment } from "./flowTools";
 import { AttachedToolBlock, ImportWorkflowsDialog, RunWorkflowToolDialog } from "./components/dialogs/FlowToolDialogs";
@@ -213,9 +213,9 @@ import { DesignPlacementPanel } from "./components/DesignPlacementPanel";
 import { shellSheet } from "./shell3d";
 import { groupedToMerged, groupToSite, isGroupedPlan, siteToGroup, type PlanGroup } from "./planGroups";
 import { applyInstanceTransform, designLevelFor, loadDesignPaths, uniqueInstances, type DesignPaths } from "./designInstances";
-import { getPythonResult, getPythonError, onPythonResult, objIsPython } from "./python/pythonObjects";
+import { getPythonResult, getPythonError, onPythonResult, objIsPython, pythonRotation } from "./python/pythonObjects";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
-import { MESH3D_FORMATS } from "./export/flowMesh3d";
+import { MESH3D_FORMATS } from "./export/flowMesh3dFormats";
 import type { DesignInstance, DrawPathStyle, PathJustify } from "./types";
 import { AddSegmentDialog, type AddSegmentConfig } from "./components/dialogs/AddSegmentDialog";
 import { AddNodeDialog, type NodeDisplayConfig } from "./components/dialogs/AddNodeDialog";
@@ -1579,7 +1579,8 @@ const polysBBox = (polys: Point[][]): { minX: number; minY: number; maxX: number
  *  see that, so every spine was reported non-host-aware and squashed into the Space's largest inscribed
  *  rectangle — which is why a Tessellation attached to a whole space drew as one small patch inside it. */
 const pobjIsHostAware = (defText: string): boolean =>
-  isSpineObjectText(defText) || /hostW|hostH|hostArea|hostMin|hostMax|"host"|"pipeline"/.test(defText);
+  isSpineObjectText(defText) || /"rotates":\s*"self"/.test(defText)   // a Math Engine object translated to Python
+  || /hostW|hostH|hostArea|hostMin|hostMax|"host"|"pipeline"/.test(defText);
 
 // `pobjToAttachedFlow` (pobj → editable Flow graph, incl. the explicit `flow` decompilation and the pipeline
 // fallback) is shared with the Flow Import browser — see ./flow/pobjToFlow.
@@ -2066,7 +2067,9 @@ const defaultBinding = (obj: object | undefined): MaterialBinding => {
     const o = obj as { nodes?: { data?: { tool?: string; params?: { props?: { id: string; value: unknown }[] } } }[]; spine?: { nodes?: unknown[] } };
     const nodes = (o.nodes ?? o.spine?.nodes ?? []) as { data?: { tool?: string; params?: { props?: { id: string; value: unknown }[] } } }[];
     const props = nodes.find((n) => n.data?.tool === "input-props")?.data?.params?.props ?? [];
-    const val = (id: string) => String(props.find((p) => p.id === id)?.value ?? "");
+    // A definition without a spine (a Python object, incl. Math Engine translations) declares them as parameters.
+    const params = ((obj as { parameters?: { key: string; default?: unknown }[] }).parameters ?? []);
+    const val = (id: string) => String(props.find((p) => p.id === id)?.value ?? params.find((p) => p.key === id)?.default ?? "");
     b = { materialPath: val("materialPath"), finishes: val("finishes") };
     defaultBindingCache.set(obj, b);
   }
@@ -2343,8 +2346,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         knownLayerIds.add(l.id);
         if (l.visible) visibleLayerIds.add(l.id);
       }
+      // Grid lines, beams, pipes and conduits are drawn as segments too, but they never bound a room —
+      // left in, they cut every room into phantom cells. Only Architectural / Interior / Exterior count.
+      const nonBoundingLayerIds = new Set(layerTable.filter((l) => {
+        const disc = disciplineOfLayer(l.id, l.name, l.group);
+        return disc === "Structural" || disc === "MEP" || disc === "Annotation";
+      }).map((l) => l.id));
       const isWallLayerVisible = (w: { layerId?: string }) => {
         const id = w.layerId ?? "0";
+        if (nonBoundingLayerIds.has(id)) return false;
         if (!knownLayerIds.has(id)) return true;
         return visibleLayerIds.has(id);
       };
@@ -2490,7 +2500,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   }, [layerLockedSet]);
 
   /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
-  const miteredPolygons = useMemo(() => cachedBy(miteredPolygonsCache, history.state.walls, () => computeMiteredWallPolygons(history.state.walls)), [history.state.walls]);
+  // The mitre engine builds its junction graph by COORDINATE, so a beam, grid line or pipe lying on a wall
+  // becomes an extra spoke at every corner it shares and the corner mitres into spikes. Only wall bands join:
+  // buffered segments, minus Structural / MEP / Annotation layers (columns draw OVER the walls instead).
+  const miteredPolygons = useMemo(() => cachedBy(miteredPolygonsCache, history.state.walls, () => {
+    const skip = new Set((history.state.layers ?? []).filter((l) => {
+      const d = disciplineOfLayer(l.id, l.name, l.group);
+      return d === "Structural" || d === "MEP" || d === "Annotation";
+    }).map((l) => l.id));
+    return computeMiteredWallPolygons(history.state.walls.filter((w) => !skip.has(w.layerId ?? "0")));
+  }), [history.state.walls, history.state.layers]);
   /** LIVE Path spaces — Display mode "Path" (`bufferStyle` + `asSpace`): each connected group of touching
    *  path bands derives a Space from its union outline. Membership is CONTAGIOUS: any buffered band
    *  (except NURBS ribbons) touching a flagged run joins its Space, so a corridor whose first/last
@@ -3699,6 +3718,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  Site-related layers (Buildable / Footprint / Basement / Inset Area) hide
    *  under a single header row. Default expanded so users see them on first run. */
   const [siteLayerGroupExpanded, setSiteLayerGroupExpanded] = useState<boolean>(true);
+  // Discipline groups named by `Layer.group` (Architectural / Interior / Structural / MEP / Exterior …) — folded ones.
+  const [collapsedLayerGroups, setCollapsedLayerGroups] = useState<Set<string>>(() => new Set());
   const [defaultLayerGroupExpanded, setDefaultLayerGroupExpanded] = useState<boolean>(true);
   const [measureDraft, setMeasureDraft] = useState<Point | null>(null);
   const [measurePreviewPoint, setMeasurePreviewPoint] = useState<Point | null>(null);
@@ -4644,10 +4665,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const obj = lib[att.objectId];
       if (objIsPython(obj)) {
         // Object-local metres (+x across, +y back→front, +z up) → scene metres (x, y up, z = plan Y), turned by
-        // the instance's `rotation` (degrees, plan) about its anchor.
-        const res = getPythonResult(obj, att.params);
+        // the instance's `rotation` (degrees, plan) about its anchor. Like spine objects, Python runs only in Full.
+        if (renderModeOf(vp(att.params)) !== "Full") return;
+        const res = getPythonResult(obj, att.params, hostPts);
         if (!res) return;
-        const rot = ((Number(att.params.rotation) || 0) * Math.PI) / 180, c = Math.cos(rot), sn = Math.sin(rot);
+        const rot = pythonRotation(obj, att.params), c = Math.cos(rot), sn = Math.sin(rot);
         const ax = anchorPx.x / ppm, az = anchorPx.y / ppm;
         res.meshes.forEach((m, i) => {
           const src = m.positions, pos = new Float32Array(src.length);
@@ -6177,12 +6199,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     for (const r of history.state.rooms) add(r.groupId, r.layerId);
     return out;
   }, [history.state.walls, history.state.rooms, groupById]);
-  const setGroupLayerVisible = (id: string, layerId: string, visible: boolean) => {
+  const setGroupLayerVisible = (id: string, layerIds: string | string[], visible: boolean) => {
     const groups = (history.state.groups ?? []).map((g) => {
       if (g.id !== id) return g;
       const lo = { ...(g.layerOverrides ?? {}) };
-      if (visible) { const { visible: _v, ...rest } = lo[layerId] ?? {}; if (Object.keys(rest).length) lo[layerId] = rest; else delete lo[layerId]; }
-      else lo[layerId] = { ...(lo[layerId] ?? {}), visible: false };
+      for (const layerId of Array.isArray(layerIds) ? layerIds : [layerIds]) {
+        if (visible) { const { visible: _v, ...rest } = lo[layerId] ?? {}; if (Object.keys(rest).length) lo[layerId] = rest; else delete lo[layerId]; }
+        else lo[layerId] = { ...(lo[layerId] ?? {}), visible: false };
+      }
       return { ...g, layerOverrides: Object.keys(lo).length ? lo : undefined };
     });
     history.set({ ...history.state, groups });
@@ -8756,6 +8780,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const on = () => setRelayOn(!!getRelaySession());
     window.addEventListener("bp-relay-change", on);
     return () => window.removeEventListener("bp-relay-change", on);
+  }, []);
+  // The Project panel (ProjectStatusPanel) opens the project canvas through the same path as Import JSON.
+  useEffect(() => {
+    const onImportPlan = (e: Event) => { const d = (e as CustomEvent<{ json: string; path?: string }>).detail; if (d?.json) void importPlanTextRef.current(d.json, d.path); };
+    window.addEventListener("bp:import-plan", onImportPlan);
+    return () => window.removeEventListener("bp:import-plan", onImportPlan);
   }, []);
   useEffect(() => {
     if (!agentBridgeEnabled()) return;
@@ -29198,6 +29228,10 @@ User request: ${aiPrompt.trim()}`;
             if (list) list.push(g); else kids.set(k, [g]);
           }
           const layerName = (id: string) => (history.state.layers ?? []).find((l) => l.id === id)?.name ?? id;
+          const disciplineOf = (id: string) => {
+            const l = (history.state.layers ?? []).find((x) => x.id === id);
+            return disciplineOfLayer(id, l?.name, l?.group);
+          };
           const row = (g: PlanGroup, depth: number): ReactNode => {
             const children = kids.get(g.id) ?? [];
             const contents = [...(groupLayerCounts.get(g.id) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
@@ -29232,16 +29266,41 @@ User request: ${aiPrompt.trim()}`;
                 {open && (
                   <>
                     {children.map((c) => row(c, depth + 1))}
-                    {contents.map(([layerId, count]) => {
+                    {DISCIPLINES.map((disc) => {
+                      // house > Architectural / Interior / Structural / MEP / Exterior > layers
+                      const inDisc = contents.filter(([layerId]) => disciplineOf(layerId) === disc);
+                      if (!inDisc.length) return null;
+                      const ids = inDisc.map(([l]) => l);
+                      const discOff = ids.every((l) => g.layerOverrides?.[l]?.visible === false);
+                      const key = `${g.id}|#${disc}`;
+                      const discOpen = openGroupIds.has(key);
+                      return (
+                        <div key={key}>
+                          <div className="flex items-center gap-1 py-0.5 pr-1 text-[10.5px] font-semibold text-slate-700" style={{ paddingLeft: 2 + (depth + 1) * 12 }}>
+                            <button type="button" className="rounded p-0.5 hover:bg-orange-100" aria-label={discOpen ? "Fold" : "Unfold"}
+                              onClick={() => setOpenGroupIds((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; })}>
+                              {discOpen ? <ChevronDown className="h-3 w-3 text-slate-500" /> : <ChevronRight className="h-3 w-3 text-slate-500" />}
+                            </button>
+                            <button type="button" className="rounded p-0.5 hover:bg-orange-100" title={discOff ? `Show ${disc} in this group` : `Hide ${disc} in this group`}
+                              onClick={() => setGroupLayerVisible(g.id, ids, discOff)}>
+                              {discOff ? <EyeOff className="h-3 w-3 text-slate-400" /> : <Eye className="h-3 w-3 text-slate-600" />}
+                            </button>
+                            <span className={`flex-1 truncate ${discOff ? "text-slate-400" : ""}`}>{disc}</span>
+                            <span className="text-[10px] font-normal text-slate-400">{inDisc.reduce((s, [, c]) => s + c, 0)}</span>
+                          </div>
+                          {discOpen && inDisc.map(([layerId, count]) => {
                       const off = g.layerOverrides?.[layerId]?.visible === false;
                       return (
-                        <div key={`${g.id}|${layerId}`} className="flex items-center gap-1 py-0.5 pr-1 text-[10.5px] text-slate-600" style={{ paddingLeft: 2 + (depth + 1) * 12 + 16 }}>
+                        <div key={`${g.id}|${layerId}`} className="flex items-center gap-1 py-0.5 pr-1 text-[10.5px] text-slate-600" style={{ paddingLeft: 2 + (depth + 2) * 12 + 16 }}>
                           <button type="button" className="rounded p-0.5 hover:bg-orange-100" title={off ? `Show ${layerName(layerId)} in this group` : `Hide ${layerName(layerId)} in this group`}
                             onClick={() => setGroupLayerVisible(g.id, layerId, off)}>
                             {off ? <EyeOff className="h-3 w-3 text-slate-400" /> : <Eye className="h-3 w-3 text-slate-500" />}
                           </button>
                           <span className={`flex-1 truncate ${off ? "text-slate-400" : ""}`}>{layerName(layerId)}</span>
                           <span className="text-[10px] text-slate-400">{count}</span>
+                        </div>
+                      );
+                          })}
                         </div>
                       );
                     })}
@@ -29483,7 +29542,37 @@ User request: ${aiPrompt.trim()}`;
                     )}
                   </div>
                 )}
-                {nonSiteLayers.map(renderRow)}
+                {DISCIPLINES.map((group) => {
+                  // Flat layer list folded by discipline: Architectural / Interior / Structural / MEP / Exterior.
+                  const members = nonSiteLayers.filter((l) => disciplineOfLayer(l.id, l.name, l.group) === group);
+                  if (!members.length) return null;
+                  const allVisible = members.every((l) => l.visible);
+                  const open = !collapsedLayerGroups.has(group);
+                  const ids = new Set(members.map((l) => l.id));
+                  return (
+                    <div key={`grp-${group}`} className="rounded border border-slate-200 bg-slate-50">
+                      <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
+                        <button
+                          type="button"
+                          title={allVisible ? `Hide all ${group} layers` : `Show all ${group} layers`}
+                          onClick={() => history.set({ ...history.state, layers: (history.state.layers ?? []).map((l) => (ids.has(l.id) ? { ...l, visible: !allVisible } : l)) })}
+                          className="rounded p-0.5 hover:bg-slate-200"
+                        >
+                          {allVisible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCollapsedLayerGroups((prev) => { const next = new Set(prev); if (next.has(group)) next.delete(group); else next.add(group); return next; })}
+                          className="flex flex-1 items-center justify-between rounded px-1 py-0.5 text-left font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-200"
+                        >
+                          <span>{group}</span>
+                          <span className="text-[10px] text-slate-400">{open ? "▼" : "▶"} {members.length}</span>
+                        </button>
+                      </div>
+                      {open && <div className="space-y-1 border-t border-slate-200 bg-white p-1">{members.map(renderRow)}</div>}
+                    </div>
+                  );
+                })}
                 {siteLayers.length > 0 && (
                   <div className="rounded border border-slate-200 bg-slate-50">
                     <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
@@ -33351,18 +33440,21 @@ User request: ${aiPrompt.trim()}`;
                       // Until its first run lands (Pyodide loads once per session) a dashed box from length/width stands in.
                       if (objIsPython(obj)) {
                         void pyTick;
-                        const res = getPythonResult(obj, att.params);
-                        const rot = ((Number(att.params.rotation) || 0) * Math.PI) / 180, c = Math.cos(rot), sn = Math.sin(rot);
+                        // Render mode: Nothing draws nothing; Basic draws the size box without running Python.
+                        const pyMode = renderModeOf(vp(att.params));
+                        if (pyMode === "Nothing") return null;
+                        const res = pyMode === "Full" ? getPythonResult(obj, att.params) : null;
+                        const rot = pythonRotation(obj, att.params), c = Math.cos(rot), sn = Math.sin(rot);
                         const toW = (q: number[]) => [node.x + (q[0] * c - q[1] * sn) * pixelsPerMeter, node.y + (q[0] * sn + q[1] * c) * pixelsPerMeter];
                         const num = (k: string, d: number) => { const v = Number(att.params[k] ?? obj!.parameters.find((p) => p.key === k)?.default); return isFinite(v) && v > 0 ? v : d; };
                         const L = num("length", 2), Wd = num("width", 1.6);
                         const outlines = res?.plan?.length ? res.plan : [[[-Wd / 2, -L / 2], [Wd / 2, -L / 2], [Wd / 2, L / 2], [-Wd / 2, L / 2]]];
-                        const err = getPythonError(obj, att.params);
+                        const err = pyMode === "Full" ? getPythonError(obj, att.params) : undefined;
                         return (
                           <Group key={att.id} listening={false}>
                             {outlines.map((ring, i) => (
-                              <Line key={i} points={ring.flatMap(toW)} closed={ring.length > 2} stroke={err ? "#dc2626" : color} strokeWidth={sw}
-                                fill={i === 0 ? `${color}14` : undefined} dash={res ? undefined : [6 / scale, 4 / scale]} lineJoin="round" />
+                              <Line key={i} points={ring.flatMap(toW)} closed={ring.length > 2} stroke={err ? "#dc2626" : (res?.planColors?.[i] ?? color)} strokeWidth={sw}
+                                fill={res?.planColors?.[i] ? `${res.planColors[i]}33` : i === 0 ? `${color}14` : undefined} dash={res || pyMode === "Basic" ? undefined : [6 / scale, 4 / scale]} lineJoin="round" />
                             ))}
                           </Group>
                         );

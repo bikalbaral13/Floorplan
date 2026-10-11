@@ -1,0 +1,61 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "stone.marble",
+  "title": "Marble — large-format floor",
+  "description": "Polished marble-look porcelain. Veining is one low-frequency noise at high distortion — the streaks a slab shows across two metres, not the speckle a close-up shows across two centimetres.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 1.6,
+      "detail": 9,
+      "roughness": 0.62,
+      "lacunarity": 2.4,
+      "distortion": 3.2,
+      "colorA": "#f4f1ea",
+      "colorB": "#d8d2c6"
+    }
+  },
+  "pbr": {
+    "baseColor": "#efeae0",
+    "roughness": 0.16,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.004,
+      "samples": 4
+    },
+    "subsurface": {
+      "weight": 0.12,
+      "radius": [
+        0.02,
+        0.018,
+        0.015
+      ],
+      "scale": 0.01
+    },
+    "coat": {
+      "weight": 0.35,
+      "roughness": 0.05,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 6
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 8,
+    "angle": 0,
+    "weight": 1,
+    "color": "#efeae0"
+  },
+  "dxf": {
+    "pattern": "TILEPAT1",
+    "scale": 1.2,
+    "angle": 0
+  }
+}

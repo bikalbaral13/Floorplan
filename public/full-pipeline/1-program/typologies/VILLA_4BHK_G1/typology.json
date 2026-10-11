@@ -1,0 +1,365 @@
+{
+ "id": "VILLA_4BHK_G1",
+ "version": "0.1.0",
+ "title": "Premium 4BHK independent villa, G+1, for 30' x 40' class plots (modern Indian, vastu-aware)",
+ "frame": "Feet. Drawing frame: road at the top; x across the frontage (left to right as drawn), y into the plot from the road. Compass follows road_side; output is converted to compass (X east, Y north).",
+ "road_sides_supported": [
+  "N",
+  "E",
+  "S",
+  "W"
+ ],
+ "unit_count": 1,
+ "bedrooms": 4,
+ "levels": [
+  "GF",
+  "FF"
+ ],
+ "facings": [
+  "North",
+  "East",
+  "South",
+  "West"
+ ],
+ "applicability": {
+  "plot_width_ft": [
+   26,
+   40
+  ],
+  "plot_depth_ft": [
+   36,
+   50
+  ],
+  "_note": "25' x 32' net footprint is the tested minimum for 4 bedrooms with a central dining hub"
+ },
+ "planner": "planner/villa_4bhk_planner.html",
+ "planner_fixed": [],
+ "objects": {
+  "stair": {
+   "object": "STAIR_DOGLEG",
+   "version": "0.1.0",
+   "params": {
+    "floor_height_ft": "floor_height_ft",
+    "max_riser_in": "max_riser_in",
+    "tread_in": "tread_in",
+    "flight_width_ft": "flight_width_ft",
+    "direction": "stair_first_flight",
+    "turn": "stair_turn"
+   }
+  },
+  "door": {
+   "object": "DOOR_HINGED",
+   "version": "0.1.0",
+   "params": {
+    "width_ft": "main_door_width_ft",
+    "position_pct": "main_door_pct"
+   }
+  }
+ },
+ "parameters": {
+  "option": {
+   "type": "choice",
+   "default": "A",
+   "options": [
+    "A",
+    "B"
+   ],
+   "label": "Layout option"
+  },
+  "road_side": {
+   "type": "choice",
+   "default": "N",
+   "options": [
+    "N",
+    "E",
+    "S",
+    "W"
+   ],
+   "label": "Road side (from site.json)"
+  },
+  "mirror": {
+   "type": "choice",
+   "default": "auto",
+   "options": [
+    "no",
+    "yes",
+    "auto"
+   ],
+   "label": "Mirror left/right (auto = best vastu score)"
+  },
+  "plot_width_ft": {
+   "type": "number",
+   "default": 30,
+   "min": 24,
+   "max": 45,
+   "unit": "ft",
+   "label": "Plot frontage"
+  },
+  "plot_depth_ft": {
+   "type": "number",
+   "default": 40,
+   "min": 34,
+   "max": 60,
+   "unit": "ft",
+   "label": "Plot depth"
+  },
+  "setback_front_ft": {
+   "type": "number",
+   "default": 5,
+   "min": 3,
+   "max": 15,
+   "unit": "ft",
+   "label": "Front setback"
+  },
+  "setback_rear_ft": {
+   "type": "number",
+   "default": 3,
+   "min": 0,
+   "max": 10,
+   "unit": "ft",
+   "label": "Rear setback"
+  },
+  "setback_left_ft": {
+   "type": "number",
+   "default": 3,
+   "min": 0,
+   "max": 8,
+   "unit": "ft",
+   "label": "Left setback (as drawn, road at top)"
+  },
+  "setback_right_ft": {
+   "type": "number",
+   "default": 2,
+   "min": 0,
+   "max": 8,
+   "unit": "ft",
+   "label": "Right setback (as drawn)"
+  },
+  "porch_width_ft": {
+   "type": "number",
+   "default": 11,
+   "min": 9,
+   "max": 14,
+   "unit": "ft",
+   "label": "Car porch width"
+  },
+  "front_band_ft": {
+   "type": "number",
+   "default": 15,
+   "min": 13,
+   "max": 20,
+   "unit": "ft",
+   "label": "Front band depth (porch + living)"
+  },
+  "middle_band_ft": {
+   "type": "number",
+   "default": 8,
+   "min": 7,
+   "max": 12,
+   "unit": "ft",
+   "label": "Middle band depth (stair + dining); grows to the stair width"
+  },
+  "toilet_width_ft": {
+   "type": "number",
+   "default": 4.5,
+   "min": 4,
+   "max": 6,
+   "unit": "ft",
+   "label": "Common toilet width (beside dining)"
+  },
+  "kitchen_width_ft": {
+   "type": "number",
+   "default": 10,
+   "min": 7,
+   "max": 13,
+   "unit": "ft",
+   "label": "Kitchen width target (clamped so bedroom 4 keeps a door to dining)"
+  },
+  "attached_toilet_ft": {
+   "type": "number",
+   "default": 5.5,
+   "min": 5,
+   "max": 7,
+   "unit": "ft",
+   "label": "Attached toilet (square)"
+  },
+  "master_width_ft": {
+   "type": "number",
+   "default": 15,
+   "min": 12,
+   "max": 18,
+   "unit": "ft",
+   "label": "Master bedroom width (option A)"
+  },
+  "balcony_depth_ft": {
+   "type": "number",
+   "default": 3,
+   "min": 0,
+   "max": 5,
+   "unit": "ft",
+   "label": "Front balcony projection (first floor)"
+  },
+  "puja_ft": {
+   "type": "number",
+   "default": 4,
+   "min": 0,
+   "max": 5,
+   "unit": "ft",
+   "label": "Puja niche size (0 = none); placed in the living corner nearest north-east"
+  },
+  "floor_height_ft": {
+   "from_object": "stair.floor_height_ft",
+   "default": 10.5,
+   "label": "Floor-to-floor height"
+  },
+  "max_riser_in": {
+   "from_object": "stair.max_riser_in",
+   "label": "Maximum riser"
+  },
+  "tread_in": {
+   "from_object": "stair.tread_in",
+   "label": "Tread"
+  },
+  "flight_width_ft": {
+   "from_object": "stair.flight_width_ft",
+   "label": "Flight width"
+  },
+  "stair_first_flight": {
+   "from_object": "stair.direction",
+   "default": "W",
+   "label": "First flight goes up towards (drawing frame: W = left, E = right; flipped when mirrored)"
+  },
+  "stair_turn": {
+   "from_object": "stair.turn",
+   "default": "L",
+   "label": "Turn at landing"
+  },
+  "main_door_width_ft": {
+   "from_object": "door.width_ft",
+   "default": 3.5,
+   "label": "Main door width"
+  },
+  "main_door_pct": {
+   "from_object": "door.position_pct",
+   "default": 25,
+   "label": "Main door position along the living front wall"
+  }
+ },
+ "site_params": {
+  "plot_width_ft": "width_ft",
+  "plot_depth_ft": "depth_ft",
+  "road_side": "road_side"
+ },
+ "rule_params": {
+  "setback_front_ft": {
+   "min": "front_setback_min_ft"
+  },
+  "setback_rear_ft": {
+   "min": "rear_setback_min_ft"
+  },
+  "setback_left_ft": {
+   "min": "side_setback_min_ft"
+  },
+  "setback_right_ft": {
+   "min": "side_setback_min_ft"
+  },
+  "max_riser_in": {
+   "max": "stair_max_riser_in"
+  },
+  "tread_in": {
+   "min": "stair_min_tread_in"
+  },
+  "flight_width_ft": {
+   "min": "stair_min_flight_ft"
+  },
+  "main_door_width_ft": {
+   "min": "door_min_width_ft"
+  },
+  "balcony_depth_ft": {
+   "max": "balcony_max_projection_ft"
+  }
+ },
+ "options": {
+  "A": {
+   "title": "Front living, family lounge upstairs",
+   "facing": "Entrance on the road side",
+   "units": "1"
+  },
+  "B": {
+   "title": "Double-height living (OTS), gallery upstairs",
+   "facing": "Entrance on the road side",
+   "units": "1"
+  }
+ },
+ "rule_defaults": {
+  "_note": "Placeholders from NBC 2016 room minimums and typical small-plot bye-laws. P3 must confirm against the local authority (BBMP / CMDA / DTCP / GHMC ...).",
+  "authority": "",
+  "front_setback_min_ft": 5,
+  "rear_setback_min_ft": 3,
+  "side_setback_min_ft": 2,
+  "one_side_zero_allowed": false,
+  "coverage_max_pct": 75,
+  "far_max": 1.75,
+  "height_max_ft": 33,
+  "far_excludes": [
+   "porch",
+   "void",
+   "balcony"
+  ],
+  "min_first_habitable_sqft": 102.3,
+  "min_habitable_sqft": 80.7,
+  "min_habitable_width_ft": 7.87,
+  "min_kitchen_sqft": 53.8,
+  "min_kitchen_width_ft": 5.9,
+  "min_toilet_sqft": 30.1,
+  "min_toilet_width_ft": 3.94,
+  "parking_min_width_ft": 8.2,
+  "parking_min_length_ft": 16.4,
+  "parking_in_front_setback": true,
+  "stair_max_riser_in": 7.5,
+  "stair_min_tread_in": 10,
+  "stair_min_flight_ft": 3,
+  "door_min_width_ft": 3,
+  "balcony_max_projection_ft": 4,
+  "parapet_ft": 3.5
+ },
+ "brief_defaults": {
+  "unit_count": 1,
+  "bedrooms": 4,
+  "facing_allowed": [
+   "North",
+   "East",
+   "South",
+   "West"
+  ],
+  "future_floors": false,
+  "vastu": true,
+  "parking": 1,
+  "options": [
+   "A",
+   "B"
+  ]
+ },
+ "stages": [
+  "P1_SITE",
+  "P2_BRIEF",
+  "P3_RULES",
+  "P4_OPTIONS",
+  "P5_SELECT",
+  "P5b_STAIR_SCHEDULE",
+  "+P5c_AREA_VASTU",
+  "P6_HANDOFF",
+  "P7_QC"
+ ],
+ "stage_versions": {
+  "P1_SITE": "0.3",
+  "P2_BRIEF": "0.2",
+  "P3_RULES": "0.2",
+  "P4_OPTIONS": "0.3",
+  "P5_SELECT": "0.3",
+  "P5b_STAIR_SCHEDULE": "0.2",
+  "P6_HANDOFF": "0.2",
+  "P7_QC": "0.3"
+ },
+ "migrations": {}
+}

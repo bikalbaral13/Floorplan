@@ -1,0 +1,450 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://builderpluss.dev/library/Schemas/canvas.v1.schema.json",
+ "title": "canvas/1 — the BuilderPluss editor's standard plan JSON (key fields)",
+ "description": "Local copy of library/Schemas/canvas.v1.schema.json (structure only). Never edit — re-copy from the library.",
+ "type": "object",
+ "required": [
+  "schemaVersion",
+  "settings"
+ ],
+ "properties": {
+  "schemaVersion": {
+   "type": "integer"
+  },
+  "settings": {
+   "type": "object",
+   "required": [
+    "pixelsPerMeter"
+   ],
+   "properties": {
+    "pixelsPerMeter": {
+     "type": "number"
+    },
+    "units": {
+     "type": "string"
+    },
+    "library_path": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": true
+  },
+  "nodes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "x",
+     "y"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
+     "layer": {
+      "type": "string"
+     },
+     "attachments": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "objectId",
+        "objectPath"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "objectId": {
+         "type": "string"
+        },
+        "objectPath": {
+         "type": "string"
+        },
+        "params": {
+         "type": "object"
+        },
+        "t": {
+         "type": "number"
+        },
+        "flip": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": true
+      }
+     }
+    },
+    "additionalProperties": true
+   }
+  },
+  "segments": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "fromNodeId",
+     "toNodeId"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "fromNodeId": {
+      "type": "string"
+     },
+     "toNodeId": {
+      "type": "string"
+     },
+     "layer": {
+      "type": "string"
+     },
+     "thickness": {
+      "type": "number"
+     },
+     "isObjectOpening": {
+      "type": "boolean"
+     },
+     "label": {
+      "type": "string"
+     },
+     "attachments": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "objectId",
+        "objectPath"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "objectId": {
+         "type": "string"
+        },
+        "objectPath": {
+         "type": "string"
+        },
+        "params": {
+         "type": "object"
+        },
+        "t": {
+         "type": "number"
+        },
+        "flip": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": true
+      }
+     }
+    },
+    "additionalProperties": true
+   }
+  },
+  "spaces": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "nodeIds"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "nodeIds": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "label": {
+      "type": "string"
+     },
+     "roomType": {
+      "type": "string"
+     },
+     "region": {
+      "type": "string"
+     },
+     "attachments": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "objectId",
+        "objectPath"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "objectId": {
+         "type": "string"
+        },
+        "objectPath": {
+         "type": "string"
+        },
+        "params": {
+         "type": "object"
+        },
+        "t": {
+         "type": "number"
+        },
+        "flip": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": true
+      }
+     }
+    },
+    "additionalProperties": true
+   }
+  },
+  "layers": {
+   "type": "array"
+  },
+  "levels": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "nodes",
+     "segments",
+     "spaces"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "elevation": {
+      "type": "number"
+     },
+     "height": {
+      "type": "number"
+     },
+     "nodes": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "x",
+        "y"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "x": {
+         "type": "number"
+        },
+        "y": {
+         "type": "number"
+        },
+        "layer": {
+         "type": "string"
+        },
+        "attachments": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "id",
+           "objectId",
+           "objectPath"
+          ],
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "objectId": {
+            "type": "string"
+           },
+           "objectPath": {
+            "type": "string"
+           },
+           "params": {
+            "type": "object"
+           },
+           "t": {
+            "type": "number"
+           },
+           "flip": {
+            "type": "boolean"
+           }
+          },
+          "additionalProperties": true
+         }
+        }
+       },
+       "additionalProperties": true
+      }
+     },
+     "segments": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "fromNodeId",
+        "toNodeId"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "fromNodeId": {
+         "type": "string"
+        },
+        "toNodeId": {
+         "type": "string"
+        },
+        "layer": {
+         "type": "string"
+        },
+        "thickness": {
+         "type": "number"
+        },
+        "isObjectOpening": {
+         "type": "boolean"
+        },
+        "label": {
+         "type": "string"
+        },
+        "attachments": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "id",
+           "objectId",
+           "objectPath"
+          ],
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "objectId": {
+            "type": "string"
+           },
+           "objectPath": {
+            "type": "string"
+           },
+           "params": {
+            "type": "object"
+           },
+           "t": {
+            "type": "number"
+           },
+           "flip": {
+            "type": "boolean"
+           }
+          },
+          "additionalProperties": true
+         }
+        }
+       },
+       "additionalProperties": true
+      }
+     },
+     "spaces": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "nodeIds"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "nodeIds": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "label": {
+         "type": "string"
+        },
+        "roomType": {
+         "type": "string"
+        },
+        "region": {
+         "type": "string"
+        },
+        "attachments": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "id",
+           "objectId",
+           "objectPath"
+          ],
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "objectId": {
+            "type": "string"
+           },
+           "objectPath": {
+            "type": "string"
+           },
+           "params": {
+            "type": "object"
+           },
+           "t": {
+            "type": "number"
+           },
+           "flip": {
+            "type": "boolean"
+           }
+          },
+          "additionalProperties": true
+         }
+        }
+       },
+       "additionalProperties": true
+      }
+     }
+    },
+    "additionalProperties": true
+   }
+  },
+  "imageUnderlay": {
+   "type": [
+    "object",
+    "null"
+   ]
+  },
+  "graphAttrs": {
+   "type": "object"
+  }
+ },
+ "additionalProperties": true
+}

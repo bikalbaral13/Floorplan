@@ -1,0 +1,403 @@
+{
+  "version": 1,
+  "id": "table-with-math",
+  "title": "Table — one Math Engine, top, legs and apron",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Table",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 10h18",
+        "M3 10l1 10",
+        "M21 10l-1 10",
+        "M6 10V6h12v4",
+        "M8 20h8"
+      ]
+    }
+  },
+  "description": "A parametric TABLE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE, A SEGMENT OR A SPACE. In a space the table takes the space's LONGEST edge as its length direction, so a dining table in a rectangular room lands the way the room wants it without a rotation being typed.\n\nTHREE LEG STYLES, ONE TABLE. Four corner posts, a pair of trestle slabs joined by a stretcher, or a central pedestal on a foot — chosen by a ternary between three quad tables (`_isFour ? _FOUR : (_isTrestle ? _TRES : _PED)`), not by three flows. Each is a different number of rows in the same 11-column format, and everything downstream is unchanged.\n\nTHE APRON IS CONDITIONAL ON THE LEGS, not just on its checkbox: rails between the corner posts mean nothing on a pedestal, so `apron > 0 && _isFour` gates it and the false branch emits an EMPTY operand, which is the identity for `vcat`.\n\nOVERHANG IS WHY THE TOP AND THE LEGS ARE MEASURED DIFFERENTLY. The top spans the full length and width; the legs sit on an inset rectangle, so raising the overhang pulls the legs in and leaves the top where it was — which is what an overhang is.\n\nSEATS AROUND is a metric, not geometry: 0.60 m of edge per person on each of the four sides, floored — a sanity number for a dining layout that comes free from dimensions the flow already has.\n\nTHE PLAN IS DERIVED from the same quads with z dropped. Each part is its own 2D row because a grouped outline list is read EVEN-ODD: the legs sit INSIDE the top outline, and in one row they would void it into holes rather than reading as legs under a top.\n\nDIMENSIONS AT THE DEFAULTS: 1.60 × 0.90 m at 0.75 m high on four 0.07 m posts, 1.44 m² of top, 6 seats around.\n\nWHAT THIS CANNOT DO. The top is rectangular — a round or oval table is a different body, since a quad prism cannot express a circle. Legs are vertical and square; nothing is mitred or tapered.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 1.6,
+              "min": 0.4,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.4,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Height",
+              "type": "range",
+              "value": 0.75,
+              "min": 0.3,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "topThk",
+              "name": "Top thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.015,
+              "max": 0.12,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "overhang",
+              "name": "Top overhang",
+              "type": "range",
+              "value": 0.06,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "legStyle",
+              "name": "Leg style",
+              "type": "select",
+              "value": "Four legs",
+              "options": [
+                "Four legs",
+                "Trestle",
+                "Pedestal"
+              ]
+            },
+            {
+              "id": "legSize",
+              "name": "Leg size",
+              "type": "range",
+              "value": 0.07,
+              "min": 0.03,
+              "max": 0.16,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "apron",
+              "name": "Apron rail",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "apronDepth",
+              "name": "Apron depth",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "apronThk",
+              "name": "Apron thickness",
+              "type": "range",
+              "value": 0.025,
+              "min": 0.01,
+              "max": 0.08,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "modern dining table, solid oak top, matte finish, warm",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/plaster.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Soft",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "TABLE — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\nmodern dining table, solid oak top, matte finish, warm\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Length: {length}\n- Width: {width}\n- Height: {height}\n- Top thickness: {topThk}\n- Top overhang: {overhang}\n- Leg style: {legStyle} (one of: Four legs / Trestle / Pedestal)\n- Leg size: {legSize}\n- Apron rail: {apron}\n- Apron depth: {apronDepth}\n- Apron thickness: {apronThk}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Length = {length}\n- Width = {width}\n- Height = {height}\n- Leg size = {legSize}\n- Apron depth = {apronDepth}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_top",
+              "kind": "polygon",
+              "name": "Top",
+              "color": "#b45309",
+              "layer": "Table",
+              "show": true
+            },
+            {
+              "id": "p2_legs",
+              "kind": "polygon",
+              "name": "Legs",
+              "color": "#78350f",
+              "layer": "Table",
+              "show": true
+            },
+            {
+              "id": "p2_apron",
+              "kind": "polygon",
+              "name": "Apron",
+              "color": "#92400e",
+              "layer": "Table",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_top",
+              "kind": "polyhedron",
+              "name": "Top",
+              "color": "#b45309",
+              "layer": "Table",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#78350f",
+              "layer": "Table",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_apron",
+              "kind": "polyhedron",
+              "name": "Apron",
+              "color": "#92400e",
+              "layer": "Table",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

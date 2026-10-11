@@ -1,0 +1,17 @@
+{
+ "id": "STAIR_DOGLEG",
+ "version": "0.1.0",
+ "title": "Dog-legged staircase (two flights, half landing)",
+ "frame": "Feet. Local axes: u along the first flight (up), v across towards the return flight.",
+ "parameters": {
+  "floor_height_ft": {"type": "number", "default": 10,  "min": 9,   "max": 12,  "unit": "ft", "label": "Floor-to-floor height"},
+  "max_riser_in":    {"type": "number", "default": 7,   "min": 5.5, "max": 7.5, "unit": "in", "label": "Maximum riser"},
+  "tread_in":        {"type": "number", "default": 10,  "min": 9,   "max": 12,  "unit": "in", "label": "Tread"},
+  "flight_width_ft": {"type": "number", "default": 3.5, "min": 3,   "max": 4.5, "unit": "ft", "label": "Flight width"},
+  "gap_ft":          {"type": "number", "default": 0.3333333333333333, "min": 0, "max": 1, "unit": "ft", "label": "Gap between flights"},
+  "direction":       {"type": "choice", "default": "W", "options": ["N","E","S","W"], "label": "First flight goes up towards"},
+  "turn":            {"type": "choice", "default": "R", "options": ["L","R"], "label": "Turn at landing"}
+ },
+ "rule_keys": {"max_riser_in": "stair_max_riser_in", "min_tread_in": "stair_min_tread_in", "min_flight_ft": "stair_min_flight_ft"},
+ "functions": ["compute", "place", "lines", "qc", "schedule"]
+}

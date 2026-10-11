@@ -1,0 +1,59 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.rug-pile.sage",
+  "title": "Fabric — cut-pile rug, sage green",
+  "description": "Sage-green cut-pile wool for the carved pattern of a rug. Same pile recipe as Fabric/rug-pile, recoloured.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 320,
+      "detail": 2,
+      "roughness": 0.7,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#8a9b76",
+      "colorB": "#6f805d"
+    }
+  },
+  "pbr": {
+    "baseColor": "#7d8f6a",
+    "roughness": 0.99,
+    "metallic": 0,
+    "sheen": 0.4
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.6,
+      "roughness": 0.4,
+      "tint": "#efe7d8"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 1.6,
+      "scale": 1
+    },
+    "displacement": {
+      "scale": 0.006,
+      "midlevel": 0.5
+    },
+    "roughnessVariation": {
+      "amount": 0.1,
+      "scale": 30
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#7d8f6a"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 0.3,
+    "angle": 0
+  }
+}

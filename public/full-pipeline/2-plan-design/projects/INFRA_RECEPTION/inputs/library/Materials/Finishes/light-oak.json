@@ -1,0 +1,67 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "wood.oak.light",
+  "title": "Wood — light oak veneer",
+  "description": "The veneer this plan names five times. Same banded wave as the other two woods at a wider scale with a pale pair, because a veneer reads by its VALUE against what is next to it, not by a different grain algorithm — and running three different algorithms would make three woods that cannot sit in one room.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "X",
+      "waveProfile": "SIN",
+      "scale": 2.6,
+      "distortion": 11,
+      "detail": 3,
+      "detailScale": 1.1,
+      "detailRoughness": 0.55,
+      "phaseOffset": 0,
+      "colorA": "#c8a87c",
+      "colorB": "#a98761"
+    }
+  },
+  "pbr": {
+    "baseColor": "#bb9a70",
+    "roughness": 0.42,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.002,
+      "samples": 4
+    },
+    "grain": {
+      "axis": "u",
+      "rotationDeg": 0,
+      "scaleU": 1,
+      "scaleV": 0.3
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.4,
+      "scale": 1
+    },
+    "coat": {
+      "weight": 0.2,
+      "roughness": 0.14,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.1,
+      "scale": 8
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#bb9a70"
+  },
+  "dxf": {
+    "pattern": "WOOD2",
+    "scale": 1,
+    "angle": 0
+  }
+}

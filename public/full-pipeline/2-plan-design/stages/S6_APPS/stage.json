@@ -1,0 +1,25 @@
+{
+ "id": "S6_APPS",
+ "version": "0.1.0",
+ "title": "Generate the architect, client and modeler apps",
+ "kind": "script",
+ "gate": false,
+ "summary": "Build the router + three role pages from templates/app, the local-preview data, the database seed batches and publish.json (with the access rules).",
+ "inputs": [
+  "work: brief.json",
+  "work: views",
+  "work: refs",
+  "scope.json"
+ ],
+ "outputs": [
+  "work: apps/site/*",
+  "work: apps/dbseed/*",
+  "work: apps/publish.json"
+ ],
+ "checks": [
+  "every page's scripts parse (node --check)",
+  "every sheet and reference file is present",
+  "site under 16 MB",
+  "db rules: editors write shared data, each person writes only inputs/<self>"
+ ]
+}

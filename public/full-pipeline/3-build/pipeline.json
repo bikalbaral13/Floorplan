@@ -1,0 +1,90 @@
+{
+ "schema": "pipeline/1",
+ "id": "build-from-deck",
+ "title": "Build (from roombrief or Plan Deck)",
+ "version": "0.2.0",
+ "phase": "build",
+ "entry": {
+  "agents": "AGENTS.md",
+  "run": "see STAGES.json (S1 intake … S8 QA); in the Full Pipeline S1–S2 are skipped when projects/{CODE}/roombrief.json came from Plan/Design"
+ },
+ "kit": "0.3.1",
+ "inputs": [
+  {
+   "id": "roombrief",
+   "from": "Projects/{CODE}/brief/roombrief.json",
+   "schema": "roombrief.v1",
+   "required": false,
+   "note": "from the Plan/Design phase (space-brief S8 archive); replaces deck intake S1-S2"
+  },
+  {
+   "id": "plan",
+   "from": "Projects/{CODE}/brief/plan.canvas.json",
+   "schema": "canvas.v1",
+   "required": false,
+   "note": "the design canvas; S3 starts from it instead of tracing deck pixels"
+  },
+  {
+   "id": "deck",
+   "from": "project:inputs/*.pptx",
+   "required": false,
+   "note": "fallback: an outside plan-phase deck (.pptx) when no roombrief exists"
+  },
+  {
+   "id": "room",
+   "from": "project:project.json",
+   "required": true,
+   "note": "chosen by the USER (room picker), never by the agent"
+  }
+ ],
+ "library_pins": [],
+ "outputs": {
+  "keep": [
+   {
+    "id": "roombrief",
+    "local": "project:roombrief.json",
+    "to": "Projects/{CODE}/build/roombrief.json",
+    "schema": "roombrief.v1"
+   },
+   {
+    "id": "canvas",
+    "local": "project:{CODE}.room.canvas.json",
+    "to": "Projects/{CODE}/build/{CODE}.room.canvas.json",
+    "schema": "canvas.v1",
+    "after": "S5_COMPOSE"
+   },
+   {
+    "id": "resolve",
+    "local": "project:resolve.json",
+    "to": "Projects/{CODE}/build/resolve.json",
+    "after": "S4_RESOLVE"
+   },
+   {
+    "id": "drawings",
+    "local": "project:drawings/*",
+    "to": "Projects/{CODE}/build/drawings/",
+    "binary": true,
+    "after": "S6_DRAWINGS"
+   },
+   {
+    "id": "blend",
+    "local": "render/{CODE}.blend",
+    "to": "Projects/{CODE}/build/{CODE}.blend",
+    "binary": true,
+    "after": "S7_RENDER"
+   },
+   {
+    "id": "qa",
+    "local": "project:QA.md",
+    "to": "Projects/{CODE}/build/QA.md",
+    "after": "S8_QA"
+   }
+  ],
+  "temp": [
+   "deck/**",
+   "catalog.json",
+   "render/stills/**",
+   "*.baked.json"
+  ]
+ }
+}

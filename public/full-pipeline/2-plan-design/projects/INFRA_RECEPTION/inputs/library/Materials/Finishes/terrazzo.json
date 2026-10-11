@@ -1,0 +1,53 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "stone.terrazzo",
+  "title": "Stone — terrazzo",
+  "description": "Chips in a binder. Voronoi cells ARE the chips, so the scale is the chip size in reverse — drop the scale and the chips grow, which is the one control a terrazzo actually has.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 38,
+      "detail": 1,
+      "roughness": 0.5,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#dcd8d1",
+      "colorB": "#8f8a80"
+    }
+  },
+  "pbr": {
+    "baseColor": "#cfcac2",
+    "roughness": 0.2,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.002,
+      "samples": 4
+    },
+    "coat": {
+      "weight": 0.55,
+      "roughness": 0.04,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 9
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#cfcac2"
+  },
+  "dxf": {
+    "pattern": "AR-CONC",
+    "scale": 0.8,
+    "angle": 0
+  }
+}

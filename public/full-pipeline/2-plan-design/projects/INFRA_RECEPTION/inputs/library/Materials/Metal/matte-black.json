@@ -1,0 +1,51 @@
+{
+  "schema": "material/1",
+  "category": "Metal",
+  "id": "metal.matte-black",
+  "title": "Metal — matte black powder coat",
+  "description": "Black powder-coated steel for bar handles, frames and brackets. Metallic 0 on purpose: the surface is the paint, not the steel. A very fine low-contrast noise and a soft coat give the satin highlight that separates a real matte black from a flat black fill, which renders as a hole in the picture.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 400,
+      "detail": 2,
+      "roughness": 0.5,
+      "distortion": 0,
+      "colorA": "#1d1d1d",
+      "colorB": "#161616"
+    }
+  },
+  "pbr": {
+    "baseColor": "#1a1a1a",
+    "roughness": 0.5,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0008,
+      "samples": 3
+    },
+    "coat": {
+      "weight": 0.15,
+      "roughness": 0.35,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.06,
+      "scale": 40
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#1a1a1a"
+  },
+  "dxf": {
+    "pattern": "ANSI32",
+    "scale": 0.2,
+    "angle": 0
+  }
+}

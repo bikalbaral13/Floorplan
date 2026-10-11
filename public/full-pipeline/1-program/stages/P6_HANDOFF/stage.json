@@ -1,0 +1,26 @@
+{
+ "id": "P6_HANDOFF",
+ "version": "0.2.1",
+ "scope": "project",
+ "summary": "Selected program -> design_pipeline hand-off: output/plan_trace.json (mm, unit shells + entrance doors), output/area_statement.csv, output/PROGRAM.md.",
+ "inputs": [
+  "selected.json",
+  "project.json (wall_mm, handoff)"
+ ],
+ "outputs": [
+  "output/plan_trace.json",
+  "output/area_statement.csv",
+  "output/PROGRAM.md"
+ ],
+ "checks": [
+  "one room per unit, polygons with positive area",
+  "every entrance door lies on its room's outline",
+  "trace areas within 10% of the program areas (wall inset)",
+  "output/plan_trace.json validates against library/Schemas/plan_trace.v1 (selftest)"
+ ],
+ "manual": "Copy to design_pipeline with tools/handoff_to_design.py <CODE> (asks before overwriting).",
+ "requires": [
+  "to_plan_trace"
+ ],
+ "title": "Hand-off to design_pipeline -> plan_trace.json"
+}

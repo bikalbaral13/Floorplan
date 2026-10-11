@@ -1,0 +1,445 @@
+{
+  "version": 1,
+  "id": "armchair-with-math",
+  "title": "Armchair — one Math Engine, seat, back, arms, legs",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Armchair",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M5 11V7a2 2 0 012-2h10a2 2 0 012 2v4",
+        "M4 11h16v6H4z",
+        "M4 11a1 1 0 012 0v6",
+        "M18 11a1 1 0 012 0v6",
+        "M6 17v3",
+        "M18 17v3"
+      ]
+    }
+  },
+  "description": "A parametric ARMCHAIR on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nTHE ARMS EAT INTO THE SEAT, which is the detail that makes the published seat area honest. The cushion runs between the arms and behind the back, not across the whole footprint, so a chair with fat arms reports the smaller seat it actually has rather than the box it occupies.\n\nTHREE STYLES on one ternary: an Armchair with arms at arm height, a Tub chair whose arms rise to meet the back, and a Bench with neither back nor arms. The frame, cushion and legs are identical in all three — a bench is not a different object, it is this one with two pieces emptied.\n\nSEAT DEPTH AND FRONT CLEARANCE are published rather than drawn. Depth is what decides comfort, clearance is what decides whether the chair can be got out of, and neither is visible in a plan.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Width",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.5,
+              "max": 1.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.85,
+              "min": 0.5,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Back height",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.5,
+              "max": 1.3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "seatHeight",
+              "name": "Seat height",
+              "type": "range",
+              "value": 0.42,
+              "min": 0.25,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "seatThk",
+              "name": "Cushion thickness",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backThk",
+              "name": "Back thickness",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "armWidth",
+              "name": "Arm width",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.06,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "armHeight",
+              "name": "Arm height",
+              "type": "range",
+              "value": 0.62,
+              "min": 0.3,
+              "max": 0.9,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "legHeight",
+              "name": "Leg height",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.02,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "style",
+              "name": "Style",
+              "type": "select",
+              "value": "Armchair",
+              "options": [
+                "Armchair",
+                "Tub chair",
+                "Bench (no back)"
+              ]
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "mid-century armchair, boucle upholstery, walnut splayed legs",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Fabric/boucle.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Legs=Finishes/light-oak.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Plump",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "ARMCHAIR — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\nmid-century armchair, boucle upholstery, walnut splayed legs\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Width: {length}\n- Depth: {width}\n- Back height: {height}\n- Seat height: {seatHeight}\n- Cushion thickness: {seatThk}\n- Back thickness: {backThk}\n- Arm width: {armWidth}\n- Arm height: {armHeight}\n- Leg height: {legHeight}\n- Style: {style} (one of: Armchair / Tub chair / Bench (no back))\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Width = {length}\n- Depth = {width}\n- Back height = {height}\n- Seat height = {seatHeight}\n- Arm width = {armWidth}\n- Arm height = {armHeight}\n- Leg height = {legHeight}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame",
+              "color": "#9a8478",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_cushion",
+              "kind": "polygon",
+              "name": "Seat cushion",
+              "color": "#d6c7bb",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Back",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_arms",
+              "kind": "polygon",
+              "name": "Arms",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_legs",
+              "kind": "polygon",
+              "name": "Legs",
+              "color": "#57534e",
+              "layer": "Furniture",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_frame",
+              "kind": "polyhedron",
+              "name": "Frame",
+              "color": "#9a8478",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cushion",
+              "kind": "polyhedron",
+              "name": "Seat cushion",
+              "color": "#d6c7bb",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Back",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_arms",
+              "kind": "polyhedron",
+              "name": "Arms",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#57534e",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

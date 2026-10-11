@@ -1,0 +1,59 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.boucle",
+  "title": "Fabric — bouclé",
+  "description": "Looped ivory upholstery. Voronoi at a coarse scale is the loop; the sheen is most of what you actually see, because a bouclé lit from the side is a field of little bright rims and almost no body.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 55,
+      "detail": 2,
+      "roughness": 0.6,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#efe7db",
+      "colorB": "#ddd2c2"
+    }
+  },
+  "pbr": {
+    "baseColor": "#e9e0d3",
+    "roughness": 0.95,
+    "metallic": 0,
+    "sheen": 0.5
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.75,
+      "roughness": 0.25,
+      "tint": "#fffaf0"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 1.1,
+      "scale": 1
+    },
+    "displacement": {
+      "scale": 0.003,
+      "midlevel": 0.5
+    },
+    "roughnessVariation": {
+      "amount": 0.08,
+      "scale": 22
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#e9e0d3"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 0.4,
+    "angle": 0
+  }
+}

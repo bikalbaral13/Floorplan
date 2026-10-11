@@ -1,0 +1,17 @@
+{
+ "schema": "standards/1",
+ "id": "AADITHYAA",
+ "version": "1.0.0",
+ "extends": "DEFAULT",
+ "about": "Aadithyaa Developers house standards (program_pipeline standards/AADITHYAA.json).",
+ "objects": {
+  "DOOR_HINGED": {
+   "width_ft": 3
+  },
+  "STAIR_DOGLEG": {
+   "max_riser_in": 7,
+   "tread_in": 10,
+   "flight_width_ft": 3.5
+  }
+ }
+}

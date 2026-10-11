@@ -1,0 +1,12 @@
+{
+ "source": "inputs/site_sketch.jpg",
+ "units": "ft",
+ "front_ft": 36, "rear_ft": 36, "west_ft": 106, "east_ft": "105'-6\"",
+ "stated_area_sqft": 3807,
+ "road_side": "N",
+ "assumptions": [
+  "Sketch labels in Tamil: road (ரோடு) along the top edge, north arrow (வ) pointing up, so the road is on the north.",
+  "Left side 106' read as the west side, right side 105.5' as the east side.",
+  "Area 3807 sq ft as written on the sketch (36 x average depth 105.75)."
+ ]
+}

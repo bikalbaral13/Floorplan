@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>4BHK Villa Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --bg:#DDE2E7; --panel:#FFFFFF; --ink:#16202B; --ink2:#4E5A66; --line:#CBD1D7;
+  --accent:#0B6E99; --accent-bg:#E1F0F7; --warn:#8A5A00; --warn-bg:#FDF1D8; --float:rgba(255,255,255,.94);
+  --font:'Barlow',system-ui,'Segoe UI',Arial,sans-serif; --cond:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --lw:330px; --rw:300px;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0E1318;--panel:#1A222B;--ink:#E7ECF1;--ink2:#A3AFBB;--line:#2E3946;--accent:#5BB8E0;--accent-bg:#14303F;--warn:#F2C46B;--warn-bg:#3A2C10;--float:rgba(26,34,43,.94)}}
+:root[data-theme="dark"]{--bg:#0E1318;--panel:#1A222B;--ink:#E7ECF1;--ink2:#A3AFBB;--line:#2E3946;--accent:#5BB8E0;--accent-bg:#14303F;--warn:#F2C46B;--warn-bg:#3A2C10;--float:rgba(26,34,43,.94)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+button{font-family:inherit}
+.top{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);min-height:48px}
+.top h1{font-family:var(--cond);font-weight:600;font-size:20px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top h1{flex:0 0 auto}
+.top h1 .firm{display:block;font-family:var(--font);font-size:12px;font-weight:500;color:var(--ink2);line-height:1.1;margin-top:1px}
+.top .sp{flex:1}
+.tbtn{white-space:nowrap;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:6px;padding:6px 11px;font-size:14px;font-weight:500;cursor:pointer}
+.tbtn[aria-pressed="true"]{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
+.work{display:grid;grid-template-columns:var(--lw) minmax(0,1fr) var(--rw);min-height:0}
+body.noL{--lw:0px} body.noR{--rw:0px}
+body.noL #pL,body.noR #pR{display:none}
+.panel{background:var(--panel);overflow:auto;padding:14px 16px 24px;min-height:0}
+#pL{border-right:1px solid var(--line)} #pR{border-left:1px solid var(--line)}
+.sheetHead{display:none}
+h2{font-family:var(--cond);font-weight:600;font-size:17px;margin:16px 0 8px}
+.sec>h2:first-child{margin-top:0}
+.sec+.sec{margin-top:18px}
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:8px 11px;margin-bottom:6px;cursor:pointer;font:inherit}
+.opt b{font-family:var(--cond);font-weight:600;font-size:16px;margin-right:6px;color:var(--accent)}
+.opt small{display:block;color:var(--ink2);font-size:13px;line-height:1.35}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg)}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--ink2);font-size:14px;font-weight:500;padding:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.sl{display:grid;grid-template-columns:112px 1fr 52px;align-items:center;gap:8px;margin:4px 0}
+.sl label{font-size:14px;color:var(--ink2);line-height:1.2}
+.sl output{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.sl.dim{opacity:.4}
+.seg3{grid-template-columns:1fr 1fr 1fr!important;margin-top:6px}
+.seg4{grid-template-columns:repeat(4,1fr)!important}
+.mini{display:block;font-size:13px;color:var(--ink2);margin:10px 0 4px}
+.h2b{margin-top:14px!important}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px}
+.hint{font-size:13px;color:var(--ink2);margin:6px 0 0}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:9px 11px;font-size:13.5px;margin-top:10px}
+.warn:empty{display:none}
+.field{display:block;margin-bottom:10px}
+.field span{display:block;font-size:13px;color:var(--ink2);margin-bottom:3px}
+.field input,.field textarea,select{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.field textarea{resize:vertical;min-height:54px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.btn{font-size:15px;font-weight:600;border-radius:6px;padding:10px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff}
+.btn.sec2{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:progress}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.canvas{position:relative;overflow:hidden;touch-action:none;cursor:grab;min-height:0}
+.canvas.drag{cursor:grabbing}
+.canvas>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ui{position:absolute;z-index:2;background:var(--float);border:1px solid var(--line);border-radius:8px;cursor:default}
+.chips{display:flex;align-items:center;padding:3px;gap:2px;border:1px solid var(--line);border-radius:8px;background:var(--bg);overflow-x:auto;scrollbar-width:none;min-width:0;flex:0 1 auto}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:0 0 auto;border:0;background:transparent;color:var(--ink2);font-family:var(--cond);font-weight:600;font-size:16px;width:34px;height:30px;border-radius:6px;cursor:pointer}
+.chips button:hover{color:var(--ink)}
+.chips button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.chips .nt{width:auto;white-space:nowrap;padding:0 10px;font-family:var(--font);font-size:13px;font-weight:500;border-left:1px solid var(--line);border-radius:0 6px 6px 0}
+.stats{font-size:13px;color:var(--ink2);line-height:1.25;white-space:nowrap;text-align:right}
+.stats strong{display:block;color:var(--ink);font-family:var(--cond);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.zoom{right:12px;bottom:12px;display:flex;padding:3px;gap:2px}
+.zoom button{border:0;background:transparent;color:var(--ink);font-size:14px;font-weight:500;min-width:34px;height:32px;padding:0 8px;border-radius:6px;cursor:pointer}
+.zoom button:hover{background:var(--accent-bg)}
+.tabbar{display:none}
+#toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:9px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+#toast.show{opacity:1}
+
+@media (max-width:1500px){.stats .eu{display:none}}
+@media (max-width:1180px){ body:not(.forceR){--rw:0px} body:not(.forceR) #pR{display:none} }
+@media (max-width:900px){
+  .top .tbtn{display:none}
+  .work{grid-template-columns:1fr}
+  .panel{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));max-height:min(60dvh,520px);z-index:10;border:0!important;border-top:1px solid var(--line)!important;border-radius:14px 14px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);transform:translateY(110%);transition:transform .22s ease;display:block!important;padding-top:6px}
+  .sec{display:none}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;position:sticky;top:-6px;background:var(--panel);padding:6px 0 8px;margin-bottom:4px;z-index:1}
+  .sheetHead::before{content:"";position:absolute;left:50%;top:0;width:36px;height:4px;border-radius:2px;background:var(--line);transform:translateX(-50%)}
+  .sheetHead h3{font-family:var(--cond);font-size:18px;margin:6px 0 0}
+  .sheetHead button{border:0;background:transparent;color:var(--accent);font-size:15px;font-weight:600;padding:6px 4px;margin-top:6px;cursor:pointer}
+  body[data-tab="layout"] #pL,body[data-tab="site"] #pL,body[data-tab="rooms"] #pL,body[data-tab="stair"] #pL,body[data-tab="export"] #pR{transform:none}
+  body[data-tab="layout"] .sec[data-s="layout"],body[data-tab="site"] .sec[data-s="site"],body[data-tab="rooms"] .sec[data-s="rooms"],body[data-tab="stair"] .sec[data-s="stair"],body[data-tab="export"] .sec[data-s="export"],body[data-tab="export"] .sec[data-s="title"]{display:block}
+  .sec>h2:first-child{display:none}
+  body[data-tab="export"] .sec[data-s="title"]{margin-top:18px}
+  body[data-tab="export"] .sec[data-s="title"]>h2:first-child{display:block}
+  .h2b{display:block!important}
+  .sec+.sec{margin-top:0}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);background:var(--panel);border-top:1px solid var(--line);height:58px;z-index:11}
+  .tabbar button{border:0;background:transparent;color:var(--ink2);font-size:13px;font-weight:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}
+  .tabbar svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+  .tabbar button[aria-pressed="true"]{color:var(--accent)}
+  .top{flex-wrap:wrap;row-gap:8px;padding:8px 12px}
+  .top h1{flex:1 1 auto;min-width:0;font-size:18px}
+  .top .sp{display:none}
+  .stats{order:2}
+  .stats .eu{display:none}
+  .stats strong{font-size:15px}
+  .chips{order:3;flex:1 1 100%;justify-content:space-between}
+  .chips button{width:29px}
+  .chips .nt{padding:0 8px}
+  .stats .cv{display:none}
+  .zoom button.wide{display:none}
+}
+@media (prefers-reduced-motion:reduce){.panel{transition:none}}
+
+.vt{font-size:13px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vt .vs{padding:6px 9px;background:var(--bg)}
+.vt .vr{display:grid;grid-template-columns:1.1fr 1fr .5fr .9fr;gap:6px;padding:4px 9px;border-top:1px solid var(--line)}
+.vt .v-good span:last-child{color:#2F7A3E}.vt .v-avoid span:last-child{color:#B3261E}.vt .v-acceptable span:last-child{color:var(--accent)}
+.q{font-size:13px;padding:6px 9px;border-radius:6px;margin-bottom:5px;line-height:1.4}
+.q-fail{background:#FBE9E7;color:#8C1D18}.q-warn{background:var(--warn-bg);color:var(--warn)}.q-ok{background:#E6F4EA;color:#1E6B33}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .q-fail{background:#3B1C1A;color:#F2B8B5}:root:not([data-theme="light"]) .q-ok{background:#16301F;color:#A8DAB5}}
+:root[data-theme="dark"] .q-fail{background:#3B1C1A;color:#F2B8B5}:root[data-theme="dark"] .q-ok{background:#16301F;color:#A8DAB5}
+.seg4{grid-template-columns:repeat(4,1fr)!important}.seg3{grid-template-columns:1fr 1fr 1fr!important}
+</style>
+<body data-tab="">
+<header class="top">
+  <h1>4BHK Villa Planner<span class="firm" id="hdrFirm">Aadithyaa Developers</span></h1>
+  <div class="chips" id="chips" role="group" aria-label="Option, road side, mirror"></div>
+  <span class="sp"></span>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <button class="tbtn" id="tgL" aria-pressed="true" onclick="togglePanel('L')">Layout</button>
+  <button class="tbtn" id="tgR" aria-pressed="true" onclick="togglePanel('R')">Export</button>
+</header>
+
+<div class="work">
+  <aside class="panel" id="pL" aria-label="Villa settings">
+    <div class="sheetHead"><h3 id="shL">Layout</h3><button onclick="closeSheet()">Done</button></div>
+    <section class="sec" data-s="layout">
+      <h2>Layout option</h2>
+      <div id="opts"></div>
+      <h2 class="h2b">Road side</h2>
+      <div class="seg seg4" id="road"><button data-v="N">North</button><button data-v="E">East</button><button data-v="S">South</button><button data-v="W">West</button></div>
+      <h2 class="h2b">Mirror left / right</h2>
+      <div class="seg seg3" id="mir"><button data-v="auto">Auto (vastu)</button><button data-v="no">No</button><button data-v="yes">Yes</button></div>
+      <h2 class="h2b">Drawing</h2>
+      <div class="seg" id="flip"><button data-v="top">Road at top</button><button data-v="bottom">Road at bottom</button></div>
+      <h2 class="h2b">Vastu</h2>
+      <div id="vastu" class="vt"></div>
+      <h2 class="h2b">Checks</h2>
+      <p class="hint">Against placeholder rules (NBC 2016 room minimums, typical bye-laws). Confirm the local authority's values in the pipeline (P3).</p>
+      <div id="qc"></div>
+    </section>
+    <section class="sec" data-s="site">
+      <h2>Plot</h2>
+      <div class="sl"><label for="pw">Frontage</label><input type="range" id="pw" min="24" max="45" step="0.5" value="30"><output id="pwv"></output></div>
+      <div class="sl"><label for="pd">Depth</label><input type="range" id="pd" min="34" max="60" step="0.5" value="40"><output id="pdv"></output></div>
+      <h2 class="h2b">Setbacks</h2>
+      <div class="sl"><label for="sbF">Front (road)</label><input type="range" id="sbF" min="3" max="15" step="0.5" value="5"><output id="sbFv"></output></div>
+      <div class="sl"><label for="sbR">Rear</label><input type="range" id="sbR" min="0" max="10" step="0.5" value="3"><output id="sbRv"></output></div>
+      <div class="sl"><label for="sbL">Left (as drawn)</label><input type="range" id="sbL" min="0" max="8" step="0.5" value="3"><output id="sbLv"></output></div>
+      <div class="sl"><label for="sbRt">Right (as drawn)</label><input type="range" id="sbRt" min="0" max="8" step="0.5" value="2"><output id="sbRtv"></output></div>
+      <p class="hint" id="siteInfo"></p>
+    </section>
+    <section class="sec" data-s="rooms">
+      <h2>Bands</h2>
+      <div class="sl"><label for="fband">Front band</label><input type="range" id="fband" min="13" max="20" step="0.5" value="15"><output id="fbandv"></output></div>
+      <div class="sl"><label for="mband">Middle band</label><input type="range" id="mband" min="7" max="12" step="0.5" value="8"><output id="mbandv"></output></div>
+      <p class="hint">Front: porch and living. Middle: staircase, dining hub, common toilet. Rear: bedroom 4 and kitchen.</p>
+      <h2 class="h2b">Room sizes</h2>
+      <div class="sl"><label for="porch">Car porch width</label><input type="range" id="porch" min="9" max="14" step="0.5" value="11"><output id="porchv"></output></div>
+      <div class="sl"><label for="kw">Kitchen width</label><input type="range" id="kw" min="7" max="13" step="0.5" value="10"><output id="kwv"></output></div>
+      <div class="sl"><label for="tw">Common toilet</label><input type="range" id="tw" min="4" max="6" step="0.25" value="4.5"><output id="twv"></output></div>
+      <div class="sl"><label for="at">Attached toilets</label><input type="range" id="at" min="5" max="7" step="0.25" value="5.5"><output id="atv"></output></div>
+      <div class="sl"><label for="mw">Master width (A)</label><input type="range" id="mw" min="12" max="18" step="0.5" value="15"><output id="mwv"></output></div>
+      <div class="sl"><label for="bal">Front balcony</label><input type="range" id="bal" min="0" max="5" step="0.5" value="3"><output id="balv"></output></div>
+      <div class="sl"><label for="puja">Puja niche</label><input type="range" id="puja" min="0" max="5" step="0.5" value="4"><output id="pujav"></output></div>
+      <div class="warn" id="warn"></div>
+    </section>
+    <section class="sec" data-s="stair">
+      <h2>Staircase</h2>
+      <div class="sl"><label for="fh">Floor height</label><input type="range" id="fh" min="9" max="12" step="0.25" value="10.5"><output id="fhv"></output></div>
+      <div class="sl"><label for="rs">Max riser</label><input type="range" id="rs" min="5.5" max="7.5" step="0.25" value="7"><output id="rsv"></output></div>
+      <div class="sl"><label for="td">Tread</label><input type="range" id="td" min="9" max="12" step="0.5" value="10"><output id="tdv"></output></div>
+      <div class="sl"><label for="fw">Flight width</label><input type="range" id="fw" min="3" max="4.5" step="0.25" value="3.5"><output id="fwv"></output></div>
+      <label class="mini">First flight goes up towards (as drawn, before mirroring)</label>
+      <div class="seg seg4" id="sdir"><button data-v="W">Left</button><button data-v="E">Right</button><button data-v="N">Road</button><button data-v="S">Rear</button></div>
+      <label class="mini">Turn at landing</label>
+      <div class="seg" id="sturn"><button data-v="L">Left</button><button data-v="R">Right</button></div>
+      <p class="hint" id="stInfo"></p>
+      <h2 class="h2b">Main door</h2>
+      <div class="sl"><label for="dw">Width</label><input type="range" id="dw" min="2.5" max="4" step="0.25" value="3.5"><output id="dwv"></output></div>
+      <div class="sl"><label for="dp">Position</label><input type="range" id="dp" min="0" max="100" step="1" value="25"><output id="dpv"></output></div>
+      <div class="warn" id="warn2"></div>
+    </section>
+  </aside>
+
+  <section class="canvas" id="cv" aria-label="Drawing sheet. Drag to pan, pinch or scroll to zoom.">
+    <div class="ui zoom">
+      <button onclick="zoomBtn(1/1.3)" aria-label="Zoom in">+</button>
+      <button onclick="zoomBtn(1.3)" aria-label="Zoom out">−</button>
+      <button onclick="fitPlan()">Plans</button>
+      <button onclick="fitFloor(0)" aria-label="Fit ground floor">GF</button><button onclick="fitFloor(1)" aria-label="Fit first floor">FF</button>
+      <button onclick="fitSheet()">Sheet</button>
+    </div>
+    <svg id="cvs" xmlns="http://www.w3.org/2000/svg"></svg>
+  </section>
+
+  <aside class="panel" id="pR" aria-label="Export and title block">
+    <div class="sheetHead"><h3 id="shR">Export</h3><button onclick="closeSheet()">Done</button></div>
+    <section class="sec" data-s="export">
+      <h2>Export drawing</h2>
+      <label class="field"><span>Sheet size</span>
+        <select id="sheetSize"><option value="a3" id="a3opt">A3 landscape</option><option value="a4">A4 landscape (fit, use scale bar)</option></select></label>
+      <div class="btns"><button class="btn" id="bPdf" onclick="exportPDF()">Export PDF</button><button class="btn sec2" id="bPng" onclick="exportPNG()">Export PNG</button></div>
+      <p class="hint">The title block is added to the exported sheet only.</p>
+      <h2 class="h2b">Settings file</h2>
+      <div class="btns"><button class="btn sec2" onclick="saveSettings()">Save settings</button><button class="btn sec2" onclick="$('loadIn').click()">Load settings</button></div>
+      <input type="file" id="loadIn" accept=".json,application/json" hidden>
+      <p class="hint">Option and every parameter of VILLA_4BHK_G1. The program pipeline reads it at P5 as the selection.</p>
+    </section>
+    <section class="sec" data-s="title">
+      <h2>Title block</h2>
+      <label class="field"><span>Firm name</span><input data-k="firm"></label>
+      <label class="field"><span>Firm address or tagline</span><input data-k="tag"></label>
+      <label class="field"><span>Project</span><input data-k="project"></label>
+      <label class="field"><span>Client or owner</span><input data-k="client"></label>
+      <label class="field"><span>Site address</span><textarea data-k="site"></textarea></label>
+      <div class="row2"><label class="field"><span>Drawing no.</span><input data-k="dwg"></label><label class="field"><span>Revision</span><input data-k="rev"></label></div>
+      <div class="row2"><label class="field"><span>Drawn by</span><input data-k="drawn"></label><label class="field"><span>Checked by</span><input data-k="checked"></label></div>
+      <label class="field"><span>Date</span><input data-k="date"></label>
+      <button class="btn sec2" style="width:100%" onclick="resetTB()">Reset title block</button>
+    </section>
+  </aside>
+</div>
+
+<nav class="tabbar" aria-label="Settings">
+  <button data-t="layout" onclick="openTab('layout')"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M4 12h16M12 3v9"/></svg>Layout</button>
+  <button data-t="site" onclick="openTab('site')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1" stroke-dasharray="3 2"/><rect x="7" y="8" width="10" height="8"/></svg>Site</button>
+  <button data-t="rooms" onclick="openTab('rooms')"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Rooms</button>
+  <button data-t="stair" onclick="openTab('stair')"><svg viewBox="0 0 24 24"><path d="M4 20h4v-4h4v-4h4V8h4V4"/></svg>Stair</button>
+  <button data-t="export" onclick="openTab('export')"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 19h14"/></svg>Export</button>
+</nav>
+<div id="toast" role="status"></div>
+
+<script>
+let TB={};
+const $=id=>document.getElementById(id);
+const mobile=()=>matchMedia('(max-width:900px)').matches;
+/* VILLA CORE START */
+/* VILLA_4BHK_G1 0.1.0 — JavaScript twin of typologies/VILLA_4BHK_G1/generator.py (generate + qc).
+   Keep in step with the Python: tools/selftest.py compares both on tests/fixtures/villa_parity.json. */
+const VILLA_VERSION='0.1.0';
+function fmtFt(v){v=Math.round(v*12)/12;let ft=Math.floor(v+1e-9),inch=Math.round((v-ft)*12);if(inch===12){ft++;inch=0}return ft+"'-"+inch+'"'}
+const NAMES={PORCH:'Car porch',LIV:'Living',PUJA:'Puja',STAIR:'Staircase',DIN:'Dining',TC:'Common toilet',BED4:'Bedroom 4 (guest / parents)',T4:'Toilet 4',KIT:'Kitchen',
+  BED2:'Bedroom 2',T2:'Toilet 2',BED3:'Bedroom 3',T3:'Toilet 3',LNG:'Family lounge',LOB:'Gallery',MBR:'Master bedroom',MDR:'Master dress',MT:'Master toilet',OTS:'Open to sky (double height)',BAL:'Balcony'};
+const OPT_TITLES={A:'Front living, family lounge upstairs',B:'Double-height living (OTS), gallery upstairs'};
+const VRULES={front_setback_min_ft:5,rear_setback_min_ft:3,side_setback_min_ft:2,one_side_zero_allowed:false,coverage_max_pct:75,far_max:1.75,height_max_ft:33,far_excludes:['porch','void','balcony'],
+  min_first_habitable_sqft:102.3,min_habitable_sqft:80.7,min_habitable_width_ft:7.87,min_kitchen_sqft:53.8,min_kitchen_width_ft:5.9,min_toilet_sqft:30.1,min_toilet_width_ft:3.94,
+  parking_min_width_ft:8.2,parking_min_length_ft:16.4,parking_in_front_setback:true,stair_max_riser_in:7.5,stair_min_tread_in:10,stair_min_flight_ft:3,door_min_width_ft:3,balcony_max_projection_ft:4,parapet_ft:3.5};
+const VBRIEF={unit_count:1,bedrooms:4,facing_allowed:['North','East','South','West'],future_floors:false,vastu:true,parking:1};
+
+/* geometry */
+const vrect=(x1,y1,x2,y2)=>[[x1,y1],[x2,y1],[x2,y2],[x1,y2]];
+function vnotch(x1,y1,x2,y2,c,s){if(s<=0)return vrect(x1,y1,x2,y2);return{tl:[[x1+s,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1+s],[x1+s,y1+s]],tr:[[x1,y1],[x2-s,y1],[x2-s,y1+s],[x2,y1+s],[x2,y2],[x1,y2]],
+  bl:[[x1,y1],[x2,y1],[x2,y2],[x1+s,y2],[x1+s,y2-s],[x1,y2-s]],br:[[x1,y1],[x2,y1],[x2,y2-s],[x2-s,y2-s],[x2-s,y2],[x1,y2]]}[c]}
+function varea(p){let s=0;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];s+=a[0]*b[1]-b[0]*a[1]}return Math.abs(s)/2}
+function vbbox(p){const xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]}
+function vcentroid(p){const b=vbbox(p);return[(b[0]+b[2])/2,(b[1]+b[3])/2]}
+function vinside(pt,poly){const[x,y]=pt;let c=false;for(let i=0;i<poly.length;i++){const[x1,y1]=poly[i],[x2,y2]=poly[(i+1)%poly.length];if((y1>y)!==(y2>y)&&x<(x2-x1)*(y-y1)/(y2-y1)+x1)c=!c}return c}
+function vshared(pa,pb,tol=1e-6){let best=null;
+  for(let i=0;i<pa.length;i++){const a1=pa[i],a2=pa[(i+1)%pa.length];
+    for(let j=0;j<pb.length;j++){const b1=pb[j],b2=pb[(j+1)%pb.length];
+      if(Math.abs(a1[1]-a2[1])<tol&&Math.abs(b1[1]-b2[1])<tol&&Math.abs(a1[1]-b1[1])<tol){const lo=Math.max(Math.min(a1[0],a2[0]),Math.min(b1[0],b2[0])),hi=Math.min(Math.max(a1[0],a2[0]),Math.max(b1[0],b2[0]));
+        if(hi-lo>tol&&(best===null||hi-lo>best[2]))best=[[lo,a1[1]],[hi,a1[1]],hi-lo]}
+      if(Math.abs(a1[0]-a2[0])<tol&&Math.abs(b1[0]-b2[0])<tol&&Math.abs(a1[0]-b1[0])<tol){const lo=Math.max(Math.min(a1[1],a2[1]),Math.min(b1[1],b2[1])),hi=Math.min(Math.max(a1[1],a2[1]),Math.max(b1[1],b2[1]));
+        if(hi-lo>tol&&(best===null||hi-lo>best[2]))best=[[a1[0],lo],[a1[0],hi],hi-lo]}}}
+  return best}
+const AXES={N:[[1,0],[0,-1]],E:[[0,-1],[-1,0]],S:[[-1,0],[0,1]],W:[[0,1],[1,0]]};
+function toCompass(road,dx,dy){const[[xe,xn],[ye,yn]]=AXES[road];return[dx*xe+dy*ye,dx*xn+dy*yn]}
+function vzone(road,dx,dy,hw,hd){const[e,n]=toCompass(road,dx/hw,dy/hd);if(Math.hypot(e,n)<0.3)return'C';const a=((Math.atan2(n,e)*180/Math.PI)+360)%360;return['E','NE','N','NW','W','SW','S','SE'][Math.floor(((a+22.5)%360)/45)]}
+const VASTU={kitchen:[['SE'],['NW'],['NE','SW','C']],master:[['SW'],['S','W'],['NE','SE']],puja:[['NE'],['E','N'],['S','SW','SE']],living:[['N','E','NE'],['NW'],['SW']],
+  stair:[['S','W','SW'],['SE','NW'],['NE','C']],toilet:[['NW','W'],['S','SE','E'],['NE','SW','C']],entrance:[['N','E','NE'],['NW','SE'],['SW','S']]};
+
+/* objects: STAIR_DOGLEG 0.1.0, DOOR_HINGED 0.1.0 */
+const SDIRS={E:[1,0],W:[-1,0],N:[0,-1],S:[0,1]};
+function stairCompute(p){const risers=Math.ceil(p.floor_height_ft*12/p.max_riser_in-1e-9),rAct=p.floor_height_ft*12/risers,perF=Math.ceil(risers/2),treads=perF-1,run=treads*p.tread_in/12;
+  const SL=run+p.flight_width_ft,SW=2*p.flight_width_ft+p.gap_ft,d=SDIRS[p.direction],ln=[d[1],-d[0]],sv=p.turn==='L'?ln:[-ln[0],-ln[1]],along=d[0]!==0;
+  return{risers,rAct,perF,treads,run,SL,SW,TD:p.tread_in/12,FW:p.flight_width_ft,FH:p.floor_height_ft,gap:p.gap_ft,d,sv,wX:along?SL:SW,hY:along?SW:SL,direction:p.direction,turn:p.turn}}
+function stairPlace(c,x,y){const cs=[[0,0],[c.SL,0],[0,c.SW],[c.SL,c.SW]].map(([u,v])=>[c.d[0]*u+c.sv[0]*v,c.d[1]*u+c.sv[1]*v]);
+  return Object.assign({},c,{o:[x-Math.min(...cs.map(q=>q[0])),y-Math.min(...cs.map(q=>q[1]))],x,y,w:c.wX,h:c.hY})}
+function stairPt(s,u,v){return[s.o[0]+s.d[0]*u+s.sv[0]*v,s.o[1]+s.d[1]*u+s.sv[1]*v]}
+function stairLines(s){const FW=s.FW,g=s.gap,run=s.run,SW=s.SW,SL=s.SL,v2=FW+g,out=[['divider',stairPt(s,0,FW),stairPt(s,run,FW)],['divider',stairPt(s,0,v2),stairPt(s,run,v2)],['landing',stairPt(s,run,0),stairPt(s,run,SW)]];
+  for(let i=1;i<=s.treads;i++){const k=i*s.TD;if(k<run-0.02)out.push(['tread',stairPt(s,k,0),stairPt(s,k,FW)],['tread',stairPt(s,k,v2),stairPt(s,k,SW)])}
+  const xl=run+(SL-run)/2;out.push(['path',stairPt(s,0.5,FW/2),stairPt(s,xl,FW/2)],['path',stairPt(s,xl,FW/2),stairPt(s,xl,v2+FW/2)],['path',stairPt(s,xl,v2+FW/2),stairPt(s,1.2,v2+FW/2)]);return out}
+function doorPlace(p,a,b){const horiz=Math.abs(b[1]-a[1])<1e-9,L=horiz?Math.abs(b[0]-a[0]):Math.abs(b[1]-a[1]),s=p.margin_ft+Math.max(0,L-2*p.margin_ft-p.width_ft)*p.position_pct/100;
+  if(horiz){const x0=Math.min(a[0],b[0])+s;return{a:[x0,a[1]],b:[x0+p.width_ft,a[1]],width_ft:p.width_ft}}const y0=Math.min(a[1],b[1])+s;return{a:[a[0],y0],b:[a[0],y0+p.width_ft],width_ft:p.width_ft}}
+
+/* layout (see generator.py _layout) */
+function vLayout(p,mirror){
+  const PW=p.plot_width_ft,PD=p.plot_depth_ft,x0=p.setback_left_ft,y0=p.setback_front_ft,bw=PW-x0-p.setback_right_ft,bd=PD-y0-p.setback_rear_ft;
+  let dir=p.stair_first_flight;if(mirror)dir={E:'W',W:'E'}[dir]||dir;
+  const sc=stairCompute({floor_height_ft:p.floor_height_ft,max_riser_in:p.max_riser_in,tread_in:p.tread_in,flight_width_ft:p.flight_width_ft,gap_ft:1/3,direction:dir,turn:p.stair_turn});
+  const SL=sc.wX,SW=sc.hY,fb=p.front_band_ft,m=Math.max(p.middle_band_ft,SW),r=bd-fb-m,pw=p.porch_width_ft,tw=p.toilet_width_ft,at=p.attached_toilet_ft,dw=bw-SL-tw,warn=[];
+  if(dw<8)warn.push(`Dining hub is only ${fmtFt(dw)} wide (stair ${fmtFt(SL)} + toilet ${fmtFt(tw)} on a ${fmtFt(bw)} footprint).`);
+  if(r<8.5)warn.push(`Rear band is only ${fmtFt(r)} deep; bedrooms there will be cramped.`);
+  const xsLo=SL+3.5,xsHi=SL+dw-3.5,xs=Math.min(Math.max(bw-p.kitchen_width_ft,xsLo),xsHi);
+  if(Math.abs((bw-xs)-p.kitchen_width_ft)>0.01)warn.push(`Kitchen set to ${fmtFt(bw-xs)} (target ${fmtFt(p.kitchen_width_ft)}) so bedroom 4 and the kitchen both keep a door to the dining.`);
+  const sf=p.option==='A'?SL+3.5:SL+4;
+  const rooms={GF:{},FF:{}},GF=rooms.GF,FF=rooms.FF,conns=[];
+  const R=(lv,code,kind,poly)=>{rooms[lv][code]={code,name:NAMES[code],kind,level:lv,poly}};
+  R('GF','PORCH','porch',vrect(0,0,pw,fb));R('GF','LIV','living',vrect(pw,0,bw,fb));R('GF','STAIR','stair',vrect(0,fb,SL,fb+m));
+  R('GF','DIN','dining',vrect(SL,fb,SL+dw,fb+m));R('GF','TC','toilet',vrect(SL+dw,fb,bw,fb+m));
+  const zoneAt=(x,y)=>vzone(p.road_side,(mirror?bw-x:x)-bw/2,y-bd/2,bw/2,bd/2);
+  const[good,okz,bad]=VASTU.toilet,rank=z=>good.includes(z)?2:okz.includes(z)?1:bad.includes(z)?-2:0;
+  const rbl=rank(zoneAt(at/2,bd-at/2)),rbr=rank(zoneAt(xs-at/2,bd-at/2)),t4c=rbr>rbl?'br':'bl';
+  R('GF','BED4','bedroom',vnotch(0,fb+m,xs,bd,t4c,at));R('GF','T4','toilet',t4c==='bl'?vrect(0,bd-at,at,bd):vrect(xs-at,bd-at,xs,bd));
+  R('GF','KIT','kitchen',vrect(xs,fb+m,bw,bd));
+  conns.push(['GF','DIN','LIV','opening',0],['GF','DIN','TC','door',2.5],['GF','DIN','BED4','door',3],['GF','BED4','T4','door',2.5],['GF','DIN','KIT','door',3],['GF','DIN','STAIR','opening',0],['GF','LIV','PORCH','door',3]);
+  R('FF','STAIR','stair',vrect(0,fb,SL,fb+m));R('FF','BED2','bedroom',vnotch(0,0,sf,fb,'bl',at));R('FF','T2','toilet',vrect(0,fb-at,at,fb));
+  const bal=p.balcony_depth_ft;if(bal>0)R('FF','BAL','balcony',vrect(0,-bal,bw,0));
+  if(p.option==='A'){
+    R('FF','BED3','bedroom',vnotch(sf,0,bw,fb,'br',at));R('FF','T3','toilet',vrect(bw-at,fb-at,bw,fb));R('FF','LNG','lounge',vrect(SL,fb,bw,fb+m));
+    const mw=Math.min(Math.max(p.master_width_ft,SL+3.5),bw-7),mtd=Math.min(Math.max(r/2,30.2/Math.max(bw-mw,0.1)),r-2.5);
+    R('FF','MBR','master',vrect(0,fb+m,mw,bd));R('FF','MDR','dress',vrect(mw,fb+m,bw,bd-mtd));R('FF','MT','toilet',vrect(mw,bd-mtd,bw,bd));
+    conns.push(['FF','STAIR','LNG','opening',0],['FF','LNG','BED2','door',3],['FF','LNG','BED3','door',3],['FF','BED2','T2','door',2.5],['FF','BED3','T3','door',2.5],['FF','LNG','MBR','door',3],['FF','MBR','MDR','opening',0],['FF','MBR','MT','door',2.5]);
+    if(bal>0)conns.push(['FF','BED3','BAL','door',3]);
+  }else{
+    R('FF','OTS','void',vrect(sf,0,bw,fb));R('FF','LOB','lounge',vrect(SL,fb,SL+4,fb+m));R('FF','BED3','bedroom',vrect(SL+4,fb,bw,fb+m));
+    const mw=Math.min(Math.max(bw-at-5.5,SL+3.5),bw-at-4),sx2=Math.min(mw+5.5,bw-at),mtd=Math.min(Math.max(r/2,30.2/Math.max(sx2-mw,0.1)),r-2.5);
+    R('FF','MBR','master',vrect(0,fb+m,mw,bd));R('FF','MDR','dress',vrect(mw,fb+m,sx2,bd-mtd));R('FF','MT','toilet',vrect(mw,bd-mtd,sx2,bd));R('FF','T3','toilet',vrect(sx2,fb+m,bw,bd));
+    conns.push(['FF','STAIR','LOB','opening',0],['FF','LOB','BED2','door',3],['FF','LOB','BED3','door',3],['FF','BED2','T2','door',2.5],['FF','BED3','T3','door',2.5],['FF','LOB','MBR','door',3],['FF','MBR','MDR','opening',0],['FF','MBR','MT','door',2.5]);
+    if(bal>0)conns.push(['FF','BED2','BAL','door',3]);
+  }
+  const pj=p.puja_ft,liv=GF.LIV;
+  if(pj>0){const[x1,y1,x2,y2]=vbbox(liv.poly);let best=null;
+    for(const[cn,[cx,cy]]of[['tl',[x1,y1]],['tr',[x2,y1]],['bl',[x1,y2]],['br',[x2,y2]]]){
+      if((cn==='tl'||cn==='bl')&&Math.abs(x1-pw)<1e-6)continue;
+      const ex=mirror?bw-cx:cx,[e,n]=toCompass(p.road_side,ex-bw/2,cy-bd/2),s=e+n;if(best===null||s>best[0])best=[s,cn]}
+    const cn=best[1];liv.poly=vnotch(x1,y1,x2,y2,cn,pj);const qx=(cn==='tl'||cn==='bl')?x1:x2-pj,qy=(cn==='tl'||cn==='tr')?y1:y2-pj;
+    R('GF','PUJA','puja',vrect(qx,qy,qx+pj,qy+pj));conns.push(['GF','LIV','PUJA','opening',0])}
+  const lb=vbbox(liv.poly);let a=lb[0],b=lb[2];
+  if(pj>0&&GF.PUJA.poly[0][1]===0){if(GF.PUJA.poly[0][0]>lb[0]+1e-6)b=GF.PUJA.poly[0][0];else a=GF.PUJA.poly[1][0]}
+  let md=doorPlace({width_ft:p.main_door_width_ft,position_pct:p.main_door_pct,margin_ft:0.5},[a,0],[b,0]);
+  const tx=([x,y])=>[(mirror?bw-x:x)+x0,y+y0];
+  for(const lv of['GF','FF'])for(const k in rooms[lv]){const rm=rooms[lv][k];rm.poly=rm.poly.map(tx);if(mirror)rm.poly.reverse()}
+  md={a:tx(md.a),b:tx(md.b),width_ft:md.width_ft};if(mirror){const s=[md.a,md.b].sort((u,v)=>u[0]-v[0]||u[1]-v[1]);md.a=s[0];md.b=s[1]}
+  const st=stairPlace(sc,(mirror?bw-SL:0)+x0,fb+y0);
+  return{PW,PD,x0,y0,bw,bd,fb,m,r,SL,SW,dw,xs,sf,rooms,conns,main_door:md,stair:st,warn}}
+
+function vDoors(L){const out=[];
+  for(const[lv,a,b,kind,w0]of L.conns){const ra=L.rooms[lv][a],rb=L.rooms[lv][b];if(!ra||!rb)continue;const seg=vshared(ra.poly,rb.poly);
+    if(!seg){out.push({level:lv,from:a,to:b,kind,missing:true});continue}const[p1,p2,ln]=seg;
+    if(kind==='opening'){out.push({level:lv,from:a,to:b,kind,a:p1,b:p2,width_ft:ln});continue}
+    const w=Math.min(w0,ln-0.5);if(w<2){out.push({level:lv,from:a,to:b,kind,missing:true,why:`shared wall only ${fmtFt(ln)}`});continue}
+    const mx=(p1[0]+p2[0])/2,my=(p1[1]+p2[1])/2;let da,db;if(Math.abs(p1[1]-p2[1])<1e-6){da=[mx-w/2,my];db=[mx+w/2,my]}else{da=[mx,my-w/2];db=[mx,my+w/2]}
+    out.push({level:lv,from:a,to:b,kind:'door',a:da,b:db,width_ft:w})}
+  return out}
+
+function vVastu(L,road){const cx=L.x0+L.bw/2,cy=L.y0+L.bd/2,hw=L.bw/2,hd=L.bd/2,out=[];let score=0;
+  const judge=(what,ref,pt)=>{const z=vzone(road,pt[0]-cx,pt[1]-cy,hw,hd),[g,o,b]=VASTU[what],v=g.includes(z)?2:o.includes(z)?1:b.includes(z)?-2:0;score+=v;
+    out.push({item:what,ref,zone:z,verdict:{2:'good',1:'acceptable',0:'neutral','-2':'avoid'}[v]})};
+  for(const[lv,code,what]of[['GF','KIT','kitchen'],['FF','MBR','master'],['GF','PUJA','puja'],['GF','LIV','living'],['GF','STAIR','stair']])if(L.rooms[lv][code])judge(what,`${lv}-${code}`,vcentroid(L.rooms[lv][code].poly));
+  for(const lv of['GF','FF'])for(const code in L.rooms[lv])if(L.rooms[lv][code].kind==='toilet')judge('toilet',`${lv}-${code}`,vcentroid(L.rooms[lv][code].poly));
+  const md=L.main_door;judge('entrance','main door',[(md.a[0]+md.b[0])/2,(md.a[1]+md.b[1])/2]);return[out,score]}
+
+function villaGenerate(p){
+  const road=p.road_side,cands=p.mirror==='auto'?[false,true]:[p.mirror==='yes'];let best=null;
+  for(const mi of cands){const L=vLayout(p,mi),[va,score]=vVastu(L,road);if(best===null||score>best[2])best=[L,va,score,mi]}
+  const[L,va,score,mi]=best,rooms=L.rooms,doors=vDoors(L),sched=[];
+  for(const lv of['GF','FF'])for(const code in rooms[lv]){const rm=rooms[lv][code],b=vbbox(rm.poly);rm.area_sqft=varea(rm.poly);rm.w=b[2]-b[0];rm.h=b[3]-b[1];
+    sched.push({code:`${lv}-${code}`,name:rm.name,level:lv,kind:rm.kind,face:'',size:`${fmtFt(rm.w)} x ${fmtFt(rm.h)}`,area_sqft:rm.area_sqft})}
+  const foot=L.bw*L.bd,plot=L.PW*L.PD,porch=rooms.GF.PORCH.area_sqft,all=lv=>Object.values(rooms[lv]);
+  const voidA=all('FF').filter(r=>r.kind==='void').reduce((s,r)=>s+r.area_sqft,0),balc=all('FF').filter(r=>r.kind==='balcony').reduce((s,r)=>s+r.area_sqft,0);
+  const gf=foot,ff=foot-voidA,total=gf+ff,far_area=total-porch;
+  const beds=[...all('GF'),...all('FF')].filter(r=>r.kind==='bedroom'||r.kind==='master').length,toilets=[...all('GF'),...all('FF')].filter(r=>r.kind==='toilet').length;
+  const face={N:'North',E:'East',S:'South',W:'West'}[road],st=L.stair,e=stairPt(st,-2.5,st.FW/2);st.entryOK=vinside(e,rooms.GF.DIN.poly);
+  const w2=st.entryOK?[]:['The first step does not start from the dining hub. Change stair_first_flight / stair_turn.'];
+  if(L.m>p.middle_band_ft+1e-6)w2.push(`Middle band widened to the stair width ${fmtFt(L.m)}.`);
+  const res={typology:'VILLA_4BHK_G1',version:VILLA_VERSION,option:p.option,option_title:OPT_TITLES[p.option],params:Object.assign({},p),mirror:mi,road_side:road,facing:face,
+    site:{width_ft:L.PW,depth_ft:L.PD,area_sqft:plot},setbacks:{front:p.setback_front_ft,rear:p.setback_rear_ft,left:p.setback_left_ft,right:p.setback_right_ft},
+    build:{x0:L.x0,y0:L.y0,bw:L.bw,bd:L.bd,front_band:L.fb,middle_band:L.m,rear_band:L.r,dining_w:L.dw,rear_split:L.xs},
+    levels:[{code:'GF',ffl_ft:0},{code:'FF',ffl_ft:p.floor_height_ft}],rooms:{GF:all('GF'),FF:all('FF')},doors,main_door:L.main_door,stair:st,
+    areas:{footprint:foot,gf,ff,porch,void:voidA,balcony:balc,far_area},total,coverage_pct:foot/plot*100,far:far_area/plot,bedrooms:beds,toilets,height_ft:2*p.floor_height_ft,
+    vastu:va,vastu_score:score,schedule:sched,warn:L.warn,warn2:w2};
+  return res}
+
+function villaReach(res,lv){const doors=res.doors.filter(d=>d.level===lv&&!d.missing),seen=new Set(lv==='GF'?['LIV','PORCH']:['STAIR']);let grow=true;
+  while(grow){grow=false;for(const d of doors)for(const[a,b]of[[d.from,d.to],[d.to,d.from]])if(seen.has(a)&&!seen.has(b)){seen.add(b);grow=true}}return seen}
+
+function villaQC(res,r=VRULES,brief=VBRIEF){const out=[],F=(level,check,ref,msg)=>out.push({level,check,ref,msg}),sb=res.setbacks,f=fmtFt;
+  for(const[k,rk]of[['front','front_setback_min_ft'],['rear','rear_setback_min_ft'],['left','side_setback_min_ft'],['right','side_setback_min_ft']])
+    if(r[rk]!=null&&sb[k]<r[rk]-1e-9&&!((k==='left'||k==='right')&&sb[k]===0&&r.one_side_zero_allowed&&sb[k==='right'?'left':'right']>0))F('fail','setback',k,`${k} setback ${f(sb[k])} below ${f(r[rk])}`);
+  if(r.coverage_max_pct!=null)F(res.coverage_pct>r.coverage_max_pct+1e-9?'fail':'info','coverage','site',`ground coverage ${res.coverage_pct.toFixed(1)}% (max ${r.coverage_max_pct}%)`);
+  const ex=new Set(r.far_excludes||['porch','void','balcony']),A=res.areas,farA=res.total-(ex.has('porch')?A.porch:0)+(ex.has('balcony')?0:A.balcony),far=farA/res.site.area_sqft;
+  if(r.far_max!=null)F(far>r.far_max+1e-9?'fail':'info','far','site',`FAR ${far.toFixed(2)} (max ${r.far_max})`);
+  const h=res.height_ft+(r.parapet_ft||0);if(r.height_max_ft!=null&&h>r.height_max_ft+1e-9)F('fail','height','building',`height ${f(h)} above ${f(r.height_max_ft)}`);
+  if(brief.bedrooms&&res.bedrooms!==brief.bedrooms)F('fail','program','bedrooms',`${res.bedrooms} bedrooms, brief asks ${brief.bedrooms}`);
+  const habit=[];
+  for(const lv of['GF','FF'])for(const rm of res.rooms[lv]){const ref=`${lv}-${rm.code}`,a=rm.area_sqft,w=Math.min(rm.w,rm.h);
+    if(['bedroom','master','living','lounge'].includes(rm.kind)&&rm.code!=='LOB'){habit.push(a);
+      if(r.min_habitable_sqft&&a<r.min_habitable_sqft-1e-6)F('fail','room_area',ref,`${a.toFixed(0)} sq ft below ${r.min_habitable_sqft}`);
+      if(r.min_habitable_width_ft&&w<r.min_habitable_width_ft-1e-6)F('fail','room_width',ref,`${f(w)} below ${f(r.min_habitable_width_ft)}`)}
+    if(rm.kind==='kitchen'){if(a<r.min_kitchen_sqft-1e-6)F('fail','room_area',ref,`kitchen ${a.toFixed(0)} sq ft below ${r.min_kitchen_sqft}`);if(w<r.min_kitchen_width_ft-1e-6)F('fail','room_width',ref,`kitchen ${f(w)} below ${f(r.min_kitchen_width_ft)}`)}
+    if(rm.kind==='toilet'){if(a<r.min_toilet_sqft-1e-6)F('fail','room_area',ref,`toilet ${a.toFixed(0)} sq ft below ${r.min_toilet_sqft}`);if(w<r.min_toilet_width_ft-1e-6)F('fail','room_width',ref,`toilet ${f(w)} below ${f(r.min_toilet_width_ft)}`)}
+    if(rm.kind==='porch'&&brief.parking){const Lb=rm.h+(r.parking_in_front_setback?sb.front:0);
+      if(rm.w<r.parking_min_width_ft-1e-6||Lb<r.parking_min_length_ft-1e-6)F('fail','parking',ref,`car bay ${f(rm.w)} x ${f(Lb)} below ${f(r.parking_min_width_ft)} x ${f(r.parking_min_length_ft)}`)}
+    if(rm.kind==='balcony'){if(rm.h>r.balcony_max_projection_ft+1e-9)F('fail','balcony',ref,`projects ${f(rm.h)} (max ${f(r.balcony_max_projection_ft)})`);if(rm.h>sb.front+1e-9)F('fail','balcony',ref,`projects ${f(rm.h)} beyond the ${f(sb.front)} front setback`)}}
+  if(r.min_first_habitable_sqft&&(!habit.length||Math.max(...habit)<r.min_first_habitable_sqft-1e-6))F('fail','room_area','habitable',`no habitable room reaches ${r.min_first_habitable_sqft} sq ft`);
+  for(const d of res.doors)if(d.missing)F('fail','access',`${d.level}-${d.from}/${d.to}`,`no ${d.kind} possible between ${d.from} and ${d.to} ${d.why||''}`.trim());
+  for(const lv of['GF','FF']){const seen=villaReach(res,lv);for(const rm of res.rooms[lv])if(rm.kind!=='void'&&!seen.has(rm.code))F('fail','access',`${lv}-${rm.code}`,'cannot be reached by doors / openings')}
+  const s=res.stair;if(s.rAct>r.stair_max_riser_in+1e-9)F('fail','stair','riser',`riser ${s.rAct.toFixed(2)}" above ${r.stair_max_riser_in}"`);
+  if(s.TD*12<r.stair_min_tread_in-1e-9)F('fail','stair','tread',`tread ${(s.TD*12).toFixed(1)}" below ${r.stair_min_tread_in}"`);
+  if(s.FW<r.stair_min_flight_ft-1e-9)F('fail','stair','flight',`flight ${s.FW.toFixed(2)}' below ${r.stair_min_flight_ft}'`);
+  const bl=2*s.rAct+s.TD*12;if(!(bl>=21.65&&bl<=27.56))F('warn','stair','comfort',`2R + T = ${bl.toFixed(1)}" (comfortable 21.7" to 27.6")`);
+  if(!s.entryOK)F('fail','stair','entry','first step does not start from the dining hub');
+  if(res.main_door.width_ft<r.door_min_width_ft-1e-9)F('fail','door','main door',`door ${res.main_door.width_ft}' below ${r.door_min_width_ft}'`);
+  for(const w of res.warn)F('warn','layout','plan',w);
+  if(brief.vastu){for(const v of res.vastu)if(v.verdict==='avoid')F('warn','vastu',v.ref,`${v.item} in ${v.zone} (traditionally avoided)`)}
+  return out}
+if(typeof module!=='undefined')module.exports={villaGenerate,villaQC,stairLines,stairPt,vinside,vbbox,varea,fmtFt,toCompass,NAMES,OPT_TITLES,VRULES,VBRIEF,VILLA_VERSION};
+/* VILLA CORE END */
+function f(v){v=Math.round(v*12)/12;let ft=Math.floor(v+1e-9),inch=Math.round((v-ft)*12);if(inch===12){ft++;inch=0}return ft+"'-"+inch+'"'}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function n0(v){return Math.round(v).toLocaleString('en-IN')}
+
+
+function wrap(s,maxCh){const words=String(s||'').split(/\s+/).filter(Boolean),lines=[];let cur='';words.forEach(w=>{if((cur+' '+w).trim().length>maxCh&&cur){lines.push(cur);cur=w}else cur=(cur+' '+w).trim()});if(cur)lines.push(cur);return lines}
+function txt(x,y,s,sz,o={}){return `<text x="${x}" y="${y}" font-size="${sz}" font-family="Arial, Helvetica, sans-serif" fill="${o.c||'#1b1f24'}" font-weight="${o.b?'bold':'normal'}" text-anchor="${o.a||'start'}"${o.r?` transform="rotate(${o.r} ${x} ${y})"`:''}>${esc(s)}</text>`}
+function mtxt(x,y,lines,sz,lh,o){return lines.map((l,i)=>txt(x,y+i*lh,l,sz,o)).join('')}
+
+function today(){const d=new Date();return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear()}
+function loadTB(){let s=null;try{s=JSON.parse(localStorage.getItem(TBKEY)||'null')}catch(e){}TB=Object.assign({},TB_DEFAULT,{date:today()},s||{});fillTB()}
+function fillTB(){document.querySelectorAll('[data-k]').forEach(i=>{i.value=TB[i.dataset.k]||''})}
+function saveTB(){try{localStorage.setItem(TBKEY,JSON.stringify(TB))}catch(e){}}
+function resetTB(){TB=Object.assign({},TB_DEFAULT,{date:today()});saveTB();fillTB();render()}
+document.querySelectorAll('[data-k]').forEach(i=>i.addEventListener('input',()=>{TB[i.dataset.k]=i.value;saveTB();render()}));
+
+
+/* panels and sheets */
+function togglePanel(s){if(s==='L'){const off=document.body.classList.toggle('noL');$('tgL').setAttribute('aria-pressed',!off)}else{const on=document.body.classList.toggle('forceR');document.body.classList.toggle('noR',!on&&!wideR());if(wideR())document.body.classList.toggle('noR',!on);$('tgR').setAttribute('aria-pressed',on)}keepView()}
+function wideR(){return matchMedia('(min-width:1181px)').matches}
+function initPanels(){if(wideR()){document.body.classList.add('forceR');$('tgR').setAttribute('aria-pressed','true')}else $('tgR').setAttribute('aria-pressed','false')}
+function openTab(t){const cur=document.body.dataset.tab;document.body.dataset.tab=cur===t?'':t;document.querySelectorAll('.tabbar button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===document.body.dataset.tab));$('shL').textContent=TABN[t];$('shR').textContent=TABN[t]}
+function closeSheet(){document.body.dataset.tab='';document.querySelectorAll('.tabbar button').forEach(b=>b.setAttribute('aria-pressed','false'))}
+
+
+/* canvas view: pan and zoom by viewBox */
+const cv=$('cv'),svgEl=$('cvs');let vb=null;
+function rect(){return cv.getBoundingClientRect()}
+function applyVB(){svgEl.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`)}
+function fitTo(b){const r=rect();if(!r.width||!r.height)return;const k=Math.max(b.w/r.width,b.h/r.height)*1.08;vb={w:r.width*k,h:r.height*k};vb.x=b.x+b.w/2-vb.w/2;vb.y=b.y+b.h/2-vb.h/2;applyVB()}
+function zoomAt(px,py,fac){const r=rect(),k=vb.w/r.width,sx=vb.x+(px-r.left)*k,sy=vb.y+(py-r.top)*k;const nw=Math.min(1400,Math.max(18,vb.w*fac));fac=nw/vb.w;vb.w*=fac;vb.h*=fac;vb.x=sx-(px-r.left)*vb.w/r.width;vb.y=sy-(py-r.top)*vb.h/r.height;applyVB()}
+function zoomBtn(fac){const r=rect();zoomAt(r.left+r.width/2,r.top+r.height/2,fac)}
+let lastSize=null;
+function keepView(){requestAnimationFrame(()=>{const r=rect();if(!vb||!lastSize){lastSize=[r.width,r.height];return}const k=vb.w/lastSize[0],cx=vb.x+vb.w/2,cy=vb.y+vb.h/2;vb.w=r.width*k;vb.h=r.height*k;vb.x=cx-vb.w/2;vb.y=cy-vb.h/2;lastSize=[r.width,r.height];applyVB()})}
+new ResizeObserver(keepView).observe(cv);
+const ptrs=new Map();let moved=0,pinch=null;
+cv.addEventListener('pointerdown',e=>{if(e.target.closest('.ui'))return;cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=0;cv.classList.add('drag');if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)}}});
+cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;const p=ptrs.get(e.pointerId),dx=e.clientX-p.x,dy=e.clientY-p.y;
+  if(ptrs.size===1){const k=vb.w/rect().width;vb.x-=dx*k;vb.y-=dy*k;applyVB();moved+=Math.abs(dx)+Math.abs(dy)}
+  p.x=e.clientX;p.y=e.clientY;
+  if(ptrs.size===2&&pinch){const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(d>0){zoomAt((a.x+b.x)/2,(a.y+b.y)/2,pinch.d/d);pinch.d=d}moved+=10}});
+function endPtr(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size){cv.classList.remove('drag');if(moved<6&&mobile())closeSheet()}}
+cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,Math.exp(e.deltaY*0.0015))},{passive:false});
+
+
+/* export */
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2600)}
+function rasterize(pxPerMm){return new Promise((res,rej)=>{const svg=buildSVG(RES,true).replace('width="420mm" height="297mm"',`width="${420*pxPerMm}" height="${297*pxPerMm}"`);
+  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=420*pxPerMm;c.height=297*pxPerMm;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);res(c)};
+  img.onerror=()=>rej(new Error('render'));img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)})}
+async function saveFile(name,blob){
+  if(window.claude&&typeof window.claude.use==='function'){let dl=null;try{dl=await window.claude.use('downloads')}catch(e){}
+    if(dl){try{await dl.save({filename:name,data:blob});toast('Saved '+name)}catch(e){const code=e&&e.code;toast(code==='declined'?'Download cancelled':code==='rate_limited'?'A save prompt is already open':'Download is not available here')}return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('Saved '+name)}
+async function exportPNG(){const b=$('bPng');b.disabled=true;try{const c=await rasterize(8);const blob=await new Promise(r=>c.toBlob(r,'image/png'));await saveFile(fname('png'),blob)}catch(e){toast('Could not create the PNG')}b.disabled=false}
+async function exportPDF(){const b=$('bPdf');b.disabled=true;try{
+  if(!window.jspdf){toast('PDF library did not load. Check your connection.');b.disabled=false;return}
+  const a3=$('sheetSize').value==='a3';const c=await rasterize(8);const pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:a3?'a3':'a4',compress:true});
+  pdf.addImage(c.toDataURL('image/png'),'PNG',0,0,a3?420:297,a3?297:210,undefined,'FAST');pdf.setProperties({title:'4BHK villa option '+st.opt,author:TB.firm||'',creator:TB.firm||''});
+  await saveFile(fname('pdf'),pdf.output('blob'))}catch(e){toast('Could not create the PDF')}b.disabled=false}
+
+
+/* ---------- app state, UI ---------- */
+const st={opt:'A',road:'N',mir:'auto',sdir:'W',sturn:'L',flip:false};
+const TB_DEFAULT={firm:'Aadithyaa Developers',tag:'Builders and developers',project:'Proposed 4BHK villa (G+1)',client:'',site:"30' x 40' plot (1,200 sq ft)",dwg:'AD/VL/01',rev:'R0',drawn:'',checked:'',date:''};
+const TBKEY='villa-tb';
+const NUM={plot_width_ft:'pw',plot_depth_ft:'pd',setback_front_ft:'sbF',setback_rear_ft:'sbR',setback_left_ft:'sbL',setback_right_ft:'sbRt',porch_width_ft:'porch',front_band_ft:'fband',
+  middle_band_ft:'mband',toilet_width_ft:'tw',kitchen_width_ft:'kw',attached_toilet_ft:'at',master_width_ft:'mw',balcony_depth_ft:'bal',puja_ft:'puja',floor_height_ft:'fh',max_riser_in:'rs',
+  tread_in:'td',flight_width_ft:'fw',main_door_width_ft:'dw',main_door_pct:'dp'};
+const PMAP=NUM;
+const SMAP={option:'opt',road_side:'road',mirror:'mir',stair_first_flight:'sdir',stair_turn:'sturn'};
+const SEGS={road:'road',mir:'mir',sdir:'sdir',sturn:'sturn'};
+function params(){const p={};for(const k in NUM)p[k]=+$(NUM[k]).value;for(const k in SMAP)p[k]=st[SMAP[k]];return p}
+function syncSegs(){for(const id in SEGS)document.querySelectorAll('#'+id+' button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st[SEGS[id]]));
+  document.querySelectorAll('#flip button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='bottom')===st.flip))}
+for(const id in SEGS)document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{st[SEGS[id]]=b.dataset.v;syncSegs();render()});
+document.querySelectorAll('#flip button').forEach(b=>b.onclick=()=>{st.flip=b.dataset.v==='bottom';syncSegs();render()});
+Object.values(NUM).forEach(id=>$(id).addEventListener('input',render));
+const OPTS={A:['Front living, lounge upstairs','GF: porch, living, dining, kitchen, bedroom 4. FF: 3 bedrooms, family lounge, balcony'],
+  B:['Double-height living','Living open to the first floor; gallery upstairs; 3 bedrooms on FF']};
+const ROADS=['N','E','S','W'],MIRS=['auto','no','yes'];
+function drawOpts(){const el=$('opts');el.innerHTML='';for(const k in OPTS){const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',st.opt===k);
+    b.innerHTML=`<b>${k}</b>${OPTS[k][0]}<small>${OPTS[k][1]}</small>`;b.onclick=()=>{st.opt=k;render()};el.appendChild(b)}
+  const ch=$('chips');ch.innerHTML='';for(const k in OPTS){const b=document.createElement('button');b.textContent=k;b.title=OPTS[k][0];b.setAttribute('aria-pressed',st.opt===k);b.onclick=()=>{st.opt=k;render()};ch.appendChild(b)}
+  const r=document.createElement('button');r.className='nt';r.textContent='Road '+st.road;r.title='Road side (tap to change)';r.onclick=()=>{st.road=ROADS[(ROADS.indexOf(st.road)+1)%4];syncSegs();render()};ch.appendChild(r);
+  const m=document.createElement('button');m.className='nt';m.textContent='Mirror '+st.mir;m.title='Mirror (tap to change)';m.onclick=()=>{st.mir=MIRS[(MIRS.indexOf(st.mir)+1)%3];syncSegs();render()};ch.appendChild(m)}
+const TABN={layout:'Layout',site:'Site',rooms:'Rooms',stair:'Stair and main door',export:'Export and title block'};
+
+let RES=null,QC=[];
+function render(){
+  const p=params(),c=villaGenerate(p);RES=c;QC=villaQC(c);
+  ['pw','pd','sbF','sbR','sbL','sbRt','fband','mband','porch','kw','tw','at','mw','bal','puja','fh','fw','dw'].forEach(id=>$(id+'v').textContent=f(+$(id).value));
+  $('rsv').textContent=$('rs').value+'"';$('tdv').textContent=$('td').value+'"';$('dpv').textContent=$('dp').value+'%';
+  $('pujav').textContent=+$('puja').value?f(+$('puja').value):'none';$('balv').textContent=+$('bal').value?f(+$('bal').value):'none';
+  const S=chooseScale(p);$('a3opt').textContent='A3 landscape (1:'+S+')';
+  $('siteInfo').textContent=`Plot ${n0(c.site.area_sqft)} sq ft (${(c.site.area_sqft*0.092903).toFixed(1)} m²). Footprint ${f(c.build.bw)} x ${f(c.build.bd)} = ${n0(c.areas.footprint)} sq ft, coverage ${c.coverage_pct.toFixed(1)}%.`;
+  const s=c.stair;$('stInfo').textContent=`${s.risers} risers of ${s.rAct.toFixed(2)}", 2 flights of ${s.perF} (${s.treads} treads each). Stair ${f(s.SL)} x ${f(s.SW)}.`;
+  $('warn').innerHTML=c.warn.map(esc).join('<br>');$('warn2').innerHTML=c.warn2.map(esc).join('<br>');
+  $('vastu').innerHTML=`<div class="vs">Score <strong>${c.vastu_score>=0?'+':''}${c.vastu_score}</strong>${c.mirror?' (mirrored layout)':''}</div>`+
+    c.vastu.map(v=>`<div class="vr v-${v.verdict}"><span>${esc(v.item)}</span><span>${esc(v.ref.replace('main door','door'))}</span><span>${v.zone}</span><span>${v.verdict}</span></div>`).join('');
+  const shown=QC.filter(x=>x.level!=='info'&&x.check!=='vastu');
+  $('qc').innerHTML=shown.length?shown.map(x=>`<div class="q q-${x.level}"><b>${x.level==='fail'?'Fails':'Note'}</b> ${esc(x.ref)}: ${esc(x.msg)}</div>`).join(''):'<div class="q q-ok">All checks pass.</div>';
+  $('hdrFirm').textContent=TB.firm||'';drawOpts();
+  const fails=QC.filter(x=>x.level==='fail').length;
+  $('stats').innerHTML=`<span class="eu">${c.bedrooms}BHK, ${c.toilets} toilets, vastu ${c.vastu_score>=0?'+':''}${c.vastu_score}${fails?`, <span style="color:var(--warn)">${fails} check${fails>1?'s':''} failing</span>`:''}</span><strong>GF ${n0(c.areas.gf)} + FF ${n0(c.areas.ff)} sq ft<span class="cv">, FAR ${c.far.toFixed(2)}</span></strong>`;
+  const full=buildSVG(c);svgEl.innerHTML=full.replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'');
+  if(!vb){mobile()?fitPlan():fitSheet();lastSize=[rect().width,rect().height]}else applyVB();
+}
+
+/* ---------- drawing sheet (mm, A3 420 x 297) ---------- */
+function chooseScale(p){return[100,125,150,200,250].find(n=>p.plot_width_ft*304.8/n<=95&&(p.plot_depth_ft+6)*304.8/n<=128)||250}
+const KFILL={porch:'#EEF1F4',living:'#EAF4F8',dining:'#EAF4F8',lounge:'#EAF4F8',bedroom:'#F2EEF8',master:'#EDE6F7',kitchen:'#FFF2D2',toilet:'#E3F1E4',dress:'#F6F1E7',stair:'#FFFFFF',puja:'#FCE9D9',void:'#FFFFFF',balcony:'#F7F7F7'};
+function labelPoint(poly){const[x1,y1,x2,y2]=vbbox(poly);let best=[(x1+x2)/2,(y1+y2)/2,-1];
+  const dseg=(px,py,a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],L2=dx*dx+dy*dy,t=L2?Math.max(0,Math.min(1,((px-a[0])*dx+(py-a[1])*dy)/L2)):0;return Math.hypot(px-a[0]-t*dx,py-a[1]-t*dy)};
+  for(let i=1;i<12;i++)for(let j=1;j<12;j++){const px=x1+(x2-x1)*i/12,py=y1+(y2-y1)*j/12;if(!vinside([px,py],poly))continue;
+    let d=Math.min(...poly.map((q,k)=>dseg(px,py,q,poly[(k+1)%poly.length])));d-=0.05*Math.hypot(px-(x1+x2)/2,py-(y1+y2)/2);if(d>best[2])best=[px,py,d]}
+  return[best[0],best[1]]}
+function L(a,b,w,c,extra){return`<line x1="${a[0].toFixed(2)}" y1="${a[1].toFixed(2)}" x2="${b[0].toFixed(2)}" y2="${b[1].toFixed(2)}" stroke="${c||'#1b1f24'}" stroke-width="${w}"${extra||''}/>`}
+function buildSVG(c,exp){
+  const p=c.params,PW=c.site.width_ft,PD=c.site.depth_ft,SCALE=chooseScale(p),S=304.8/SCALE,flip=st.flip,road=c.road_side;
+  const PWm=PW*S,PDm=PD*S,oy=38,gx=36,fxo=gx+PWm+32;
+  const map=(ox,x,y)=>[ox+(flip?PW-x:x)*S,oy+(flip?PD-y:y)*S];
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 297" width="420mm" height="297mm">`;
+  s+=exp?`<rect x="0" y="0" width="420" height="297" fill="#ffffff"/><rect x="20" y="10" width="390" height="277" fill="none" stroke="#1b1f24" stroke-width="0.7"/>`:`<rect x="12" y="4" width="306" height="289" fill="#ffffff"/>`;
+  s+=txt(22,17,`4BHK VILLA, G+1, OPTION ${c.option}`,4,{b:1})+txt(22,22.5,`${c.option_title}. ${c.facing} facing${c.mirror?', mirrored':''}. Scale 1:${SCALE} on A3.`,2.3,{c:'#4E5A66'});
+  for(const[lv,ox]of[['GF',gx],['FF',fxo]]){
+    const P=(x,y)=>map(ox,x,y);
+    const ry=flip?oy+PDm+3:oy-11;
+    s+=`<rect x="${ox-6}" y="${ry}" width="${PWm+12}" height="8" fill="#E8EBEE" stroke="#8b949c" stroke-width="0.15"/>`+txt(ox+PWm/2,ry+5.2,`ROAD (${road})`,2.2,{a:'middle',b:1});
+    s+=`<rect x="${ox}" y="${oy}" width="${PWm}" height="${PDm}" fill="none" stroke="#6b747c" stroke-width="0.35"/>`;
+    for(const rm of c.rooms[lv]){
+      const pts=rm.poly.map(q=>P(q[0],q[1]).map(v=>v.toFixed(2)).join(',')).join(' ');
+      const thin=rm.kind==='balcony'||rm.kind==='void';
+      s+=`<polygon points="${pts}" fill="${KFILL[rm.kind]||'#fff'}" stroke="#1b1f24" stroke-width="${thin?0.25:0.5}"${rm.kind==='balcony'?' stroke-dasharray="1.2 0.8"':''}/>`;
+      const[x1,y1,x2,y2]=vbbox(rm.poly);
+      if(rm.kind==='void')s+=L(P(x1,y1),P(x2,y2),0.15,'#9AA3AB')+L(P(x1,y2),P(x2,y1),0.15,'#9AA3AB');
+      if(rm.kind==='porch'){const cx=(x1+x2)/2,cy=(y1+y2)/2,cw=6,cl=Math.min(14.5,y2-y1+(c.setbacks.front||0)-1);const a=P(cx-cw/2,cy-cl/2),b=P(cx+cw/2,cy+cl/2);
+        s+=`<rect x="${Math.min(a[0],b[0]).toFixed(2)}" y="${Math.min(a[1],b[1]).toFixed(2)}" width="${Math.abs(b[0]-a[0]).toFixed(2)}" height="${Math.abs(b[1]-a[1]).toFixed(2)}" rx="1.6" fill="none" stroke="#9AA3AB" stroke-width="0.2" stroke-dasharray="0.8 0.6"/>`}
+    }
+    if(c.stair){for(const[k,a,b]of stairLines(c.stair))s+=L(P(...a),P(...b),{tread:0.12,path:0.18}[k]||0.25,k==='path'?'#0B6E99':'#1b1f24');
+      const st0=c.stair,b=[st0.x,st0.y,st0.x+st0.w,st0.y+st0.h];const q1=P(b[0],b[1]),q2=P(b[2],b[3]);
+      s+=`<rect x="${Math.min(q1[0],q2[0]).toFixed(2)}" y="${Math.min(q1[1],q2[1]).toFixed(2)}" width="${Math.abs(q2[0]-q1[0]).toFixed(2)}" height="${Math.abs(q2[1]-q1[1]).toFixed(2)}" fill="none" stroke="#1b1f24" stroke-width="0.35"/>`;
+      if(lv==='GF'){const u=P(...stairPt(st0,-1.3,st0.FW/2));s+=txt(u[0],u[1]+0.7,'UP',1.8,{a:'middle',b:1,c:'#0B6E99'})}}
+    for(const d of c.doors){if(d.level!==lv||d.missing)continue;
+      const A=P(...d.a),B=P(...d.b);
+      if(d.kind==='opening'){s+=L(A,B,0.7,'#ffffff')+L(A,B,0.12,'#9AA3AB',' stroke-dasharray="0.8 0.6"');continue}
+      s+=doorSym(lv,d.a,d.b,c.rooms[lv].find(r=>r.code===d.to).poly,P)}
+    if(lv==='GF'){const md=c.main_door;s+=doorSym('GF',md.a,md.b,c.rooms.GF.find(r=>r.code==='LIV').poly,P,true)}
+    for(const rm of c.rooms[lv]){if(rm.kind==='stair')continue;const[lx,ly]=labelPoint(rm.poly),q=P(lx,ly),small=rm.w<6.5||rm.h<4.5;
+      const nm=small?rm.code:rm.name.replace(' (guest / parents)','').replace(' (double height)','').toUpperCase();
+      s+=txt(q[0],q[1]-(small?-0.6:0.4),nm,small?1.7:2.1,{a:'middle',b:!small});
+      if(!small)s+=txt(q[0],q[1]+2.4,`${f(rm.w)} x ${f(rm.h)}`,1.6,{a:'middle',c:'#4E5A66'})}
+    const tl=lv==='GF'?'GROUND FLOOR PLAN':`FIRST FLOOR PLAN (FFL +${f(p.floor_height_ft)})`;
+    s+=txt(ox,oy+PDm+(flip?20:21),tl,3,{b:1})+`<line x1="${ox}" y1="${oy+PDm+(flip?21.2:22.2)}" x2="${ox+tl.length*1.62}" y2="${oy+PDm+(flip?21.2:22.2)}" stroke="#1b1f24" stroke-width="0.25"/>`;
+  }
+  /* dimensions on the ground floor */
+  {const P=(x,y)=>map(gx,x,y),b=c.build,yb=oy+PDm+(flip?0:0);
+    const hx=[0,b.x0,b.x0+b.bw,PW].map(x=>P(x,0)[0]).sort((u,v)=>u-v),hy=[0,b.y0,b.y0+b.bd,PD].map(y=>P(0,y)[1]).sort((u,v)=>u-v);
+    const vals=v=>v;const dy0=oy+PDm+5,dx0=gx+PWm+5;
+    for(let i=0;i<3;i++)s+=dimLine([hx[i],dy0],[hx[i+1],dy0],f((hx[i+1]-hx[i])/S),'h');
+    s+=dimLine([hx[0],dy0+5.5],[hx[3],dy0+5.5],f(PW)+' plot','h');
+    for(let i=0;i<3;i++)s+=dimLine([dx0,hy[i]],[dx0,hy[i+1]],f((hy[i+1]-hy[i])/S),'v');
+    s+=dimLine([gx-5,hy[0]],[gx-5,hy[3]],f(PD)+' plot','v');}
+  /* right column: north arrow, legend, scale */
+  const rx=fxo+PWm+12,ang=({N:0,E:-90,S:180,W:90}[road])+(flip?180:0),nx=Math.min(rx+16,300),ny=oy+10;
+  s+=`<circle cx="${nx}" cy="${ny}" r="8" fill="none" stroke="#1b1f24" stroke-width="0.3"/><g transform="rotate(${ang} ${nx} ${ny})"><polygon points="${nx},${ny-7} ${nx+2.8},${ny+4.5} ${nx},${ny+2.2}" fill="#1b1f24"/><polygon points="${nx},${ny-7} ${nx-2.8},${ny+4.5} ${nx},${ny+2.2}" fill="#fff" stroke="#1b1f24" stroke-width="0.2"/>`+
+    `<text x="${nx}" y="${ny-9.2}" font-size="3" font-family="Arial, Helvetica, sans-serif" font-weight="bold" text-anchor="middle" transform="rotate(${-ang} ${nx} ${ny-10.3})">N</text></g>`;
+  let ly=oy+28;s+=txt(rx,ly,'LEGEND',2.6,{b:1});ly+=4;
+  for(const[k,t]of[['living','Living, dining, lounge'],['bedroom','Bedrooms'],['master','Master bedroom'],['kitchen','Kitchen'],['toilet','Toilets'],['puja','Puja'],['porch','Car porch'],['balcony','Balcony (projection)']]){
+    s+=`<rect x="${rx}" y="${ly}" width="6" height="3.4" fill="${KFILL[k]}" stroke="#1b1f24" stroke-width="0.2"${k==='balcony'?' stroke-dasharray="1 0.6"':''}/>`+txt(rx+8,ly+2.7,t,2.1);ly+=5}
+  s+=L([rx,ly+1.7],[rx+6,ly+1.7],0.12,'#9AA3AB',' stroke-dasharray="0.8 0.6"')+txt(rx+8,ly+2.7,'Open connection',2.1);ly+=5;
+  s+=`<path d="M ${rx} ${ly+3.4} L ${rx} ${ly} A 3.4 3.4 0 0 1 ${rx+3.4} ${ly+3.4}" fill="none" stroke="#1b1f24" stroke-width="0.2"/>`+txt(rx+8,ly+2.7,'Door',2.1);ly+=9;
+  const u5=5*S;s+=txt(rx,ly,'SCALE (FEET)',2.3,{b:1});ly+=2;for(let i=0;i<4;i++)s+=`<rect x="${rx+i*u5}" y="${ly}" width="${u5}" height="1.6" fill="${i%2?'#fff':'#1b1f24'}" stroke="#1b1f24" stroke-width="0.2"/>`;
+  [0,5,10,15,20].forEach((v,i)=>{s+=txt(rx+i*u5,ly+4.6,String(v),1.9,{a:'middle'})});
+  /* bottom: area statement, room schedule, vastu + notes */
+  const by=oy+PDm+30,A=c.areas,plot=c.site.area_sqft,m2=v=>(v*0.092903).toFixed(1);
+  s+=txt(22,by,'AREA STATEMENT',2.7,{b:1});
+  const ar=[['Plot',plot],['Footprint (coverage '+c.coverage_pct.toFixed(1)+'%)',A.footprint],['Ground floor',A.gf],['First floor',A.ff],['Total built-up',c.total],['Less car porch',-A.porch],['FAR area',A.far_area],['Balcony (excluded)',A.balcony],['OTS void (excluded)',A.void]];
+  let yy=by+3;s+=tableRow(22,yy,[['Item',0],['Sq ft',62,'end'],['Sq m',82,'end']],true);yy+=4.4;
+  for(const[k,v]of ar){s+=tableRow(22,yy,[[k,0],[n0(v),62,'end'],[m2(v),82,'end']],k==='Total built-up'||k==='FAR area');yy+=4.4}
+  s+=tableRow(22,yy,[['FAR',0],[c.far.toFixed(2),62,'end'],['',82,'end']],true);yy+=4.4;
+  s+=txt(22,yy+3,`${c.bedrooms} bedrooms, ${c.toilets} toilets. Height ${f(c.height_ft+(VRULES.parapet_ft||0))} to parapet.`,2,{c:'#4E5A66'});
+  const sx=118;s+=txt(sx,by,'ROOM SCHEDULE',2.7,{b:1});yy=by+3;s+=tableRow(sx,yy,[['Code',0],['Room',13],['Size',62],['Sq ft',100,'end']],true);yy+=3.9;
+  for(const r of c.schedule){if(r.kind==='void')continue;s+=tableRow(sx,yy,[[r.code,0],[r.name.replace(' (guest / parents)','').replace(' (double height)',''),13],[r.size,62],[n0(r.area_sqft),100,'end']],false,3.9,1.75);yy+=3.9}
+  const vx=226;s+=txt(vx,by,`VASTU (score ${c.vastu_score>=0?'+':''}${c.vastu_score})`,2.7,{b:1});yy=by+3;s+=tableRow(vx,yy,[['Item',0],['Room',18],['Zone',46],['Verdict',58]],true,3.9,1.8);yy+=3.9;
+  for(const v of c.vastu){s+=tableRow(vx,yy,[[v.item,0],[v.ref,18],[v.zone,46],[v.verdict,58]],false,3.9,1.75);yy+=3.9}
+  yy+=4;s+=txt(vx,yy,'NOTES',2.7,{b:1});yy+=4;
+  for(const[i,nt]of['All dimensions in feet and inches. Room sizes are to wall centre lines.','Rules shown are placeholders (NBC 2016, typical bye-laws). Confirm with the local authority.','Vastu zones are advisory; they do not override rules.','Do not scale this drawing.'].entries()){const ls=wrap(nt,52);s+=txt(vx,yy,(i+1)+'.',1.9)+mtxt(vx+3.5,yy,ls,1.9,2.9);yy+=ls.length*2.9+0.8}
+  if(exp)s+=titleBlock(c,SCALE);
+  return s+`</svg>`}
+function tableRow(x,y,cells,bold,h=4.4,sz=2){let s=`<line x1="${x}" y1="${y+h-1.1}" x2="${x+(cells[cells.length-1][1]||0)+(cells[cells.length-1][2]==='end'?0:24)}" y2="${y+h-1.1}" stroke="#C9CFD5" stroke-width="0.12"/>`;
+  for(const[t,dx,a]of cells)s+=txt(x+dx,y+h-2,t,sz,{a:a||'start',b:bold});return s}
+function dimLine(a,b,label,o){const hz=o==='h';let s=L(a,b,0.15);
+  for(const p of[a,b])s+=L([p[0]-0.8,p[1]+0.8],[p[0]+0.8,p[1]-0.8],0.3);
+  const len=hz?Math.abs(b[0]-a[0]):Math.abs(b[1]-a[1]),sz=1.8,tw=label.length*sz*0.5,mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+  if(hz)s+=txt(mx,tw+1>len?my+2.6:my-0.7,label,sz,{a:'middle'});else s+=txt(tw+1>len?mx+2.4:mx-0.7,my,label,sz,{a:'middle',r:-90});return s}
+function doorSym(lv,a,b,toPoly,P,main){const horiz=Math.abs(a[1]-b[1])<1e-6,w=Math.hypot(b[0]-a[0],b[1]-a[1]),mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  let n=horiz?[0,1]:[1,0];if(!vinside([mid[0]+n[0]*0.4,mid[1]+n[1]*0.4],toPoly))n=[-n[0],-n[1]];
+  const A=P(...a),B=P(...b),leaf=P(a[0]+n[0]*w,a[1]+n[1]*w);let s=L(A,B,0.9,'#ffffff');
+  s+=L(A,leaf,main?0.35:0.25);const pts=[];for(let i=0;i<=10;i++){const t=i/10*Math.PI/2,ux=b[0]-a[0],uy=b[1]-a[1];const q=[a[0]+ux*Math.cos(t)+n[0]*w*Math.sin(t),a[1]+uy*Math.cos(t)+n[1]*w*Math.sin(t)];pts.push(P(...q).map(v=>v.toFixed(2)).join(','))}
+  s+=`<polyline points="${pts.join(' ')}" fill="none" stroke="#1b1f24" stroke-width="0.12"/>`;
+  if(main){const o=P(mid[0]-n[0]*1.8,mid[1]-n[1]*1.8),o2=P(mid[0]-n[0]*0.4,mid[1]-n[1]*0.4),dx=o2[0]-o[0],dy=o2[1]-o[1],dl=Math.hypot(dx,dy)||1,ux=dx/dl,uy=dy/dl;
+    s+=`<polygon points="${o2[0]},${o2[1]} ${o[0]-uy*1.3},${o[1]+ux*1.3} ${o[0]+uy*1.3},${o[1]-ux*1.3}" fill="#0B6E99"/>`}
+  return s}
+function titleBlock(c,SCALE){let s='';const tx=318,tw=92,R2=tx+tw,cell=(y,h)=>`<rect x="${tx}" y="${y}" width="${tw}" height="${h}" fill="none" stroke="#1b1f24" stroke-width="0.3"/>`;
+  s+=`<rect x="${tx}" y="10" width="${tw}" height="277" fill="none" stroke="#1b1f24" stroke-width="0.6"/>`;
+  const firmL=wrap(TB.firm||'',20);s+=mtxt(tx+4,20,firmL.slice(0,2),5.2,6,{b:1,c:'#0B6E99'})+mtxt(tx+4,20+Math.min(2,firmL.length)*6+0.5,wrap(TB.tag,44).slice(0,2),2.3,3.2,{c:'#4E5A66'});
+  s+=`<line x1="${tx}" y1="48" x2="${R2}" y2="48" stroke="#1b1f24" stroke-width="0.6"/>`;
+  const blk=(y,h,label,val,sz,mc,ml,b)=>cell(y,h)+txt(tx+2.5,y+4,label,1.9,{c:'#4E5A66'})+mtxt(tx+2.5,y+8.6,wrap(val,mc).slice(0,ml),sz,sz*1.35,{b});
+  s+=blk(48,22,'PROJECT',TB.project,3,38,3,1)+blk(70,16,'CLIENT / OWNER',TB.client||'-',2.8,40,2,0)+blk(86,24,'SITE ADDRESS',TB.site,2.5,46,4,0);
+  s+=blk(110,30,'DRAWING TITLE',`4BHK villa G+1, option ${c.option}: ${c.option_title.toLowerCase()}. Ground and first floor plans, ${c.facing.toLowerCase()} facing.`,2.6,44,4,1);
+  const half=(y,h,l1,v1,l2,v2,sz)=>`<rect x="${tx}" y="${y}" width="${tw/2}" height="${h}" fill="none" stroke="#1b1f24" stroke-width="0.3"/><rect x="${tx+tw/2}" y="${y}" width="${tw/2}" height="${h}" fill="none" stroke="#1b1f24" stroke-width="0.3"/>`+txt(tx+2.5,y+4,l1,1.9,{c:'#4E5A66'})+txt(tx+2.5,y+10,v1||'-',sz||2.8)+txt(tx+tw/2+2.5,y+4,l2,1.9,{c:'#4E5A66'})+txt(tx+tw/2+2.5,y+10,v2||'-',sz||2.8);
+  const a3=$('sheetSize').value==='a3';
+  s+=half(140,13,'SCALE',a3?'1:'+SCALE:'As per scale bar','SHEET SIZE',a3?'A3':'A4 (fit)',2.6)+half(153,13,'DATE',TB.date,'REVISION',TB.rev)+half(166,13,'DRAWN BY',TB.drawn,'CHECKED BY',TB.checked);
+  s+=cell(179,15)+txt(tx+2.5,183,'DRAWING NO.',1.9,{c:'#4E5A66'})+txt(tx+2.5,190.5,TB.dwg||'-',3.6,{b:1});
+  s+=cell(194,46)+txt(tx+2.5,198,"OWNER'S SIGNATURE",1.9,{c:'#4E5A66'});
+  s+=cell(240,47)+txt(tx+2.5,244,'ARCHITECT / ENGINEER',1.9,{c:'#4E5A66'})+txt(tx+2.5,283,TB.firm||'',2.2,{c:'#4E5A66'});return s}
+
+/* ---------- settings file (program_pipeline typology VILLA_4BHK_G1) ---------- */
+const TYPO_ID='VILLA_4BHK_G1',TYPO_VERSION=VILLA_VERSION;
+function getSettings(){const p=params(),c=villaGenerate(p);
+  return{typology:TYPO_ID,typology_version:TYPO_VERSION,app:'4BHK Villa Planner',saved:new Date().toISOString(),params:p,view:{road_at:st.flip?'bottom':'top'},
+    summary:{gf_sqft:+c.areas.gf.toFixed(1),ff_sqft:+c.areas.ff.toFixed(1),far:+c.far.toFixed(3),coverage_pct:+c.coverage_pct.toFixed(2),mirror:c.mirror,vastu_score:c.vastu_score,
+      fails:villaQC(c).filter(x=>x.level==='fail').map(x=>x.ref+': '+x.msg),warnings:c.warn.concat(c.warn2)},title_block:TB}}
+function applySettings(o){if(!o||o.typology!==TYPO_ID)throw new Error('type');const p=o.params||{};
+  for(const k in NUM)if(p[k]!=null&&isFinite(p[k]))$(NUM[k]).value=p[k];
+  for(const k in SMAP)if(typeof p[k]==='string')st[SMAP[k]]=p[k];
+  if(!OPTS[st.opt])st.opt='A';st.flip=(o.view||{}).road_at==='bottom';
+  if(o.title_block&&typeof o.title_block==='object'){TB=Object.assign({},TB,o.title_block);saveTB();fillTB()}
+  syncSegs();render()}
+async function saveSettings(){await saveFile(`villa_4bhk_option${st.opt}_road${st.road}.json`,new Blob([JSON.stringify(getSettings(),null,1)],{type:'application/json'}))}
+$('loadIn').addEventListener('change',async e=>{const fl=e.target.files[0];if(!fl)return;try{applySettings(JSON.parse(await fl.text()));toast('Loaded '+fl.name)}catch(err){toast('That file is not a 4BHK Villa Planner settings file')}e.target.value=''});
+function fname(ext){const firm=(TB.firm||'Drawing').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');return `${firm}_Villa4BHK_Option${st.opt}_Road${st.road}.${ext}`}
+function fitSheet(){fitTo({x:12,y:4,w:306,h:289})}
+function fitFloor(i){const p=params(),S=304.8/chooseScale(p),PWm=p.plot_width_ft*S,PDm=p.plot_depth_ft*S,x=36+i*(PWm+32);fitTo({x:x-8,y:24,w:PWm+18,h:PDm+28});if(mobile()){vb.y=20;applyVB()}}
+function fitPlan(){const p=params(),S=304.8/chooseScale(p),PWm=p.plot_width_ft*S,PDm=p.plot_depth_ft*S;
+  if(mobile()){const r=rect(),portrait=r.height>r.width*1.2;
+    if(portrait){fitTo({x:28,y:24,w:PWm+18,h:PDm+28});vb.y=20;applyVB();return}          /* one floor at a time: ground floor; pan right for the first floor */
+    fitTo({x:22,y:20,w:36+2*PWm+14,h:PDm+30});return}
+  fitTo({x:18,y:10,w:36+2*PWm+46,h:PDm+56})}
+
+initPanels();loadTB();syncSegs();render();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+ "id": "P5b_STAIR_SCHEDULE", "version": "0.1.0", "scope": "either",
+ "title": "Staircase schedule for future floors",
+ "summary": "Selected option's staircase (STAIR_DOGLEG) -> output/stair_schedule.csv; checks riser, tread, flight, comfort, fit in the court.",
+ "inputs": ["selected.json", "rules.json", "brief.json"],
+ "outputs": ["output/stair_schedule.csv"],
+ "checks": ["brief.future_floors -> a staircase exists", "STAIR_DOGLEG qc passes (riser, tread, flight; 2R + T comfort warn)"],
+ "requires": ["generate"],
+ "manual": "Typology-owned stage (TOWNHOME_RENTAL): only projects on this typology or its variants get it."
+}

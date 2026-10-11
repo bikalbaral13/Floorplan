@@ -1,0 +1,67 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "leather.faux.cream",
+  "title": "Leather — faux, cream",
+  "description": "Cream PU faux leather for upholstered dining chairs. Same two-scale voronoi pebble as full grain but finer and shallower (a coated fabric, not a hide), lighter coat and a touch more sheen, so the quilting and piping read by their highlights.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 520,
+      "detail": 3,
+      "roughness": 0.55,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#e9dfcf",
+      "colorB": "#dcd0bd"
+    }
+  },
+  "pbr": {
+    "baseColor": "#e3d8c6",
+    "roughness": 0.45,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0015,
+      "samples": 4
+    },
+    "subsurface": {
+      "weight": 0.06,
+      "radius": [
+        0.006,
+        0.004,
+        0.003
+      ],
+      "scale": 0.004
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.5,
+      "scale": 1
+    },
+    "coat": {
+      "weight": 0.28,
+      "roughness": 0.25,
+      "ior": 1.45
+    },
+    "roughnessVariation": {
+      "amount": 0.12,
+      "scale": 11
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#e3d8c6"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 0.5,
+    "angle": 0
+  }
+}

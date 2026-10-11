@@ -1,0 +1,9 @@
+task_id,stage,scope,title,depends_on,status,approved,started,finished,output,notes
+P1-SITE,P1_SITE,PROJECT,"Site dimensions, area, road side -> site.json",,todo,,,,,
+P2-BRIEF,P2_BRIEF,PROJECT,Program brief + typology match (confirm with user),P1-SITE,todo,,,,,
+P3-RULES,P3_RULES,PROJECT,Planning rules (confirm with user),P2-BRIEF,todo,,,,,
+P4-OPTIONS,P4_OPTIONS,PROJECT,Generate and compare typology options,P3-RULES,todo,,,,,
+P5-SELECT,P5_SELECT,PROJECT,User's chosen option -> selected.json,P4-OPTIONS,todo,,,,,
+P5b-STAIR_SCHEDULE,+P5b_STAIR_SCHEDULE,PROJECT,Staircase schedule for future floors,P5-SELECT,todo,,,,,
+P6-HANDOFF,P6_HANDOFF,PROJECT,Hand-off to design_pipeline -> plan_trace.json,P5b-STAIR_SCHEDULE,todo,,,,,
+P7-QC,P7_QC,PROJECT,Final program QC -> qc.md,P6-HANDOFF,todo,,,,,

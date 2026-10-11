@@ -1,0 +1,11 @@
+{
+ "id": "TOWNHOME_RENTAL_K",
+ "version": "0.1.0",
+ "extends": "TOWNHOME_RENTAL@0.2.0",
+ "title": "Self-test variant: adds option K (rear pair split 60/40)",
+ "parameters": {
+  "option": {"options": ["A","B","C","D","E","F","G","H","I","J","K"]},
+  "rear_split_pct": {"type": "number", "default": 60, "min": 50, "max": 70, "unit": "%", "label": "Rear west unit share (option K)"}
+ },
+ "options": {"K": {"title": "2 + 2, unequal rear pair", "facing": "All north facing", "units": "NNNN", "needs": ["court"]}}
+}

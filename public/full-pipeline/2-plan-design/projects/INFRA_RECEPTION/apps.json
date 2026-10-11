@@ -1,0 +1,12 @@
+{
+ "url": "https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe",
+ "version_id": "1791565084-36cc",
+ "site_sha256": "f4b89edd06301968c1b885904a5cceeb6df1bddc4d87734351b3d02044affe34",
+ "run_id": "20261009T161819Z",
+ "mode": "republish",
+ "seeded": true,
+ "seed_documents": 20,
+ "published_at": "2026-10-09T16:58:12+00:00",
+ "rules_probe": "as_level interact: list elements OK; set elements/zz-probe REFUSED; set inputs/<other uid> REFUSED",
+ "note": "0.2.0: pages republished with the in-app brief deck; store untouched (no new elements; pipeline meta fields unchanged)"
+}

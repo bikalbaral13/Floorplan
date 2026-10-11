@@ -1,0 +1,11 @@
+{
+ "spaces": ["L0-sp01f", "L0-sp021"],
+ "label": "Reception · Waiting lobby",
+ "client": "Marian",
+ "levels": {"ceiling_mm": 2700, "soffit_mm": 3600, "partition_mm": 2600,
+            "src": {"ceiling_mm": "user", "soffit_mm": "plan", "partition_mm": "plan"}},
+ "seed_issue": true,
+ "team": [{"role": "client", "who": "Marian (fixture)"}, {"role": "modeler", "who": "modeler (fixture)"}],
+ "approved_words": "FIXTURE — scope from the INFRA reception deck: both zones, false ceiling bottom +2700 (deck slide 4), partitions +2600 (slide 10), issue the plan-derived schedule as I1",
+ "approved_on": "2026-10-09"
+}

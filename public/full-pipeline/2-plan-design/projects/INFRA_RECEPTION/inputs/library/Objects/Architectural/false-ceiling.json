@@ -1,0 +1,621 @@
+{
+  "version": 1,
+  "id": "false-ceiling-with-math",
+  "title": "False Ceiling — one Math Engine, perimeter cove band, central panel and cove LED",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "space",
+    "name": "False Ceiling",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 4h18v16H3z",
+        "M6 7h12v10H6z",
+        "M3 4l3 3",
+        "M21 4l-3 3",
+        "M3 20l3-3",
+        "M21 20l-3-3"
+      ]
+    }
+  },
+  "description": "A parametric FALSE CEILING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE. It takes its extents from the host outline's bounding box, not from width and depth props, because a ceiling that could disagree with the room it sits in would be a second source of truth for the same rectangle. Margin insets it; Fit to host set to Exact stretches it back out.\n\nTWO LEVELS, AND THE COVE IS THE GAP BETWEEN THEM. A perimeter band at `bandSoffit` and a central panel at `panelSoffit`. The cove is never drawn as a thing — it is the reveal that exists because the panel sits higher than the band, and `coveReveal` reports it. Set the panel below the band and the metric goes to zero, which is the honest answer.\n\nTHE PANEL FILLS WHAT THE BANDS LEAVE. `_pu0 = _u0 + _bwC + _pin` — each edge is inset only by the band that is actually on that side, so dropping to Long sides or Three sides widens the panel automatically rather than leaving a gap.\n\nA SHADOW GAP IS AN INSET, NOT A SOLID. `_gapIn` simply adds to the panel inset on every banded side, so the gap and the panel cannot drift apart.\n\nTHE OPENING IS A SPLIT, NOT A SUBTRACTION. With `opening` on, the panel becomes four strips around the hole — left, right, below, above — because the quad-prism kernel extrudes plan quads and has no boolean. That is also why the hole is rectangular.\n\nDIMENSIONS AT THE DEFAULTS, on a 3.962 × 3.734 m room: band soffit 2.972, panel soffit 3.124, a 0.152 m cove reveal, 0.381 m of void above the band, 14.17 m of band run and 10.47 m² of panel.\n\nWHAT THIS CANNOT DO. The outline is the host's BOUNDING BOX — an L-shaped room gets a rectangular ceiling. There is no curved or chamfered cove profile: the kernel extrudes plan quads vertically, so Square, Stepped and Shadow gap are the three sections that can exist. Only one opening, and it is rectangular.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "slabHeight",
+              "name": "Structural slab height",
+              "type": "range",
+              "value": 3.353,
+              "min": 2.2,
+              "max": 6,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "bandSoffit",
+              "name": "Cove band soffit",
+              "type": "range",
+              "value": 2.972,
+              "min": 2,
+              "max": 5.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "panelSoffit",
+              "name": "Central panel soffit",
+              "type": "range",
+              "value": 3.124,
+              "min": 2,
+              "max": 5.8,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "bandWidth",
+              "name": "Cove band width",
+              "type": "range",
+              "value": 0.305,
+              "min": 0.1,
+              "max": 1.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bandSides",
+              "name": "Band runs on",
+              "type": "select",
+              "value": "All four",
+              "options": [
+                "All four",
+                "Long sides",
+                "Short sides",
+                "Three sides"
+              ]
+            },
+            {
+              "id": "panelInset",
+              "name": "Extra panel inset",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "edgeProfile",
+              "name": "Band inner edge",
+              "type": "select",
+              "value": "Square",
+              "options": [
+                "Square",
+                "Stepped",
+                "Shadow gap"
+              ]
+            },
+            {
+              "id": "stepWidth",
+              "name": "Step / shadow-gap width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.01,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "coveLed",
+              "name": "Cove LED on band",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "ledInset",
+              "name": "LED inset from band edge",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "opening",
+              "name": "Opening in panel (fan / shaft)",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "openingLength",
+              "name": "Opening length",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "openingWidth",
+              "name": "Opening width",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "openingOffsetU",
+              "name": "Opening offset — long axis",
+              "type": "range",
+              "value": 0,
+              "min": -3,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "openingOffsetV",
+              "name": "Opening offset — short axis",
+              "type": "range",
+              "value": 0,
+              "min": -3,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "lumensPerMetre",
+              "name": "Cove output per metre",
+              "type": "range",
+              "value": 900,
+              "min": 100,
+              "max": 3000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 2700,
+              "min": 1800,
+              "max": 8000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.006,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "lightGroupGain",
+              "name": "Light group gain",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 8,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "dimToKelvin",
+              "name": "Warm dim floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 4000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "showEmissiveSurface",
+              "name": "Draw the lit surface",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "gypsum board, warm white matte emulsion, seamless taped joints",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "recessed cove ceiling, warm concealed lighting, calm hotel bedroom, crisp shadow lines",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Objects/Photometry/…)",
+              "type": "text",
+              "value": "Objects/Photometry/LED/tape-warm-2700k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "cove",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/plaster.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Cove LED=Emissive/led-warm.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "goboPath",
+              "name": "Gobo (Library/Objects/Photometry/gobo/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "sceneMembership",
+              "name": "Lighting scenes",
+              "type": "text",
+              "value": "Relax, Night, Photo",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Soft",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "FALSE CEILING — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a room (space): origin at the room centroid, X/Y in plan, fit inside the room outline.\n\nWHAT IT IS\nrecessed cove ceiling, warm concealed lighting, calm hotel bedroom, crisp shadow lines\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Structural slab height: {slabHeight}\n- Cove band soffit: {bandSoffit}\n- Central panel soffit: {panelSoffit}\n- Cove band width: {bandWidth}\n- Band runs on: {bandSides} (one of: All four / Long sides / Short sides / Three sides)\n- Extra panel inset: {panelInset}\n- Band inner edge: {edgeProfile} (one of: Square / Stepped / Shadow gap)\n- Step / shadow-gap width: {stepWidth}\n- Cove LED on band: {coveLed}\n- LED inset from band edge: {ledInset}\n- Opening in panel (fan / shaft): {opening}\n- Opening length: {openingLength}\n- Opening width: {openingWidth}\n- Opening offset — long axis: {openingOffsetU}\n- Opening offset — short axis: {openingOffsetV}\n- Colour rendering index: {cri}\n- Dim level (%): {dimLevel}\n- Lamp radius (soft shadow): {lampRadius}\n- Export a lamp (off = geometry only): {emitsLight}\n- Light group gain: {lightGroupGain}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nThis object emits light. Use these values:\n- Cove output per metre: {lumensPerMetre}\n- Colour temperature: {kelvin}\n- Warm dim floor: {dimToKelvin}\n- Draw the lit surface: {showEmissiveSurface}\nPlace the emitter where the real lamp or LED sits, make the diffuser / bulb surface emissive to match, and hide the emitter itself from camera where a real fitting would conceal it.\n\nCHECKS (measure after building)\n- Structural slab height = {slabHeight}\n- Cove band width = {bandWidth}\n- Step / shadow-gap width = {stepWidth}\n- Opening length = {openingLength}\n- Opening width = {openingWidth}\n- Lamp radius (soft shadow) = {lampRadius}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_band",
+              "kind": "polygon",
+              "name": "Cove band",
+              "color": "#e7e5e4",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_panel",
+              "kind": "polygon",
+              "name": "Central panel",
+              "color": "#f5f5f4",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_lip",
+              "kind": "polygon",
+              "name": "Stepped lip",
+              "color": "#d6d3d1",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_led",
+              "kind": "polygon",
+              "name": "Cove LED",
+              "color": "#fbbf24",
+              "layer": "Ceiling",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_band",
+              "kind": "polyhedron",
+              "name": "Cove band",
+              "color": "#f5f5f4",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_panel",
+              "kind": "polyhedron",
+              "name": "Central panel",
+              "color": "#fafaf9",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lip",
+              "kind": "polyhedron",
+              "name": "Stepped lip",
+              "color": "#e7e5e4",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_led",
+              "kind": "polyhedron",
+              "name": "Cove LED",
+              "color": "#fbbf24",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

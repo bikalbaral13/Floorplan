@@ -5,7 +5,7 @@
  "pipeline": {
   "id": "floorplan-tracer",
   "version": "0.1.0",
-  "kit": "0.1.0"
+  "kit": "0.2.0"
  },
  "agent": "claude-code",
  "fixture": true,
@@ -28,7 +28,7 @@
   },
   {
    "path": "library/Pipelines/_kit/",
-   "version": "0.1.0",
+   "version": "0.2.0",
    "source": "vendored"
   }
  ],
@@ -81,11 +81,18 @@
    "binary": true
   },
   {
+   "id": "handoff",
+   "key": "Projects/WINDSOR_B1/plan/handoff.json",
+   "local": "public/floorplan-tracer-pipeline/projects/WINDSOR_B1/handoff.json",
+   "sha256": "7005d5887a3fdad150d9a2eb8dc9023d3775fc9b0911c5e21c0d273be660e88a",
+   "bytes": 470
+  },
+  {
    "id": "report",
    "key": "Projects/WINDSOR_B1/runs/floorplan-tracer/REPORT.md",
    "local": "public/floorplan-tracer-pipeline/projects/WINDSOR_B1/REPORT.md",
-   "sha256": "2c533f163e92313f733ac1740ec53cb7adf014c24f96f3a72a1e33610bb39cd0",
-   "bytes": 1979
+   "sha256": "3e47e398786d1413a8baba199037c781e0c2a9a40f6635a872d2c00cdaffbac8",
+   "bytes": 2165
   }
  ],
  "tasks": [
@@ -125,7 +132,8 @@
   },
   {
    "task_id": "S8_REVIEW",
-   "status": "todo"
+   "status": "done",
+   "approved": "FIXTURE — kit 0.2.0 publish test by the agent (2026-10-07)"
   }
  ],
  "notes": "example built from the 2026-10-06 regression run; S8_REVIEW not approved, so only ungated outputs would publish"

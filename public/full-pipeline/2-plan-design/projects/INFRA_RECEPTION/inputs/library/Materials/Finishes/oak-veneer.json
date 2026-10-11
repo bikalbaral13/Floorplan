@@ -1,0 +1,61 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "wood.oak.veneer",
+  "title": "Wood — light oak veneer, vertical grain",
+  "description": "Crown-cut light oak on joinery fronts: wardrobe doors, drawer fronts, panelling. The library light oak is a world-space wave with heavy distortion, which on a two-metre door reads as marble. Here the bands run along X with little distortion and a fine detail layer, so on any front facing plus or minus y the grain is a tight, straight vertical figure, as a veneered door is laid up.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "X",
+      "waveProfile": "SIN",
+      "scale": 22,
+      "distortion": 2.5,
+      "detail": 4,
+      "detailScale": 3,
+      "detailRoughness": 0.6,
+      "phaseOffset": 0,
+      "colorA": "#dcc39d",
+      "colorB": "#c9a97f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#d3b68e",
+    "roughness": 0.5,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0015,
+      "samples": 3
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.25,
+      "scale": 1
+    },
+    "coat": {
+      "weight": 0.12,
+      "roughness": 0.3,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.08,
+      "scale": 12
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#d3b68e"
+  },
+  "dxf": {
+    "pattern": "ANSI32",
+    "scale": 0.5,
+    "angle": 90
+  }
+}

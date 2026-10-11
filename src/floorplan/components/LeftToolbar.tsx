@@ -249,7 +249,7 @@ export const LeftToolbar = ({
         hasMoodboard={!!hasMoodboard}
       />
     )}
-    {phase === "design" && <DesignPhaseToolbar hasPlan={!!hasPlan} hasMoodboard={!!hasMoodboard} />}
+    {phase === "plan" && <DesignPhaseToolbar hasPlan={!!hasPlan} hasMoodboard={!!hasMoodboard} />}
     {phase === "present" && (
       <PresentPhaseToolbar walkthroughPath={walkthroughPath} onWalkthroughUploaded={(p) => onWalkthroughUploaded?.(p)} />
     )}
@@ -315,7 +315,7 @@ export const LeftToolbar = ({
       onOpenAddNodeDialog={onOpenAddNodeDialog}
       onImportGeojson={onImportGeojson}
       planMode={phase === "plan"}
-      designMode={phase === "design"}
+      designMode={phase === "plan"}
     />}
 
     {/* Files toolbar moved to the top-right bar. */}

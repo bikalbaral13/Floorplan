@@ -1,0 +1,66 @@
+{
+ "kind": "parametric-object",
+ "version": 2,
+ "meta": {
+  "id": "door_hinged",
+  "name": "Single-leaf hinged door placed along a wall",
+  "category": "Architectural",
+  "units": "m",
+  "source": "program_pipeline objects/DOOR_HINGED@0.1.0"
+ },
+ "hostKind": "node",
+ "description": "Single-leaf hinged door placed along a wall. Feet. The wall is a straight segment; position 0% = first end (west end of a north wall, north end of an east wall).",
+ "units": "ft",
+ "functions": [
+  "build",
+  "place",
+  "qc"
+ ],
+ "rule_keys": {
+  "min_width_ft": "door_min_width_ft"
+ },
+ "parameters": [
+  {
+   "key": "width_ft",
+   "label": "Door width",
+   "kind": "number",
+   "default": 3,
+   "min": 2.5,
+   "max": 4,
+   "unit": "ft"
+  },
+  {
+   "key": "position_pct",
+   "label": "Position along the wall",
+   "kind": "number",
+   "default": 50,
+   "min": 0,
+   "max": 100,
+   "unit": "%"
+  },
+  {
+   "key": "margin_ft",
+   "label": "Minimum distance from the wall ends",
+   "kind": "number",
+   "default": 0.5,
+   "min": 0,
+   "max": 2,
+   "unit": "ft"
+  },
+  {
+   "key": "rotation",
+   "label": "Rotation",
+   "kind": "number",
+   "default": 0,
+   "min": 0,
+   "max": 360,
+   "step": 90,
+   "unit": "deg"
+  }
+ ],
+ "python": {
+  "runtime": "pyodide",
+  "entry": "build",
+  "source": "\"\"\"DOOR_HINGED 0.1.0 — place an opening along a wall segment; QC.\"\"\"\n\ndef place(p, a, b):\n    \"\"\"Wall from a to b (axis-aligned). Returns {a, b} of the opening in the same frame.\"\"\"\n    horiz = abs(b[1] - a[1]) < 1e-9\n    L = abs(b[0] - a[0]) if horiz else abs(b[1] - a[1])\n    s = p[\"margin_ft\"] + max(0, L - 2 * p[\"margin_ft\"] - p[\"width_ft\"]) * p[\"position_pct\"] / 100\n    if horiz:\n        x0 = min(a[0], b[0]) + s; return {\"a\": [x0, a[1]], \"b\": [x0 + p[\"width_ft\"], a[1]], \"width_ft\": p[\"width_ft\"]}\n    y0 = min(a[1], b[1]) + s; return {\"a\": [a[0], y0], \"b\": [a[0], y0 + p[\"width_ft\"]], \"width_ft\": p[\"width_ft\"]}\n\ndef qc(p, rules, F, ref):\n    m = rules.get(\"door_min_width_ft\")\n    return [F(\"fail\", \"door\", ref, f\"door {p['width_ft']}' below {m}'\")] if m is not None and p[\"width_ft\"] < m - 1e-9 else []\n\n\n# ── object/2 entry: plan symbol in metres (leaf + quarter swing), hinge at the origin, wall along +x ──\ndef build(params):\n    import math\n    w = params[\"width_ft\"] * 0.3048\n    leaf = [[0.0, 0.0], [0.0, w]]\n    arc = [[w * math.sin(math.radians(a)), w * math.cos(math.radians(a))] for a in range(0, 91, 10)]\n    opening = [[0.0, -0.05], [w, -0.05], [w, 0.05], [0.0, 0.05]]\n    return {\"meshes\": [], \"plan\": [opening, leaf, arc], \"stats\": {\"width_m\": round(w, 4)}}\n"
+ }
+}

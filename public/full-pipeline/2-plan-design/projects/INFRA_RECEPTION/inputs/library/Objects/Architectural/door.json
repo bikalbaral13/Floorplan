@@ -1,0 +1,583 @@
+{
+  "version": 1,
+  "id": "door-with-math",
+  "title": "Door — one Math Engine, cottage boarded leaf, lever and hinges, frame and swing",
+  "category": "Building",
+  "object": {
+    "hostKind": "segment",
+    "name": "Door",
+    "symbol": "door"
+  },
+  "description": "2D palette matches floorplan.json: red leaf, swing arc and jambs.\n\nA parametric DOOR in a wall opening, rebuilt on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nSELECT A WALL SEGMENT on canvas and the door fills it. Select a SPACE and it takes the longest edge. Select a node, or nothing at all, and it falls back to the typed Door width — so the flow always draws something.\n\nWHAT THIS REPLACES. The old version was fifteen nodes and fifty-seven edges: a Segment source, a Segment Geometry hop and a Point node to get at the wall's x / y / angle / length; a Math Engine; then ONE NODE PER SHAPE — three Rectangles and an Arc for the plan, four Cuboids and a Transform 3D for the model — each wired individually to the values that positioned it. Sixteen of those edges existed only to push a centre and a rotation into a rectangle. It drew the same door.\n\nSix nodes and thirty-five edges now, and the reason it collapses is that a RENDER ROW IS A STYLE GROUP, not a shape. The two jambs and the head are three rings on one Polygon row; the leaf is one ring on another; the swing arc is twenty-four chords on a Stroke row. Nothing needs its own node because nothing needs its own colour.\n\nWHAT THE MATH ENGINE NOW OWNS. Everything the geometry hops used to supply. The wall's direction, length, midpoint and bearing all come from `P` — two rows for a segment, its longest edge for a space — so the Segment Geometry and Point nodes are gone and the brief sits inline instead of hanging off the root. Then one RECTANGLE TABLE does the work: each row is a centre, a unit long axis, a length, a thickness, a z-range and a colour group, and one loop turns each into both a plan ring and a solid. Adding a threshold or a stop bead is one more row.\n\n  jamb L / jamb R — axis along the wall, jambWidth × frameDepth, z 0 → lintel\n  head          — axis along the wall, the full opening × frameDepth, z lintel → lintel + headDepth\n  leaf          — axis along the OPEN LEAF, the full opening × leafThickness, z 0 → lintel\n\nThe corners come from the axis and its perpendicular, so a rotated wall needs no trigonometry beyond the one `normalize`. The solids come from `mprism` — the Math Engine's own extrusion — which is why the four Cuboids and the Transform 3D are gone too: a prism is built at its rotation, so nothing needs rotating afterwards.\n\nTHE LEAF NOW OPENS TO ANY ANGLE. The old flow drew it at a fixed 90°. Because the closed direction and the swing perpendicular are ORTHONORMAL, rotating between them is exact and needs no matrix: `dir = cosθ·closed + sinθ·perp`. So Open angle is a real slider from 0° (shut, the leaf lying in the opening) to 170° (flat against the wall), the swing arc sweeps exactly that far, and the SWEPT FLOOR AREA is reported — which is the number that actually matters, since it is the clearance a door demands of the room.\n\nHINGE and SWING stay two selects and remain independent: hinge picks which end the leaf pivots about, swing which side of the wall it opens to, and all four combinations are checked below.\n\nLEAVES makes it a PAIR. \"Double\" is the entrance door: the opening is halved, one leaf hinges at each jamb, both swing to the same side, and each gets its own arc at its own radius. It is not a second door bolted on — the leaf construction is now written once against a HINGE SIGN, +1 for the right jamb and −1 for the left, and a single leaf is just that construction with the sign the Hinge select asks for and the full opening as its width. So the rectangle table grows by one row and the arc by one sweep, and nothing else in the file knows the difference. Hinge is meaningless for a pair (both jambs hinge) and is ignored there, which is why its label says so.\n\nAND A PAIR HALVES THE CLEARANCE, which is the whole reason to draw one: two leaves of W/2 sweep 2 × (θ/360)·π·(W/2)², half of a single leaf's (θ/360)·π·W². On a 1.8 m opening at 90° that is 1.2723 m² instead of 2.5447 m² — a metre and a quarter of floor handed back to the room, and the number the Swept floor area metric now reports.\n\nTHE AGENT NODE IS KEPT, wired into Input Properties, so the brief can still be set in words — \"right-hinged door swinging into the room, 45° open\" — rather than by dragging sliders. It no longer stamps geometry through the source; it only tunes the parameters, which is what it was really doing.\n\nVERIFIED THROUGH THE ENGINE on a 0.9 m opening (left hinge, left swing, 90°, 50 mm jambs, 150 mm frame, 2.1 m lintel): the plan is exactly 3 frame rings + 1 leaf ring, jamb rings 0.007500 m² each = jambWidth × frameDepth, the head 0.135000 m² = W × frameDepth, the leaf 0.036000 m² = W × thickness; jamb centres exactly W apart at x = 0 and x = 0.9; the leaf centre 0.45 m perpendicular from the hinged jamb; all 24 arc chords exactly 0.9 m from the hinge, starting at the closed leaf tip and ending at the open one; swept area 0.636173 m² = a quarter disc of radius W. In 3D the frame is 0.051750 m³ (two jambs + head) and the leaf 0.075600 m³ = W × t × H, both matching their reported metrics and both CLOSED — 0 unpaired edges — spanning z 0–2.25 and 0–2.1. All four hinge/swing combinations pivot about the right jamb and open to the right side. Open angle 0 / 30 / 45 / 90 / 120 / 170 puts the leaf at that exact bearing, scales the swept area with it, and leaves the leaf's volume unchanged; at 0° the shut leaf lies within half its own thickness of the wall line. Hosts: segments of 0.9 / 1.0 / 1.2 / 1.1 m, one at 30°, one reversed (bearing 180°), one vertical (exactly 90°), a 4×3 space (takes the 4 m edge), a bare point at the typed width, and a degenerate zero-length segment — every one gives a positive opening, 3 + 1 rings, closed meshes and a leaf volume that tracks the opening, with no non-finite cell anywhere. A tilted host gives identical volumes to a flat one: the door is rigid, only its frame turns.\n\nWHAT IT STILL DOES NOT DO. It draws a door, it does not CUT one — the wall is not opened, so use a Segment to Door node (or the Math Engine's new `subtract`) if you need the reveal punched through the wall poché. Single leaf only: no double doors, no sliding or folding, no threshold, and the leaf is a plain slab with no panels, no lipping and no ironmongery. The frame is square-cut, with no architrave and no mitre at the head.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — wall segment / space / point [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0], [0.9, 0]]",
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "leaves",
+              "name": "Leaves",
+              "type": "select",
+              "value": "Single",
+              "options": [
+                "Single",
+                "Double"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "hinge",
+              "name": "Hinge (single leaf only)",
+              "type": "select",
+              "value": "left",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": [
+                "left",
+                "right"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "swing",
+              "name": "Swing direction",
+              "type": "select",
+              "value": "left",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": [
+                "left",
+                "right"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "openAngle",
+              "name": "Open angle (deg)",
+              "type": "range",
+              "value": 90,
+              "min": 0,
+              "max": 170,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to segment",
+              "type": "select",
+              "value": "Fill segment",
+              "options": [
+                "Fill segment",
+                "Own width (centred)"
+              ],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "width",
+              "name": "Width (own / unhosted)",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.6,
+              "max": 4,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "leafThickness",
+              "name": "Leaf thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.02,
+              "max": 0.08,
+              "step": 0.005,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "jambWidth",
+              "name": "Jamb width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.03,
+              "max": 0.12,
+              "step": 0.005,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "frameDepth",
+              "name": "Frame depth (wall)",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.1,
+              "max": 0.3,
+              "step": 0.01,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "lintelHeight",
+              "name": "Lintel height",
+              "type": "range",
+              "value": 2.1,
+              "min": 1.8,
+              "max": 2.4,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "headDepth",
+              "name": "Head / lintel depth",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.01,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "arcSteps",
+              "name": "Swing arc segments",
+              "type": "range",
+              "value": 24,
+              "min": 4,
+              "max": 64,
+              "step": 2,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "panelStyle",
+              "name": "Leaf style",
+              "type": "select",
+              "value": "Cottage (V-groove)",
+              "options": [
+                "Cottage (V-groove)",
+                "Flush"
+              ]
+            },
+            {
+              "id": "boards",
+              "name": "Vertical boards",
+              "type": "range",
+              "value": 5,
+              "min": 1,
+              "max": 12,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "stileWidth",
+              "name": "Stile width",
+              "type": "range",
+              "value": 0.115,
+              "min": 0.05,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "topRail",
+              "name": "Top rail height",
+              "type": "range",
+              "value": 0.115,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bottomRail",
+              "name": "Bottom rail height",
+              "type": "range",
+              "value": 0.2,
+              "min": 0.05,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "grooveWidth",
+              "name": "V-groove width",
+              "type": "range",
+              "value": 0.008,
+              "min": 0,
+              "max": 0.03,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "faceRelief",
+              "name": "Face relief",
+              "type": "range",
+              "value": 0.006,
+              "min": 0.001,
+              "max": 0.03,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "showHandle",
+              "name": "Lever handle",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "handleHeight",
+              "name": "Handle centre height",
+              "type": "range",
+              "value": 1.05,
+              "min": 0.6,
+              "max": 1.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "handleLength",
+              "name": "Lever length",
+              "type": "range",
+              "value": 0.125,
+              "min": 0.06,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "handleInset",
+              "name": "Lever inset from latch edge",
+              "type": "range",
+              "value": 0.06,
+              "min": 0.03,
+              "max": 0.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "hinges",
+              "name": "Hinges per leaf",
+              "type": "range",
+              "value": 3,
+              "min": 2,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "oak cottage door, five vertical tongue-and-groove boards with V-grooves, framed stiles and rails, matt black lever handle and butt hinges, white painted lining",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/lacquer-charcoal.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Leaf=Finishes/lacquer-charcoal.json; Lining=Finishes/paint-matte-white.json; Ironmongery=Metal/steel.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Soft",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "leafColor",
+              "name": "Leaf colour (oak)",
+              "type": "color",
+              "value": "#C49A6C",
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "leafRoughness",
+              "name": "Leaf roughness",
+              "type": "range",
+              "value": 0.45,
+              "min": 0.1,
+              "max": 0.9,
+              "step": 0.01,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "grainScale",
+              "name": "Wood grain scale (per m)",
+              "type": "range",
+              "value": 12,
+              "min": 2,
+              "max": 40,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "grainContrast",
+              "name": "Wood grain contrast",
+              "type": "range",
+              "value": 0.35,
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "liningColor",
+              "name": "Lining / frame colour",
+              "type": "color",
+              "value": "#F2F0EA",
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "liningRoughness",
+              "name": "Lining roughness (eggshell)",
+              "type": "range",
+              "value": 0.35,
+              "min": 0.1,
+              "max": 0.9,
+              "step": 0.01,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "ironmongeryColor",
+              "name": "Handle & hinge colour",
+              "type": "color",
+              "value": "#1C1C1C",
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "ironmongeryRoughness",
+              "name": "Handle & hinge roughness",
+              "type": "range",
+              "value": 0.55,
+              "min": 0.1,
+              "max": 0.9,
+              "step": 0.01,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "edgeBevel",
+              "name": "Edge bevel radius",
+              "type": "range",
+              "value": 0.002,
+              "min": 0,
+              "max": 0.01,
+              "step": 0.0005,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "DOOR — MODELLING PLAN\nAll values in metres unless stated; Values in braces are this object's parameter. Build in Blender (or any engine) with Z up, origin at floor level on the wall centre-line, midway between the jambs; the wall runs along local X, its thickness along local Y.\n\nHOST & SIZING\n- Opening width W = the host segment length (fitMode \"Fill segment\") or {width} when unhosted / \"Own width (centred)\".\n- Leaves = {leaves}. Single: one leaf of width W hinged on the {hinge} jamb. Double: two leaves of W/2, one hinged at each jamb, both swinging to the same side.\n- The leaf opens {openAngle}° towards the {swing} side of the wall (0° = shut in the opening, 90° = square to the wall).\n\nGEOMETRY\n1. Lining (frame): two jambs, each {jambWidth} wide × {frameDepth} deep, from Z 0 to {lintelHeight}, flush with each end of the opening. A head piece spans W + 2·{jambWidth} × {frameDepth} deep, from Z {lintelHeight} to {lintelHeight} + {headDepth}. Square-cut butt joints, no architrave. Bevel all exposed edges {edgeBevel}.\n2. Leaf blank: a slab (W per leaf, minus a 3 mm gap each side and top, 10 mm gap at the floor) × {leafThickness} thick × {lintelHeight} high, centred in the lining depth when shut. Pivot at the hinge-side edge, on the swing face.\n3. Leaf style = {panelStyle}.\n   - Cottage (V-groove): frame the face with two stiles {stileWidth} wide, a top rail {topRail} high and a bottom rail {bottomRail} high. Fill the field between them with {boards} vertical boards of equal width, separated by V-grooves {grooveWidth} wide and 45° deep. Recess the boarded field {faceRelief} behind the stile / rail face on both sides. Model the grooves as real geometry (they read in close-up), with a {edgeBevel} bevel on stile and rail arrises.\n   - Flush: a plain slab with {edgeBevel} bevelled edges and a 2 mm lipping line on the two vertical edges.\n4. Hinges: {hinges} butt hinges per leaf on the hinge edge, 100 × 75 mm leaves, 3 mm thick, with a 12 mm knuckle cylinder (5 knuckles). Space them: top one 180 mm below the leaf head, bottom one 250 mm above the floor, the rest evenly between. Rebate them flush into leaf and jamb.\n5. Lever handle (only if showHandle = {showHandle}): a round rose Ø52 × 8 mm on both faces, centred {handleInset} in from the latch edge at height {handleHeight}. A lever Ø18 mm, {handleLength} long, returning 90° towards the leaf at its tip with a 10 mm radius bend. Handles point away from the latch edge. Add a small escutcheon Ø35 × 6 mm 72 mm below the lever centre.\n6. Rotate each leaf (with its handle and hinge leaves) about its hinge axis by {openAngle}°, towards the {swing} side.\n7. Subdivision / smoothness: detail = {detail}, edge character = {edgeCharacter}. Fine / Smooth → weighted normals and 2-segment bevels; Blocky → no bevels.\n\nMATERIALS\n- Leaf (oak): Principled BSDF, base colour {leafColor}, roughness {leafRoughness}, metallic 0. Grain: a Wave texture (bands, along the board length / Z) at scale {grainScale} per metre, distorted by a Noise (scale 4, detail 6), mixed over the base colour at {grainContrast} towards a 25 % darker tone. Run the grain vertically on boards and stiles, horizontally on rails. Add a very light bump (strength 0.05) from the same grain; V-grooves slightly darker via ambient occlusion (distance 0.01).\n- Lining and head: painted timber, base colour {liningColor}, roughness {liningRoughness}, metallic 0, a faint noise bump (scale 200, strength 0.02) for brush texture.\n- Ironmongery (handles, roses, escutcheon, hinges): powder-coated metal, base colour {ironmongeryColor}, roughness {ironmongeryRoughness}, metallic 0.8, clearcoat 0.2.\n- UVs are not needed: use Object / box-projected coordinates so the grain stays continuous across the leaf.\n\nLIGHTS\n- None. A door emits no light.\n\nCHECKS (measure after building)\n- Overall frame height = {lintelHeight} + {headDepth}; frame depth = {frameDepth}.\n- Clear opening between jambs = W; each leaf = W (single) or W/2 (double), minus gaps.\n- Leaf thickness = {leafThickness}; leaf top at {lintelHeight} minus 3 mm.\n- Leaf rotated exactly {openAngle}° from the wall line about the {hinge} jamb (single leaf).\n- Handle centre at Z {handleHeight}; hinge count per leaf = {hinges}.\n- All meshes closed (no open edges), no overlapping duplicate faces.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame — jambs & head",
+              "color": "#dc2626",
+              "layer": "Door",
+              "show": true,
+              "fillMode": "outlined"
+            },
+            {
+              "id": "p2_leaf",
+              "kind": "polygon",
+              "name": "Leaf",
+              "color": "#dc2626",
+              "layer": "Door",
+              "show": true
+            },
+            {
+              "id": "p2_arc",
+              "kind": "stroke",
+              "name": "Swing arc",
+              "color": "#dc2626",
+              "layer": "Door",
+              "width": 0.01,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_frame",
+              "kind": "polyhedron",
+              "name": "Lining",
+              "color": "#f2efe9",
+              "layer": "Door",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_leaf",
+              "kind": "polyhedron",
+              "name": "Leaf",
+              "color": "#c89a5b",
+              "layer": "Door",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_hardware",
+              "kind": "polyhedron",
+              "name": "Ironmongery",
+              "color": "#1c1c1c",
+              "layer": "Door",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

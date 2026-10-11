@@ -1,0 +1,20 @@
+{
+ "id": "S1_INTAKE",
+ "version": "0.1.0",
+ "title": "Intake the drawing and references",
+ "kind": "script",
+ "gate": false,
+ "summary": "Check the plan (canvas.v1) and the reference images; hash every input.",
+ "inputs": [
+  "inputs/plan.canvas.json",
+  "inputs/refs/* (+ refs.csv)"
+ ],
+ "outputs": [
+  "intake.json"
+ ],
+ "checks": [
+  "plan validates against canvas.v1",
+  "plan has walls and at least one closed space",
+  "every refs.csv row names a file that exists"
+ ]
+}

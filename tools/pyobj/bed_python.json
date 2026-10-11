@@ -1,0 +1,367 @@
+{
+ "kind": "parametric-object",
+ "version": 2,
+ "meta": {
+  "id": "bed-python",
+  "name": "Bed (Python mesh)",
+  "category": "Furniture",
+  "units": "m",
+  "icon": {
+   "paths": [
+    "M3 18v-6a2 2 0 012-2h14a2 2 0 012 2v6",
+    "M3 18h18",
+    "M3 14h18",
+    "M6 10V7a1 1 0 011-1h3a1 1 0 011 1v3",
+    "M13 10V7a1 1 0 011-1h3a1 1 0 011 1v3"
+   ]
+  }
+ },
+ "hostKind": "node",
+ "description": "Upholstered platform bed: channelled or panel headboard, recessed plinth, mattress, draped duvet (rolled edge, pleated hang, corner cascade, pooling), folded-back sheet cuff with piping, wool runner, pillows + velvet cushions. Palette from bed.json (taupe boucle, white cotton, charcoal wool, rust velvet). Python mesh generator: Pyodide in the editor, CPython in Blender.",
+ "parameters": [
+  {
+   "key": "length",
+   "label": "Mattress length",
+   "kind": "number",
+   "default": 2.0,
+   "min": 1.8,
+   "max": 2.4,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "width",
+   "label": "Mattress width",
+   "kind": "number",
+   "default": 1.8,
+   "min": 0.9,
+   "max": 2.2,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "baseHeight",
+   "label": "Platform height",
+   "kind": "number",
+   "default": 0.24,
+   "min": 0.1,
+   "max": 0.5,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "baseOversail",
+   "label": "Platform oversail",
+   "kind": "number",
+   "default": 0.1,
+   "min": 0.0,
+   "max": 0.3,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "baseEdgeRadius",
+   "label": "Platform edge radius",
+   "kind": "number",
+   "default": 0.018,
+   "min": 0.0,
+   "max": 0.08,
+   "step": 0.002,
+   "unit": "m"
+  },
+  {
+   "key": "mattressThk",
+   "label": "Mattress thickness",
+   "kind": "number",
+   "default": 0.2,
+   "min": 0.1,
+   "max": 0.35,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "mattressRadius",
+   "label": "Mattress edge radius",
+   "kind": "number",
+   "default": 0.05,
+   "min": 0.01,
+   "max": 0.1,
+   "step": 0.005,
+   "unit": "m"
+  },
+  {
+   "key": "duvetStart",
+   "label": "Duvet starts from head",
+   "kind": "number",
+   "default": 0.62,
+   "min": 0.2,
+   "max": 1.2,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "duvetThk",
+   "label": "Duvet thickness",
+   "kind": "number",
+   "default": 0.035,
+   "min": 0.01,
+   "max": 0.08,
+   "step": 0.005,
+   "unit": "m"
+  },
+  {
+   "key": "duvetDrop",
+   "label": "Duvet overhang",
+   "kind": "number",
+   "default": 0.29,
+   "min": 0.05,
+   "max": 0.6,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "drapeFlare",
+   "label": "Hem flare",
+   "kind": "number",
+   "default": 0.3,
+   "min": 0.0,
+   "max": 1.0,
+   "step": 0.05
+  },
+  {
+   "key": "folds",
+   "label": "Fold depth",
+   "kind": "number",
+   "default": 1.0,
+   "min": 0.0,
+   "max": 2.0,
+   "step": 0.1
+  },
+  {
+   "key": "wrinkles",
+   "label": "Surface wrinkles",
+   "kind": "number",
+   "default": 1.0,
+   "min": 0.0,
+   "max": 2.0,
+   "step": 0.1
+  },
+  {
+   "key": "cuffDepth",
+   "label": "Sheet cuff depth",
+   "kind": "number",
+   "default": 0.14,
+   "min": 0.0,
+   "max": 0.4,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "backPillows",
+   "label": "Back pillows",
+   "kind": "number",
+   "default": 2,
+   "min": 0,
+   "max": 3,
+   "step": 1
+  },
+  {
+   "key": "middlePillows",
+   "label": "Middle pillows",
+   "kind": "number",
+   "default": 2,
+   "min": 0,
+   "max": 3,
+   "step": 1
+  },
+  {
+   "key": "frontPillows",
+   "label": "Front pillows",
+   "kind": "number",
+   "default": 2,
+   "min": 0,
+   "max": 3,
+   "step": 1
+  },
+  {
+   "key": "pillowPlump",
+   "label": "Pillow plumpness",
+   "kind": "number",
+   "default": 1.0,
+   "min": 0.5,
+   "max": 1.6,
+   "step": 0.05
+  },
+  {
+   "key": "seed",
+   "label": "Fold seed",
+   "kind": "number",
+   "default": 7,
+   "min": 0,
+   "max": 99,
+   "step": 1
+  },
+  {
+   "key": "headboardStyle",
+   "label": "Headboard",
+   "kind": "select",
+   "default": "Channelled",
+   "options": [
+    "Channelled",
+    "Panel",
+    "None"
+   ]
+  },
+  {
+   "key": "headboardHeight",
+   "label": "Headboard height",
+   "kind": "number",
+   "default": 1.05,
+   "min": 0.6,
+   "max": 1.6,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "headboardThk",
+   "label": "Headboard thickness",
+   "kind": "number",
+   "default": 0.09,
+   "min": 0.04,
+   "max": 0.2,
+   "step": 0.005,
+   "unit": "m"
+  },
+  {
+   "key": "headboardOverhang",
+   "label": "Headboard overhang",
+   "kind": "number",
+   "default": 0.06,
+   "min": 0.0,
+   "max": 0.3,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "hbChannels",
+   "label": "Headboard channels",
+   "kind": "number",
+   "default": 8,
+   "min": 3,
+   "max": 16,
+   "step": 1
+  },
+  {
+   "key": "plinth",
+   "label": "Recessed plinth",
+   "kind": "checkbox",
+   "default": true
+  },
+  {
+   "key": "runner",
+   "label": "Runner",
+   "kind": "checkbox",
+   "default": true
+  },
+  {
+   "key": "runnerWidth",
+   "label": "Runner width",
+   "kind": "number",
+   "default": 0.62,
+   "min": 0.2,
+   "max": 1.0,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "runnerFromFoot",
+   "label": "Runner from foot",
+   "kind": "number",
+   "default": 0.28,
+   "min": 0.0,
+   "max": 1.0,
+   "step": 0.01,
+   "unit": "m"
+  },
+  {
+   "key": "platformColor",
+   "label": "Platform colour",
+   "kind": "color",
+   "default": "#b3a595"
+  },
+  {
+   "key": "plinthColor",
+   "label": "Plinth colour",
+   "kind": "color",
+   "default": "#9c8f80"
+  },
+  {
+   "key": "headboardColor",
+   "label": "Headboard colour",
+   "kind": "color",
+   "default": "#b3a595"
+  },
+  {
+   "key": "mattressColor",
+   "label": "Mattress colour",
+   "kind": "color",
+   "default": "#faf8f4"
+  },
+  {
+   "key": "duvetColor",
+   "label": "Duvet colour",
+   "kind": "color",
+   "default": "#f3f0ea"
+  },
+  {
+   "key": "sheetColor",
+   "label": "Sheet / cuff colour",
+   "kind": "color",
+   "default": "#ffffff"
+  },
+  {
+   "key": "pillowColor",
+   "label": "Pillow colour",
+   "kind": "color",
+   "default": "#f7f4ee"
+  },
+  {
+   "key": "cushionColor",
+   "label": "Cushion colour",
+   "kind": "color",
+   "default": "#c2622f"
+  },
+  {
+   "key": "runnerColor",
+   "label": "Runner colour",
+   "kind": "color",
+   "default": "#4a4744"
+  },
+  {
+   "key": "detail",
+   "label": "Mesh detail",
+   "kind": "select",
+   "default": "Fine",
+   "options": [
+    "Draft",
+    "Fine",
+    "Ultra"
+   ]
+  },
+  {
+   "key": "rotation",
+   "label": "Rotation",
+   "kind": "number",
+   "default": 0,
+   "min": 0,
+   "max": 360,
+   "step": 90,
+   "unit": "deg"
+  }
+ ],
+ "python": {
+  "runtime": "pyodide",
+  "entry": "build",
+  "source": "\"\"\"Bed (Python mesh generator) \u2014 platform base, mattress, draped duvet with folded-back sheet cuff, 3 rows of pillows.\n\nContract (shared by Blender and the editor's Pyodide runtime):\n    PARAMS                      list of {key,label,kind,default,min,max,step,unit,options}\n    build(params: dict) -> {\n        \"meshes\": [{\"name\", \"color\", \"material\", \"positions\": [x,y,z,...], \"indices\": [i,j,k,...]}],\n        \"plan\":   [[[x,y], ...], ...]   # closed outlines for the 2D symbol\n    }\nUnits metres. Frame: origin = centre of the bed footprint on the floor, +x across the width, +y from the HEAD\n(against the wall, y = -L/2) to the FOOT, +z up. Pure Python (no numpy) so Pyodide runs it without packages.\n\"\"\"\nimport math\n\nPARAMS = [\n    {\"key\": \"length\", \"label\": \"Mattress length\", \"kind\": \"number\", \"default\": 2.0, \"min\": 1.8, \"max\": 2.4, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"width\", \"label\": \"Mattress width\", \"kind\": \"number\", \"default\": 1.8, \"min\": 0.9, \"max\": 2.2, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"baseHeight\", \"label\": \"Platform height\", \"kind\": \"number\", \"default\": 0.24, \"min\": 0.1, \"max\": 0.5, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"baseOversail\", \"label\": \"Platform oversail\", \"kind\": \"number\", \"default\": 0.1, \"min\": 0.0, \"max\": 0.3, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"baseEdgeRadius\", \"label\": \"Platform edge radius\", \"kind\": \"number\", \"default\": 0.018, \"min\": 0.0, \"max\": 0.08, \"step\": 0.002, \"unit\": \"m\"},\n    {\"key\": \"mattressThk\", \"label\": \"Mattress thickness\", \"kind\": \"number\", \"default\": 0.2, \"min\": 0.1, \"max\": 0.35, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"mattressRadius\", \"label\": \"Mattress edge radius\", \"kind\": \"number\", \"default\": 0.05, \"min\": 0.01, \"max\": 0.1, \"step\": 0.005, \"unit\": \"m\"},\n    {\"key\": \"duvetStart\", \"label\": \"Duvet starts from head\", \"kind\": \"number\", \"default\": 0.62, \"min\": 0.2, \"max\": 1.2, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"duvetThk\", \"label\": \"Duvet thickness\", \"kind\": \"number\", \"default\": 0.035, \"min\": 0.01, \"max\": 0.08, \"step\": 0.005, \"unit\": \"m\"},\n    {\"key\": \"duvetDrop\", \"label\": \"Duvet overhang\", \"kind\": \"number\", \"default\": 0.29, \"min\": 0.05, \"max\": 0.6, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"drapeFlare\", \"label\": \"Hem flare\", \"kind\": \"number\", \"default\": 0.3, \"min\": 0.0, \"max\": 1.0, \"step\": 0.05},\n    {\"key\": \"folds\", \"label\": \"Fold depth\", \"kind\": \"number\", \"default\": 1.0, \"min\": 0.0, \"max\": 2.0, \"step\": 0.1},\n    {\"key\": \"wrinkles\", \"label\": \"Surface wrinkles\", \"kind\": \"number\", \"default\": 1.0, \"min\": 0.0, \"max\": 2.0, \"step\": 0.1},\n    {\"key\": \"cuffDepth\", \"label\": \"Sheet cuff depth\", \"kind\": \"number\", \"default\": 0.14, \"min\": 0.0, \"max\": 0.4, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"backPillows\", \"label\": \"Back pillows\", \"kind\": \"number\", \"default\": 2, \"min\": 0, \"max\": 3, \"step\": 1},\n    {\"key\": \"middlePillows\", \"label\": \"Middle pillows\", \"kind\": \"number\", \"default\": 2, \"min\": 0, \"max\": 3, \"step\": 1},\n    {\"key\": \"frontPillows\", \"label\": \"Front pillows\", \"kind\": \"number\", \"default\": 2, \"min\": 0, \"max\": 3, \"step\": 1},\n    {\"key\": \"pillowPlump\", \"label\": \"Pillow plumpness\", \"kind\": \"number\", \"default\": 1.0, \"min\": 0.5, \"max\": 1.6, \"step\": 0.05},\n    {\"key\": \"seed\", \"label\": \"Fold seed\", \"kind\": \"number\", \"default\": 7, \"min\": 0, \"max\": 99, \"step\": 1},\n    {\"key\": \"headboardStyle\", \"label\": \"Headboard\", \"kind\": \"select\", \"default\": \"Channelled\", \"options\": [\"Channelled\", \"Panel\", \"None\"]},\n    {\"key\": \"headboardHeight\", \"label\": \"Headboard height\", \"kind\": \"number\", \"default\": 1.05, \"min\": 0.6, \"max\": 1.6, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"headboardThk\", \"label\": \"Headboard thickness\", \"kind\": \"number\", \"default\": 0.09, \"min\": 0.04, \"max\": 0.2, \"step\": 0.005, \"unit\": \"m\"},\n    {\"key\": \"headboardOverhang\", \"label\": \"Headboard overhang\", \"kind\": \"number\", \"default\": 0.06, \"min\": 0.0, \"max\": 0.3, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"hbChannels\", \"label\": \"Headboard channels\", \"kind\": \"number\", \"default\": 8, \"min\": 3, \"max\": 16, \"step\": 1},\n    {\"key\": \"plinth\", \"label\": \"Recessed plinth\", \"kind\": \"checkbox\", \"default\": True},\n    {\"key\": \"runner\", \"label\": \"Runner\", \"kind\": \"checkbox\", \"default\": True},\n    {\"key\": \"runnerWidth\", \"label\": \"Runner width\", \"kind\": \"number\", \"default\": 0.62, \"min\": 0.2, \"max\": 1.0, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"runnerFromFoot\", \"label\": \"Runner from foot\", \"kind\": \"number\", \"default\": 0.28, \"min\": 0.0, \"max\": 1.0, \"step\": 0.01, \"unit\": \"m\"},\n    {\"key\": \"platformColor\", \"label\": \"Platform colour\", \"kind\": \"color\", \"default\": \"#b3a595\"},\n    {\"key\": \"plinthColor\", \"label\": \"Plinth colour\", \"kind\": \"color\", \"default\": \"#9c8f80\"},\n    {\"key\": \"headboardColor\", \"label\": \"Headboard colour\", \"kind\": \"color\", \"default\": \"#b3a595\"},\n    {\"key\": \"mattressColor\", \"label\": \"Mattress colour\", \"kind\": \"color\", \"default\": \"#faf8f4\"},\n    {\"key\": \"duvetColor\", \"label\": \"Duvet colour\", \"kind\": \"color\", \"default\": \"#f3f0ea\"},\n    {\"key\": \"sheetColor\", \"label\": \"Sheet / cuff colour\", \"kind\": \"color\", \"default\": \"#ffffff\"},\n    {\"key\": \"pillowColor\", \"label\": \"Pillow colour\", \"kind\": \"color\", \"default\": \"#f7f4ee\"},\n    {\"key\": \"cushionColor\", \"label\": \"Cushion colour\", \"kind\": \"color\", \"default\": \"#c2622f\"},\n    {\"key\": \"runnerColor\", \"label\": \"Runner colour\", \"kind\": \"color\", \"default\": \"#4a4744\"},\n    {\"key\": \"detail\", \"label\": \"Mesh detail\", \"kind\": \"select\", \"default\": \"Fine\", \"options\": [\"Draft\", \"Fine\", \"Ultra\"]},\n]\n\nDEFAULTS = {p[\"key\"]: p[\"default\"] for p in PARAMS}\n\n\n# \u2500\u2500 small mesh toolkit \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nclass Mesh:\n    def __init__(self, name, color, material):\n        self.name, self.color, self.material = name, color, material\n        self.v = []  # [(x,y,z)]\n        self.f = []  # [(a,b,c)]\n\n    def grid(self, rows, close_u=False, flip=False):\n        \"\"\"rows: list of rows, each a list of (x,y,z). Quads between consecutive rows/columns \u2192 2 triangles.\"\"\"\n        base = len(self.v)\n        nr, nc = len(rows), len(rows[0])\n        for r in rows:\n            self.v.extend(r)\n        cols = nc if close_u else nc - 1\n        for i in range(nr - 1):\n            for j in range(cols):\n                j2 = (j + 1) % nc\n                a, b = base + i * nc + j, base + i * nc + j2\n                c, d = base + (i + 1) * nc + j2, base + (i + 1) * nc + j\n                if flip:\n                    self.f += [(a, c, b), (a, d, c)]\n                else:\n                    self.f += [(a, b, c), (a, c, d)]\n        return base\n\n    def poly(self, pts, flip=False):\n        base = len(self.v)\n        self.v.extend(pts)\n        for k in range(1, len(pts) - 1):\n            self.f.append((base, base + k + 1, base + k) if flip else (base, base + k, base + k + 1))\n\n    def out(self):\n        # flat lists, no rounding: they become Float32/Uint32 arrays on the other side anyway\n        pos = [c for p in self.v for c in p]\n        idx = [i for f in self.f for i in f]\n        return {\"name\": self.name, \"color\": self.color, \"material\": self.material, \"positions\": pos, \"indices\": idx}\n\n\ndef smooth_noise(seed):\n    \"\"\"Deterministic smooth 2D noise: a sum of a few rotated sines with seeded phases (fast, no tables).\"\"\"\n    rnd = _lcg(seed)\n    waves = []\n    for k in range(6):\n        ang = rnd() * math.pi\n        freq = 2.0 + 9.0 * rnd()\n        waves.append((math.cos(ang) * freq, math.sin(ang) * freq, rnd() * 6.283, 1.0 / (1 + k * 0.6)))\n    tot = sum(w[3] for w in waves)\n    # Unrolled (no generator per call): this is evaluated ~400k times per bed, and in Pyodide the per-call\n    # overhead of a generator expression dominated the build.\n    (a0, b0, p0, w0), (a1, b1, p1, w1), (a2, b2, p2, w2), (a3, b3, p3, w3), (a4, b4, p4, w4), (a5, b5, p5, w5) =         [(fx, fy, ph, a / tot) for fx, fy, ph, a in waves]\n    sin = math.sin\n\n    def n(x, y):\n        return (w0 * sin(a0 * x + b0 * y + p0) + w1 * sin(a1 * x + b1 * y + p1) + w2 * sin(a2 * x + b2 * y + p2)\n                + w3 * sin(a3 * x + b3 * y + p3) + w4 * sin(a4 * x + b4 * y + p4) + w5 * sin(a5 * x + b5 * y + p5))\n    return n\n\n\ndef _lcg(seed):\n    st = [int(seed) * 7919 + 12345]\n\n    def r():\n        st[0] = (st[0] * 1103515245 + 12345) % 2147483648\n        return st[0] / 2147483648.0\n    return r\n\n\ndef rounded_box(m, cx, cy, z0, sx, sy, sz, r, seg):\n    \"\"\"Box [cx\u00b1sx/2, cy\u00b1sy/2, z0..z0+sz] with every edge rounded by r: a UV sphere of radius r whose octants are\n    pushed out to the box corners (duplicated rings at the octant seams become the flat faces).\"\"\"\n    r = max(1e-4, min(r, sx / 2 - 1e-4, sy / 2 - 1e-4, sz / 2 - 1e-4))\n    hx, hy, hz = sx / 2 - r, sy / 2 - r, sz / 2 - r\n    zc = z0 + sz / 2\n    phis = [(-math.pi / 2 + (math.pi / 2) * i / seg, -1) for i in range(seg + 1)] + \\\n           [((math.pi / 2) * i / seg, 1) for i in range(seg + 1)]\n    rows = []\n    for phi, sz_ in phis:\n        row = []\n        for q in range(4):\n            for j in range(seg + 1):\n                th = (q + j / seg) * math.pi / 2\n                ox = hx if math.cos(th) > 1e-9 or (abs(math.cos(th)) <= 1e-9 and q in (0, 3)) else -hx\n                oy = hy if math.sin(th) > 1e-9 or (abs(math.sin(th)) <= 1e-9 and q in (0, 1)) else -hy\n                # quadrant decides the corner, robustly\n                ox = hx if q in (0, 3) else -hx\n                oy = hy if q in (0, 1) else -hy\n                x = cx + ox + r * math.cos(phi) * math.cos(th)\n                y = cy + oy + r * math.cos(phi) * math.sin(th)\n                z = zc + sz_ * hz + r * math.sin(phi)\n                row.append((x, y, z))\n        rows.append(row)\n    m.grid(rows, close_u=True)\n    # flat caps (the pole rings collapse to the 4 corners)\n    bot = [(cx + hx, cy + hy, z0), (cx - hx, cy + hy, z0), (cx - hx, cy - hy, z0), (cx + hx, cy - hy, z0)]\n    top = [(x, y, z0 + sz) for x, y, _ in bot]\n    m.poly(bot, flip=True)\n    m.poly(top)\n\n\n# \u2500\u2500 components \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\ndef build(params=None):\n    P = dict(DEFAULTS)\n    P.update({k: v for k, v in (params or {}).items() if k in DEFAULTS})\n    num = lambda k: float(P[k])\n    L, W = num(\"length\"), num(\"width\")\n    bh, ov, br = num(\"baseHeight\"), num(\"baseOversail\"), num(\"baseEdgeRadius\")\n    mt, mr = num(\"mattressThk\"), num(\"mattressRadius\")\n    detail = {\"Draft\": 0.55, \"Fine\": 1.0, \"Ultra\": 1.7}.get(str(P[\"detail\"]), 1.0)\n    seed = int(num(\"seed\"))\n    head_y, foot_y = -L / 2, L / 2\n    col = lambda k: str(P[k])\n    flag = lambda k: P[k] in (True, \"true\", \"True\", 1, \"1\")\n\n    meshes = []\n\n    # Platform: flush with the mattress at the head (against the wall), oversailing the sides and the foot.\n    base = Mesh(\"Platform\", col(\"platformColor\"), \"Fabric/boucle.json\")\n    bseg = max(2, int(4 * detail))\n    ph = min(0.06, bh * 0.3) if flag(\"plinth\") else 0.0\n    rounded_box(base, 0.0, ov / 2, ph, W + 2 * ov, L + ov, bh - ph, br, bseg)\n    meshes.append(base)\n    if ph > 0:\n        # recessed plinth: a darker shadow-gap base the platform floats on\n        pl = Mesh(\"Plinth\", col(\"plinthColor\"), \"Finishes/light-oak.json\")\n        rounded_box(pl, 0.0, ov / 2, 0.0, W + 2 * ov - 0.09, L + ov - 0.09, ph + 0.002, 0.004, 2)\n        meshes.append(pl)\n\n    # Mattress (with fitted sheet) sitting on the platform.\n    mat = Mesh(\"Mattress\", col(\"mattressColor\"), \"Fabric/cotton-sateen.json\")\n    rounded_box(mat, 0.0, 0.0, bh, W, L, mt, mr, max(3, int(6 * detail)))\n    meshes.append(mat)\n    ztop = bh + mt\n\n    # Duvet + cuff share one drape mapping: (X, Y) on the unfolded fabric \u2192 3D point.\n    duvet_top = ztop + num(\"duvetThk\")\n    drop = num(\"duvetDrop\")\n    flare = num(\"drapeFlare\")\n    folds = num(\"folds\")\n    wrink = num(\"wrinkles\")\n    noise = smooth_noise(seed)\n    noise2 = smooth_noise(seed + 31)\n    puff = num(\"duvetThk\") * 0.9\n    rr0 = mr * 1.15  # the cloth rolls over the mattress edge radius\n\n    def drape(X, Y, zsurf, hang, off=0.0):\n        \"\"\"Map unfolded fabric coords to 3D. Inside the mattress outline the fabric lies flat at zsurf; past an\n        edge it rolls over a radius, hangs, flares at the hem, folds (more at the corners) and pools on the\n        platform if it is long enough to reach it. `off` lays a second layer `off` above the base cloth: it rolls\n        round the SAME centre with a radius `off` larger, so it stays clear on the sides too, not only on top.\"\"\"\n        zsurf += off\n        rr = rr0 + off\n        ex = max(-W / 2, min(W / 2, X))\n        ey = min(foot_y, Y)\n        dx = abs(X) - W / 2 if abs(X) > W / 2 else 0.0\n        dy = Y - foot_y if Y > foot_y else 0.0\n        d = math.hypot(dx, dy)\n        if d <= 1e-9:\n            # flat top: soft wrinkles, fading toward the cuff and edges\n            # a duvet billows: thicker in the middle, settling toward the edges (and toward its head fold)\n            edge = min(W / 2 - abs(X), foot_y - Y, max(0.0, Y - (head_y + num(\"duvetStart\"))) + 0.05)\n            billow = puff * (1 - math.exp(-max(0.0, edge) / 0.16))\n            near_foot = math.exp(-max(0.0, foot_y - Y) / 0.55)\n            diag = 0.0\n            for sx_ in (-1.0, 1.0):\n                cx_, cy_ = sx_ * W / 2, foot_y\n                rx, ry = X - cx_, Y - cy_\n                ang = math.atan2(ry, -sx_ * rx)          # radial angle from the corner, into the bed\n                dist = math.hypot(rx, ry)\n                diag += math.exp(-dist / 0.45) * (0.5 + 0.5 * math.sin(ang * 9.0 + seed * 0.7)) ** 3\n            z = zsurf + billow + wrink * 0.010 * noise(X * 0.8, Y * 0.8) + wrink * 0.004 * noise2(X * 3.1, Y * 2.7)                 + folds * 0.012 * diag + wrink * 0.006 * near_foot * noise2(X * 5.0, Y * 1.5)\n            return (X, Y, z)\n        ux, uy = (math.copysign(dx, X) / d, dy / d)\n        # corner factor: 0 on a straight side, 1 at 45\u00b0 on a corner\n        cf = math.sin(2 * math.atan2(dy, dx)) ** 2 if dx > 0 and dy > 0 else 0.0\n        a = min(d, rr * math.pi / 2)\n        h = rr * math.sin(a / rr)\n        v = rr * (1 - math.cos(a / rr))\n        s = d - a\n        if s > 0:\n            t = min(1.0, s / max(1e-6, hang))\n            fl = 0.08 + flare * 0.45 * t * t\n            h += s * math.sin(fl)\n            v += s * math.cos(fl)\n        # folds: vertical pleats along each side, deepening toward the hem; extra cascade at the corners\n        along = (ey if dx > 0 else ex)\n        hem_t = min(1.0, s / 0.12 if s > 0 else 0.0)\n        pleat = folds * (0.010 + 0.016 * cf) * hem_t * (\n            math.sin(along * 9.0 + seed) + 0.6 * math.sin(along * 17.0 + 2 * seed) + 1.0 * cf * math.sin(math.atan2(dy, dx + 1e-9) * 9.0))\n        # the corner's spare fabric also drops a little lower and swings outward (the cascade)\n        h += folds * 0.018 * cf * hem_t\n        h += pleat\n        z = zsurf - v\n        # pool on the platform: whatever would go below its top spreads outward instead\n        zfloor = bh + 0.004\n        if z < zfloor:\n            extra = zfloor - z\n            z = zfloor + 0.004 * abs(noise(X * 2, Y * 2))\n            h += extra * 0.3 * (0.4 + 0.5 * cf)  # mostly folds under; the corners pool a little outward\n        px = ex + ux * h\n        py = ey + uy * h\n        # sides drape only where there is fabric (head end of the side is cut straight by the domain)\n        return (px, py, z)\n\n    def fabric_rows(Y0, Y1, zsurf, hang, nx, ny, xpad):\n        rows = []\n        for i in range(ny + 1):\n            Y = Y0 + (Y1 - Y0) * i / ny\n            row = []\n            for j in range(nx + 1):\n                X = -W / 2 - xpad + (W + 2 * xpad) * j / nx\n                row.append(drape(X, Y, zsurf, hang))\n            rows.append(row)\n        return rows\n\n    def solidify(m, rows, thk, hem_taper=0.35):\n        \"\"\"Top surface rows + an offset underside (along local normals, thinning toward the hem) + edge walls.\"\"\"\n        nr, nc = len(rows), len(rows[0])\n        # The grid is ordered (rows along Y, columns along X), so cross(tu, tv) has ONE consistent sense over the\n        # whole sheet. Pick its sign once from the middle (flat, facing up) \u2014 flipping per vertex on the hanging\n        # sides, where nz ~ 0, is what punched knots into the hem.\n        mi, mj = nr // 2, nc // 2\n        def raw_n(i, j):\n            a_ = rows[i][min(nc - 1, j + 1)]; b_ = rows[i][max(0, j - 1)]\n            c_ = rows[min(nr - 1, i + 1)][j]; d_ = rows[max(0, i - 1)][j]\n            tu = (a_[0] - b_[0], a_[1] - b_[1], a_[2] - b_[2]); tv = (c_[0] - d_[0], c_[1] - d_[1], c_[2] - d_[2])\n            return (tu[1] * tv[2] - tu[2] * tv[1], tu[2] * tv[0] - tu[0] * tv[2], tu[0] * tv[1] - tu[1] * tv[0])\n        sense = 1.0 if raw_n(mi, mj)[2] >= 0 else -1.0\n        under = []\n        for i in range(nr):\n            urow = []\n            for j in range(nc):\n                p = rows[i][j]\n                nx_, ny_, nz_ = (sense * c for c in raw_n(i, j))\n                ln = math.sqrt(nx_ * nx_ + ny_ * ny_ + nz_ * nz_) or 1.0\n                edge = min(j, nc - 1 - j, nr - 1 - i) / max(1, min(nc, nr) * 0.08)\n                k = thk * (hem_taper + (1 - hem_taper) * min(1.0, edge))\n                urow.append((p[0] - nx_ / ln * k, p[1] - ny_ / ln * k, p[2] - nz_ / ln * k))\n            under.append(urow)\n        m.grid(rows)\n        m.grid(under, flip=True)\n        # stitch the four borders\n        def wall(seq_top, seq_bot, flip):\n            m.grid([seq_top, seq_bot], flip=flip)\n        wall(rows[0], under[0], True)\n        wall(rows[-1], under[-1], False)\n        wall([r[0] for r in rows], [r[0] for r in under], False)\n        wall([r[-1] for r in rows], [r[-1] for r in under], True)\n\n    # Duvet: from duvetStart (measured from the head) to past the foot, wide enough to hang both sides.\n    y0 = head_y + num(\"duvetStart\")\n    hang = drop\n    nx = int(150 * detail)\n    ny = int(120 * detail)\n    duvet = Mesh(\"Duvet\", col(\"duvetColor\"), \"Fabric/cotton.json\")\n    rows = fabric_rows(y0, foot_y + drop, duvet_top, hang, nx, ny, drop)\n    # round the head edge of the duvet (its fold-back thickness) by lifting the first rows slightly\n    solidify(duvet, rows, num(\"duvetThk\"))\n    meshes.append(duvet)\n\n    # Cuff: the top sheet folded back over the duvet's head edge \u2014 a band on top with a rolled fold and a seam.\n    cd = num(\"cuffDepth\")\n    if cd > 0.005:\n        cuff = Mesh(\"Sheet cuff\", col(\"sheetColor\"), \"Fabric/cotton.json\")\n        zc = duvet_top + 0.006\n        cny = max(6, int(14 * detail))\n        crows = []\n        for i in range(cny + 1):\n            t = i / cny\n            Y = y0 - 0.02 + (cd + 0.02) * t\n            row = []\n            for j in range(nx + 1):\n                X = -W / 2 - drop * 0.55 + (W + drop * 1.1) * j / nx\n                x, y, z = drape(X, Y, zc, hang * 0.55)\n                # rolled fold at the head edge, seam ridge a third of the way in\n                if t < 0.18:\n                    z += 0.010 * math.sin(t / 0.18 * math.pi / 2)\n                seam = math.exp(-((t - 0.62) / 0.05) ** 2)\n                z += 0.0035 * seam\n                row.append((x, y, z))\n            crows.append(row)\n        solidify(cuff, crows, 0.006, hem_taper=0.6)\n        meshes.append(cuff)\n        # piping line along the cuff seam (a thin tube)\n        pipe = Mesh(\"Cuff piping\", col(\"duvetColor\"), \"Fabric/cotton.json\")\n        ring_n = 8\n        Ys = y0 - 0.02 + (cd + 0.02) * 0.62\n        line = [drape(-W / 2 - drop * 0.55 + (W + drop * 1.1) * j / nx, Ys, zc + 0.0045, hang * 0.55) for j in range(nx + 1)]\n        tube_rows = []\n        for (x, y, z) in line:\n            tube_rows.append([(x, y + 0.004 * math.cos(2 * math.pi * k / ring_n), z + 0.004 * math.sin(2 * math.pi * k / ring_n)) for k in range(ring_n)])\n        # columns = along the line, rows = around the tube\n        around = [[tube_rows[j][k] for j in range(len(tube_rows))] for k in range(ring_n)]\n        pipe.grid(around + [around[0]])\n        meshes.append(pipe)\n\n    # Runner: a wool band across the foot, lying on the duvet (so it follows the billow) and draping both sides.\n    if flag(\"runner\"):\n        rw, rf = num(\"runnerWidth\"), num(\"runnerFromFoot\")\n        run = Mesh(\"Runner\", col(\"runnerColor\"), \"Fabric/wool.json\")\n        rny = max(8, int(24 * detail))\n        rpad = drop * 0.8\n        rrows = []\n        for i in range(rny + 1):\n            Y = foot_y - rf - rw + rw * i / rny\n            row = []\n            for j in range(nx + 1):\n                X = -W / 2 - rpad + (W + 2 * rpad) * j / nx\n                row.append(drape(X, Y, duvet_top, hang, off=0.02))\n            rrows.append(row)\n        solidify(run, rrows, 0.016, hem_taper=0.7)\n        meshes.append(run)\n\n    # Pillows: three rows leaning against the headboard (or the wall when there is none).\n    plump = num(\"pillowPlump\")\n\n    def pillow(m, cx, cy, cz, a, b, thk, lean_deg, yaw_deg, sd):\n        \"\"\"a\u00d7b pillow (a across), thickness thk, rotated about x by lean (0 = lying flat, 90 = upright),\n        corners pinched into ears, puffy profile, soft creases.\"\"\"\n        nu, nv = int(34 * detail), int(26 * detail)\n        nz = smooth_noise(sd)\n        lean = math.radians(lean_deg)\n        yaw = math.radians(yaw_deg)\n        top, bot = [], []\n        for i in range(nv + 1):\n            v = -1 + 2 * i / nv\n            rt, rb = [], []\n            for j in range(nu + 1):\n                u = -1 + 2 * j / nu\n                # outline with slightly concave sides (ears at the corners)\n                x = a / 2 * u * (1 - 0.07 * (1 - v * v))\n                y = b / 2 * v * (1 - 0.08 * (1 - u * u))\n                fu = max(0.0, 1 - abs(u) ** 2.2) ** 0.6\n                fv = max(0.0, 1 - abs(v) ** 2.2) ** 0.6\n                h = thk / 2 * fu * fv * plump\n                crease = 0.10 * thk * nz(u * 1.3, v * 1.3) * fu * fv\n                dent = -0.12 * thk * math.exp(-((u * 1.1) ** 2 + (v * 1.4) ** 2)) * fu\n                for sgn, dst in ((1, rt), (-1, rb)):\n                    lz = sgn * (h + crease * 0.5) + (dent if sgn > 0 else 0)\n                    # local (x, y, lz) \u2192 lean about x (y toward the foot, rising up the wall)\n                    yy = y * math.cos(lean) - lz * math.sin(lean)\n                    zz = y * math.sin(lean) + lz * math.cos(lean)\n                    xx = x * math.cos(yaw) - yy * math.sin(yaw)\n                    yy2 = x * math.sin(yaw) + yy * math.cos(yaw)\n                    dst.append((cx + xx, cy + yy2, cz + zz))\n            top.append(rt)\n            bot.append(rb)\n        m.grid(top)\n        m.grid(bot, flip=True)\n\n    pil = Mesh(\"Pillows\", col(\"pillowColor\"), \"Fabric/linen.json\")\n    cush = Mesh(\"Cushions\", col(\"cushionColor\"), \"Fabric/velvet.json\")\n    zbed = ztop\n    rows_spec = [\n        # count, a, b, thk, lean(deg from flat), y offset from head, centre height above mattress, spacing, yaw jitter\n        (int(num(\"backPillows\")), 0.74, 0.52, 0.17, 72, 0.13, 0.245, 0.80, 3),\n        (int(num(\"middlePillows\")), 0.50, 0.33, 0.12, 64, 0.30, 0.165, 0.54, -4),\n        (int(num(\"frontPillows\")), 0.74, 0.50, 0.16, 38, 0.48, 0.125, 0.80, 2),\n    ]\n    for r_i, (cnt, a, b, thk, lean, dy, hz, gap, yaw) in enumerate(rows_spec):\n        if cnt <= 0:\n            continue\n        xs = [(-(cnt - 1) / 2 + k) * gap for k in range(cnt)]\n        for k, x in enumerate(xs):\n            pillow(cush if r_i == 1 else pil, x, head_y + dy, zbed + hz, a, b, thk, lean + (k - (cnt - 1) / 2) * 3, yaw * (1 if k % 2 else -1), seed + 10 * r_i + k)\n    meshes.append(pil)\n    if cush.v:\n        meshes.append(cush)\n\n    # Headboard: behind the head (y < -L/2), on the floor. A thin backer, plus either padded vertical CHANNELS\n    # (each a bulging strip with rounded ends, separated by a stitched gap) or one padded PANEL.\n    style = str(P[\"headboardStyle\"])\n    hb_h, hb_t, hb_o = num(\"headboardHeight\"), num(\"headboardThk\"), num(\"headboardOverhang\")\n    hb_w = W + 2 * ov + 2 * hb_o\n    if style != \"None\":\n        hb = Mesh(\"Headboard\", col(\"headboardColor\"), \"Fabric/boucle.json\")\n        back_t = hb_t * 0.35\n        y_back = head_y - hb_t\n        rounded_box(hb, 0.0, y_back + back_t / 2, 0.0, hb_w, back_t, hb_h, 0.012, 3)\n        y_face = y_back + back_t                       # padding grows from here toward the bed (+y)\n        pad = hb_t - back_t\n        z0, z1 = ph + 0.02, hb_h - 0.015\n        n = max(1, int(num(\"hbChannels\"))) if style == \"Channelled\" else 1\n        gap = 0.006 if n > 1 else 0.0\n        cw = (hb_w - 0.02) / n\n        nu, nv = (max(6, int(10 * detail)), max(12, int(36 * detail))) if n > 1 else (max(16, int(40 * detail)), max(12, int(30 * detail)))\n        hbn = smooth_noise(seed + 77)\n        for i in range(n):\n            xa = -hb_w / 2 + 0.01 + i * cw + gap / 2\n            xb = xa + cw - gap\n            front, rear = [], []\n            for jv in range(nv + 1):\n                v = jv / nv\n                fr, rr_ = [], []\n                for ju in range(nu + 1):\n                    u = -1 + 2 * ju / nu\n                    x = (xa + xb) / 2 + u * (xb - xa) / 2\n                    # rounded top and bottom of each channel\n                    endv = min(1.0, (v / 0.05) ** 0.5, ((1 - v) / 0.05) ** 0.5) if 0 < v < 1 else 0.0\n                    bulge = pad * max(0.0, 1 - abs(u) ** 2.4) ** 0.5 * endv\n                    if n == 1:  # one panel: softer, wider crown and a little surface give\n                        bulge = pad * max(0.0, 1 - abs(u) ** 6) ** 0.4 * endv * (1 + 0.04 * hbn(u * 2, v * 3))\n                    z = z0 + (z1 - z0) * v - 0.012 * (u * u) * (1 if v > 0.97 else 0)\n                    fr.append((x, y_face + bulge, z))\n                    rr_.append((x, y_face, z))\n                front.append(fr)\n                rear.append(rr_)\n            hb.grid(front, flip=True)\n            hb.grid(rear)\n        meshes.append(hb)\n\n    # 2D plan symbol: platform outline, mattress outline, duvet head edge, pillow footprints.\n    plan = [\n        [[-W / 2 - ov, head_y], [W / 2 + ov, head_y], [W / 2 + ov, foot_y + ov], [-W / 2 - ov, foot_y + ov]],\n        [[-W / 2, head_y], [W / 2, head_y], [W / 2, foot_y], [-W / 2, foot_y]],\n        [[-W / 2, y0], [W / 2, y0]],\n    ]\n    if style != \"None\":\n        plan.append([[-hb_w / 2, head_y - hb_t], [hb_w / 2, head_y - hb_t], [hb_w / 2, head_y], [-hb_w / 2, head_y]])\n    for cnt, a, b, thk, lean, dy, hz, gap, yaw in rows_spec:\n        for k in range(max(0, cnt)):\n            x = (-(cnt - 1) / 2 + k) * gap\n            depth = b * math.cos(math.radians(lean)) + thk * math.sin(math.radians(lean))\n            plan.append([[x - a / 2, head_y + dy - depth / 2], [x + a / 2, head_y + dy - depth / 2],\n                         [x + a / 2, head_y + dy + depth / 2], [x - a / 2, head_y + dy + depth / 2]])\n    return {\"meshes\": [m.out() for m in meshes], \"plan\": plan,\n            \"stats\": {\"vertices\": sum(len(m.v) for m in meshes), \"triangles\": sum(len(m.f) for m in meshes)}}\n\n\nif __name__ == \"__main__\":\n    import json, sys, time\n    t = time.time()\n    r = build({})\n    print(json.dumps(r[\"stats\"]), f\"{time.time() - t:.2f}s\", file=sys.stderr)\n"
+ }
+}

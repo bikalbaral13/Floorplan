@@ -1,0 +1,114 @@
+{
+ "schema": "pipeline/1",
+ "id": "program",
+ "title": "Program Pipeline",
+ "version": "0.5.0",
+ "phase": "program",
+ "entry": {
+  "agents": "AGENTS.md",
+  "run": "python tools/run_task.py {CODE}",
+  "new_project": "python tools/new_project.py {CODE} --title \"...\" --standards <SET>",
+  "selftest": "python tools/selftest.py"
+ },
+ "kit": "0.3.1",
+ "inputs": [
+  {
+   "id": "site",
+   "from": "project:inputs/*",
+   "required": true,
+   "note": "site sketch / survey (read-only); readings go to work/site_trace.json with every guess in assumptions"
+  },
+  {
+   "id": "brief",
+   "from": "project:brief.json",
+   "required": true,
+   "note": "program brief confirmed with the user at P2 (typology_match)"
+  },
+  {
+   "id": "rules",
+   "from": "project:rules.json",
+   "required": true,
+   "note": "planning rules confirmed with the user at P3"
+  }
+ ],
+ "library_pins": [
+  {
+   "path": "library/Pipelines/_kit/",
+   "version": "0.3.1",
+   "local_copy": "_vendor/pipeline_kit"
+  },
+  {
+   "path": "library/Standards/DEFAULT.json",
+   "version": "1.0.0",
+   "local_copy": "standards/DEFAULT.json"
+  },
+  {
+   "path": "library/Standards/AADITHYAA.json",
+   "version": "1.0.0",
+   "local_copy": "standards/AADITHYAA.json"
+  },
+  {
+   "path": "library/Schemas/pipeline.v1.schema.json",
+   "local_copy": "schemas/library/pipeline.v1.schema.json"
+  },
+  {
+   "path": "library/Schemas/plan_trace.v1.schema.json",
+   "local_copy": "schemas/library/plan_trace.v1.schema.json"
+  }
+ ],
+ "outputs": {
+  "keep": [
+   {
+    "id": "project",
+    "local": "project:project.json",
+    "to": "Projects/{CODE}/program/project.json",
+    "after": "P6-HANDOFF"
+   },
+   {
+    "id": "plan_trace",
+    "local": "project:output/plan_trace.json",
+    "to": "Projects/{CODE}/program/plan_trace.json",
+    "schema": "plan_trace.v1",
+    "after": "P6-HANDOFF"
+   },
+   {
+    "id": "program",
+    "local": "project:output/PROGRAM.md",
+    "to": "Projects/{CODE}/program/PROGRAM.md",
+    "after": "P6-HANDOFF"
+   },
+   {
+    "id": "area_statement",
+    "local": "project:output/area_statement.csv",
+    "to": "Projects/{CODE}/program/area_statement.csv",
+    "after": "P6-HANDOFF"
+   },
+   {
+    "id": "params",
+    "local": "project:output/PARAMS.md",
+    "to": "Projects/{CODE}/program/PARAMS.md",
+    "after": "P5-SELECT"
+   },
+   {
+    "id": "qc",
+    "local": "project:output/qc.md",
+    "to": "Projects/{CODE}/program/qc.md",
+    "after": "P7-QC"
+   },
+   {
+    "id": "report",
+    "local": "project:REPORT.md",
+    "to": "Projects/{CODE}/runs/program/"
+   }
+  ],
+  "temp": [
+   "work/options/**",
+   "work/FIT.md",
+   "work/inputs.sha.json"
+  ]
+ },
+ "promotes": [
+  "library/Standards/",
+  "library/Objects/"
+ ]
+}

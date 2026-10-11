@@ -62,3 +62,6 @@ floorplan_with_bedroom_after_improvement.baked.json
 **/__pycache__/
 *.pyc
 pipeline-work/
+
+# local backups of retired pipelines (2026-10-11); git history keeps the tracked ones
+_archive/

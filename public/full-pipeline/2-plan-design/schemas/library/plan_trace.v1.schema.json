@@ -1,0 +1,114 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://builderpluss.dev/library/Schemas/plan_trace.v1.schema.json",
+ "title": "plan_trace/1 — program_pipeline hand-off (to design_pipeline)",
+ "description": "mm, X east, Y north, origin = plot south-west corner. Rooms are unit / house shells (wall centrelines inset by wall_mm/2); doors carry hinge + latch points; `program` holds typology extras (court, carport, zoning…). Producer: program_pipeline P6_HANDOFF (typology to_plan_trace).",
+ "type": "object",
+ "required": [
+  "units",
+  "rooms",
+  "doors"
+ ],
+ "properties": {
+  "source": {
+   "type": "string"
+  },
+  "units": {
+   "const": "mm"
+  },
+  "rooms": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "code",
+     "polygon"
+    ],
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "polygon": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      }
+     },
+     "ceiling_mm": {
+      "type": "number"
+     }
+    },
+    "additionalProperties": true
+   }
+  },
+  "doors": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "hinge",
+     "latch"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "rooms": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "swing_room": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     },
+     "hinge": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "latch": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+     }
+    },
+    "additionalProperties": true
+   }
+  },
+  "windows": {
+   "type": "array"
+  },
+  "fixtures": {
+   "type": "array"
+  },
+  "program": {
+   "type": "object"
+  },
+  "assumptions": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "additionalProperties": true
+}

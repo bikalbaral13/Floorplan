@@ -1,0 +1,521 @@
+{
+  "version": 1,
+  "id": "services-ceiling-with-math",
+  "title": "Services Ceiling — exposed soffit with oval ducts, cable tray and pipes",
+  "category": "MEP",
+  "object": {
+    "hostKind": "space",
+    "name": "Services Ceiling",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 4h18",
+        "M4 8h16a2 2 0 010 4H4a2 2 0 010-4z",
+        "M3 16h18",
+        "M6 19h12"
+      ]
+    }
+  },
+  "description": "A parametric SERVICES CEILING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE. Everything runs along the space's longest edge (Rotation turns the runs) across its bounding box less the inset: a painted soffit plate, oval ducts, a cable tray and pipes, all at stated gaps below the soffit.\n\nTHE OVAL IS BUILT FACE BY FACE, not from boxes. A quad prism only extrudes vertically, and a duct runs horizontally, so each duct is ductFacets side faces whose corners sit on the ellipse (w/2·cos a, h/2·sin a) in the (v, z) plane, plus two end caps — every facet of every duct in ONE table indexed by floor(i/N). Rectangular is the same table at four facets turned 45° and scaled by √2.\n\nDEFAULTS are the INFRA Reception review: all ducts oval (s28), services white and complete (s18, s29), soffit at an assumed 3.6 m.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "slabHeight",
+              "name": "Slab soffit (FFL)",
+              "type": "range",
+              "value": 3.6,
+              "min": 2.4,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "soffitOn",
+              "name": "Painted soffit plate",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "soffitThk",
+              "name": "Soffit plate thickness",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.01,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "ductShape",
+              "name": "Duct shape",
+              "type": "select",
+              "value": "Oval",
+              "options": [
+                "Oval",
+                "Rectangular"
+              ]
+            },
+            {
+              "id": "ductCount",
+              "name": "Ducts",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "ductWidth",
+              "name": "Duct width",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "ductHeight",
+              "name": "Duct height",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.1,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "ductDrop",
+              "name": "Gap soffit to duct top",
+              "type": "range",
+              "value": 0.15,
+              "min": 0,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "ductSpacing",
+              "name": "Duct centres",
+              "type": "range",
+              "value": 2.4,
+              "min": 0.3,
+              "max": 8,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "ductOffset",
+              "name": "Duct field offset",
+              "type": "range",
+              "value": 0,
+              "min": -5,
+              "max": 5,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "ductFacets",
+              "name": "Oval facets",
+              "type": "range",
+              "value": 16,
+              "min": 8,
+              "max": 48,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "trayOn",
+              "name": "Cable tray",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "trayWidth",
+              "name": "Tray width",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.1,
+              "max": 0.9,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "trayDepth",
+              "name": "Tray depth",
+              "type": "range",
+              "value": 0.08,
+              "min": 0.03,
+              "max": 0.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "trayDrop",
+              "name": "Gap soffit to tray",
+              "type": "range",
+              "value": 0.12,
+              "min": 0,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "trayOffset",
+              "name": "Tray offset",
+              "type": "range",
+              "value": -1.5,
+              "min": -6,
+              "max": 6,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "pipeCount",
+              "name": "Pipes",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "pipeDia",
+              "name": "Pipe diameter",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.015,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "pipeDrop",
+              "name": "Gap soffit to pipe centre",
+              "type": "range",
+              "value": 0.35,
+              "min": 0.02,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pipeOffset",
+              "name": "Pipe field offset",
+              "type": "range",
+              "value": 1.2,
+              "min": -6,
+              "max": 6,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "inset",
+              "name": "Inset from space edge",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "painted white galvanised ducts and tray, painted soffit",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "exposed services open ceiling",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "materialPath",
+              "name": "Material path",
+              "type": "text",
+              "value": "Finishes/paint-eggshell.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "finishes",
+              "name": "Finishes",
+              "type": "text",
+              "value": "*=Finishes/paint-eggshell.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specId",
+              "name": "Spec id",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specCategory",
+              "name": "Spec category",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specNote",
+              "name": "Spec note",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "deckSlides",
+              "name": "Deck slides",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "refImages",
+              "name": "Reference images",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "productUrl",
+              "name": "Product link",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_duct",
+              "kind": "polygon",
+              "name": "Ducts",
+              "color": "#94a3b8",
+              "layer": "Services",
+              "show": true
+            },
+            {
+              "id": "p2_tray",
+              "kind": "polygon",
+              "name": "Cable tray",
+              "color": "#64748b",
+              "layer": "Services",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_duct",
+              "kind": "polyhedron",
+              "name": "Ducts",
+              "color": "#F4F4F2",
+              "layer": "Services",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_soffit",
+              "kind": "polyhedron",
+              "name": "Soffit",
+              "color": "#F7F7F5",
+              "layer": "Services",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tray",
+              "kind": "polyhedron",
+              "name": "Cable tray",
+              "color": "#EDEDEA",
+              "layer": "Services",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_pipe",
+              "kind": "tube",
+              "name": "Pipes",
+              "color": "#EDEDEA",
+              "layer": "Services",
+              "radius": 0.025,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

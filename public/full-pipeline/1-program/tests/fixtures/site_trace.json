@@ -1,0 +1,8 @@
+{
+ "source": "self-test fixture (copy of the AD_TH01 sketch reading)",
+ "units": "ft",
+ "front_ft": 36, "rear_ft": 36, "west_ft": 106, "east_ft": "105'-6\"",
+ "stated_area_sqft": 3807,
+ "road_side": "N",
+ "assumptions": ["fixture: road on the north as drawn"]
+}

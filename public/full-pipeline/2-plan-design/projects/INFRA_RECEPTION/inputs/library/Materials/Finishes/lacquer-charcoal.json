@@ -1,0 +1,47 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "paint.lacquer.charcoal",
+  "title": "Lacquer — charcoal satin",
+  "description": "Contemporary internal door leaf: charcoal satin lacquer, as in current residential schemes (white lining, dark leaf).",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 120,
+      "detail": 2,
+      "roughness": 0.3,
+      "distortion": 0,
+      "colorA": "#323436",
+      "colorB": "#2b2d2f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#2f3133",
+    "roughness": 0.38,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.002,
+      "samples": 3
+    },
+    "coat": {
+      "weight": 0.25,
+      "roughness": 0.2,
+      "ior": 1.5
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#2f3133"
+  },
+  "dxf": {
+    "pattern": "SOLID",
+    "scale": 1,
+    "angle": 0
+  }
+}

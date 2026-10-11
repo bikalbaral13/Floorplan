@@ -1,0 +1,451 @@
+{
+  "version": 1,
+  "id": "rug-with-math",
+  "title": "Rug (mesh) — plain ivory low pile with abrash; optional carved leaf pattern",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "space",
+    "name": "Rug",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 6h18v12H3z",
+        "M6 16c3-4 5-6 9-9",
+        "M10 17c1-3 4-6 8-7",
+        "M5 9c2 0 4 1 5 3"
+      ]
+    }
+  },
+  "description": "A parametric RUG — by default a PLAIN ivory low-pile rug whose texture is all in its material (fibre, abrash streaks, mottle, sheen: Fabric/rug-plain-ivory), with an optional CARVED leaf pattern in sage and tan (Leaves > 0) — on the six-node spine: Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE and it fits inside the room with a margin (fitMode Max, 0.4 m), along the space's long direction; on a node it takes its stated size.\n\nTHE PATTERN IS GEOMETRY, NOT A TEXTURE. Each leaf is one row of a table: it springs from one of the four edges, points inward on a diagonal and bows into a stretched S; its length, width, bend and colour come from a hash of (index, seed), so Seed draws a new rug. Every leaf is a flat strip lofted along its spine — narrow at the base, full through the middle, pointed at the tip — standing a few millimetres proud of the field, which is exactly what a carved (high-low) rug is. Points that fall outside the rug are pulled back onto its edge, so leaves run off the border the way the reference's do. Because it is geometry, the pattern shows on the canvas, in a GLB and in SketchUp — not only in a renderer that can read a procedural.\n\nThe field is a soft slab with a rolled pile edge; Round makes it an ellipse; optional border band and fringe are kept from the previous version.\n\nDIMENSIONS AT THE DEFAULTS: 2.4 × 1.6 m, 12 mm plain pile, crisp edge; pattern off (Leaves 0).\n\nWHAT THIS CANNOT DO. The leaves are drawn as strips, so the thin cream channels between leaves are the gaps the layout leaves rather than a designed negative. Leaves may overlap one another (one simply lies over the other).",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 2.4,
+              "min": 0.6,
+              "max": 5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.6,
+              "min": 0.4,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Pile height",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.04,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shape",
+              "name": "Shape",
+              "type": "select",
+              "value": "Rectangular",
+              "options": [
+                "Rectangular",
+                "Runner",
+                "Round"
+              ]
+            },
+            {
+              "id": "leaves",
+              "name": "Carved pattern leaves (0 = plain rug)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 60,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "leafLength",
+              "name": "Leaf length (largest)",
+              "type": "range",
+              "value": 1,
+              "min": 0.2,
+              "max": 2.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "leafWidth",
+              "name": "Leaf width (largest)",
+              "type": "range",
+              "value": 0.24,
+              "min": 0.05,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "relief",
+              "name": "Carved relief of the pattern",
+              "type": "range",
+              "value": 0.004,
+              "min": 0,
+              "max": 0.012,
+              "step": 0.0005,
+              "options": []
+            },
+            {
+              "id": "tanShare",
+              "name": "Share of tan leaves (rest sage)",
+              "type": "range",
+              "value": 0.3,
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "seed",
+              "name": "Pattern seed",
+              "type": "range",
+              "value": 5,
+              "min": 0,
+              "max": 99,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "showBorder",
+              "name": "Border band on the long sides",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "borderWidth",
+              "name": "Border width",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.03,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "fringeLength",
+              "name": "Fringe on the short ends (0 = none)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 0.15,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Max",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0.4,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Crisp",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "plain ivory low-pile wool/viscose, soft abrash streaks, fine tufted texture, high sheen; optional carved sage and tan leaf pattern",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "plain ivory low-pile area rug, soft tonal abrash, calm minimal bedroom",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Fabric/rug-plain-ivory.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Field=Fabric/rug-plain-ivory.json; Border=Fabric/rug-plain-ivory.json; Sage=Fabric/rug-pile-sage.json; Tan=Fabric/rug-pile-tan.json; Fringe=Fabric/rug-pile-cream.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "RUG — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a room (space): origin at the room centroid, X/Y in plan, fit inside the room outline.\n\nWHAT IT IS\nplain ivory low-pile area rug, soft tonal abrash, calm minimal bedroom\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Length: {length}\n- Width: {width}\n- Pile height: {height}\n- Shape: {shape} (one of: Rectangular / Runner / Round)\n- Carved pattern leaves (0 = plain rug): {leaves}\n- Leaf length (largest): {leafLength}\n- Leaf width (largest): {leafWidth}\n- Carved relief of the pattern: {relief}\n- Share of tan leaves (rest sage): {tanShare}\n- Pattern seed: {seed}\n- Border band on the long sides: {showBorder}\n- Border width: {borderWidth}\n- Fringe on the short ends (0 = none): {fringeLength}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Length = {length}\n- Width = {width}\n- Pile height = {height}\n- Leaf length (largest) = {leafLength}\n- Leaf width (largest) = {leafWidth}\n- Border width = {borderWidth}\n- Fringe on the short ends (0 = none) = {fringeLength}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_rug",
+              "kind": "polygon",
+              "name": "Rug",
+              "color": "#e9e1d2",
+              "layer": "Rug",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_field",
+              "kind": "polyhedron",
+              "name": "Field",
+              "color": "#e9e1d2",
+              "layer": "Rug",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_border",
+              "kind": "polyhedron",
+              "name": "Border",
+              "color": "#e9e1d2",
+              "layer": "Rug",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_sage",
+              "kind": "polyhedron",
+              "name": "Sage leaves",
+              "color": "#7d8f6a",
+              "layer": "Rug",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tan",
+              "kind": "polyhedron",
+              "name": "Tan leaves",
+              "color": "#b9976c",
+              "layer": "Rug",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_fringe",
+              "kind": "polyhedron",
+              "name": "Fringe",
+              "color": "#e9e1d2",
+              "layer": "Rug",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

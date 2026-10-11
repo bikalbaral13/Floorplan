@@ -1,0 +1,229 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.rug.plain-ivory",
+  "title": "Fabric — low-pile rug, plain ivory with abrash",
+  "description": "A plain ivory low-pile wool/viscose rug. Three layers make it read as fibre rather than a painted plane: a sub-millimetre fibre noise (the individual tufts, which also drive the bump), ABRASH — long soft streaks running with the pile, the tonal variation hand-spun yarn gives — and a large faint mottle. Sheen is high because the pile catches light at grazing angles; roughness is near 1 because there is no specular surface. Tones measured from the reference photo.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 900,
+      "detail": 3,
+      "roughness": 0.6,
+      "distortion": 0.3,
+      "colorA": "#cfc4b6",
+      "colorB": "#bdb0a1"
+    }
+  },
+  "pbr": {
+    "baseColor": "#c6baac",
+    "roughness": 0.97,
+    "metallic": 0,
+    "sheen": 0.6,
+    "sheenTint": "#fff8ee"
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.7,
+      "roughness": 0.35,
+      "tint": "#fff8ee"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.8,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.03,
+      "scale": 30
+    },
+    "displacement": {
+      "scale": 0.0015,
+      "midlevel": 0.5
+    }
+  },
+  "blenderGraph": {
+    "version": 1,
+    "nodes": {
+      "fibreMap": {
+        "type": "ShaderNodeMapping",
+        "props": {
+          "vector_type": "POINT"
+        },
+        "in": {
+          "Vector": "@pos",
+          "Scale": [
+            1,
+            1.4,
+            1
+          ]
+        }
+      },
+      "fibre": {
+        "type": "ShaderNodeTexNoise",
+        "in": {
+          "Vector": "fibreMap:Vector",
+          "Scale": 900,
+          "Detail": 3,
+          "Roughness": 0.65,
+          "Distortion": 0.4
+        }
+      },
+      "abrashMap": {
+        "type": "ShaderNodeMapping",
+        "props": {
+          "vector_type": "POINT"
+        },
+        "in": {
+          "Vector": "@pos",
+          "Scale": [
+            0.45,
+            3,
+            1
+          ]
+        }
+      },
+      "abrash": {
+        "type": "ShaderNodeTexNoise",
+        "in": {
+          "Vector": "abrashMap:Vector",
+          "Scale": 3.5,
+          "Detail": 6,
+          "Roughness": 0.55,
+          "Distortion": 0.8
+        }
+      },
+      "mottle": {
+        "type": "ShaderNodeTexNoise",
+        "in": {
+          "Vector": "@pos",
+          "Scale": 1.2,
+          "Detail": 2,
+          "Roughness": 0.5
+        }
+      },
+      "mix1": {
+        "type": "ShaderNodeMix",
+        "props": {
+          "data_type": "FLOAT"
+        },
+        "in": {
+          "Factor": 0.35,
+          "A": "abrash:Fac",
+          "B": "mottle:Fac"
+        }
+      },
+      "mix2": {
+        "type": "ShaderNodeMix",
+        "props": {
+          "data_type": "FLOAT"
+        },
+        "in": {
+          "Factor": 0.3,
+          "A": "mix1:Result",
+          "B": "tuft:Fac"
+        }
+      },
+      "tone": {
+        "type": "ShaderNodeValToRGB",
+        "in": {
+          "Fac": "mix3:Result"
+        },
+        "ramp": [
+          [
+            0.36,
+            "#b0a292"
+          ],
+          [
+            0.46,
+            "#bdb0a1"
+          ],
+          [
+            0.52,
+            "#c6baac"
+          ],
+          [
+            0.58,
+            "#cfc4b6"
+          ],
+          [
+            0.66,
+            "#dad0c3"
+          ]
+        ]
+      },
+      "rough": {
+        "type": "ShaderNodeMath",
+        "props": {
+          "operation": "MULTIPLY_ADD"
+        },
+        "in": {
+          "Value": "fibre:Fac",
+          "Value#1": 0.06,
+          "Value#2": 0.92
+        }
+      },
+      "bump": {
+        "type": "ShaderNodeBump",
+        "in": {
+          "Strength": 0.45,
+          "Distance": 0.0015,
+          "Height": "bumpH:Value"
+        }
+      },
+      "tuft": {
+        "type": "ShaderNodeTexNoise",
+        "in": {
+          "Vector": "@pos",
+          "Scale": 120,
+          "Detail": 3,
+          "Roughness": 0.6,
+          "Distortion": 0.3
+        }
+      },
+      "mix3": {
+        "type": "ShaderNodeMix",
+        "props": {
+          "data_type": "FLOAT"
+        },
+        "in": {
+          "Factor": 0.2,
+          "A": "mix2:Result",
+          "B": "fibre:Fac"
+        }
+      },
+      "bumpH": {
+        "type": "ShaderNodeMath",
+        "props": {
+          "operation": "MULTIPLY_ADD"
+        },
+        "in": {
+          "Value": "tuft:Fac",
+          "Value#1": 0.6,
+          "Value#2": "fibre:Fac"
+        }
+      }
+    },
+    "out": {
+      "Base Color": "tone:Color",
+      "Roughness": "rough:Value",
+      "Normal": "bump:Normal",
+      "Sheen Weight": 0.7,
+      "Sheen Roughness": 0.35,
+      "Sheen Tint": "#fff8ee"
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#d8ccbe"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 0.3,
+    "angle": 0
+  }
+}

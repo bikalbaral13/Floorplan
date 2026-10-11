@@ -1,0 +1,15 @@
+{
+ "cases": 3983,
+ "identical": 127,
+ "differ": {},
+ "refused": {
+  "arch/tessellation.json": "unported: intersect",
+  "arch_dl/tessellation.json": "unported: intersect",
+  "arch_orig/tessellation.json": "unported: intersect",
+  "live/tessellation.json": "unported: intersect",
+  "out/Faithful_Space_Render.json": "not a spine object",
+  "out-bedroom/tessellation.json": "unported: intersect"
+ },
+ "source": "tools/tmp-pobj (all copies)",
+ "tolerance_m": 1e-06
+}

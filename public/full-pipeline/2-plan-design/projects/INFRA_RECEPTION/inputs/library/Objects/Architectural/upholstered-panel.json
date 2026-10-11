@@ -1,0 +1,463 @@
+{
+  "version": 1,
+  "id": "upholstered-panel-with-math",
+  "title": "Upholstered Panel — one Math Engine, channelled pad field, float gap and halo LED",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Upholstered Panel",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 4h18v16H3z",
+        "M7 4v16",
+        "M11 4v16",
+        "M15 4v16",
+        "M19 4v16"
+      ]
+    }
+  },
+  "description": "A parametric UPHOLSTERED PANEL on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. This is the plan's hero wall: a floor-to-cove channelled panel that floats off the wall with an LED halo behind it. It is deliberately NOT part of the bed — `bed-with-math.headboardHeight` is a board bolted to a bed, and a 2.74 × 2.97 m wall feature is a different thing that must survive the bed being moved.\n\nALL FOUR PATTERNS ARE ONE BROADCAST. The pad field is a grid of `_nu` columns by `_nz` rows, and the pattern only decides whether each count is a division or a 1 — vertical is `_nz = 1`, horizontal is `_nu = 1`, square grid is both, plain is both with the groove set to zero. There is no second body for any of them, which is why changing pattern cannot change anything else about the panel.\n\nTHE GROOVE IS NOT DRAWN. A groove is the gap the pads leave, subtracted half from each side of every pad so the field still fills the frame exactly whatever the count. Drawing the groove as a solid would double-count the same millimetres.\n\nTHE FLOAT GAP IS WHAT MAKES THE HALO POSSIBLE. `_fg` pushes the backer off the wall face, and the halo frame lives in that gap and nowhere else — set the gap to zero and the halo drops out on its own rather than being clipped into the wall.\n\nTHE LIP SHRINKS THE PAD FIELD, it does not overlay it: `_fu0 = _u0 + _lw`. Turn the lip off and the pads take the full face, so the two can never overlap.\n\nDIMENSIONS AT THE DEFAULTS: 2.743 × 2.972 m at 0.133 m total depth, 0.064 m off the wall, 27 vertical channels at 0.101 m pitch, 8.15 m² of face and 11.2 m of halo.\n\nWHAT THIS CANNOT DO. Pads are flat-fronted quads — there is no crowned or buttoned cushion, and a diamond or chevron pattern is not a grid so it is not here. The lip is square, on two sides and the top only.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Panel length",
+              "type": "range",
+              "value": 2.743,
+              "min": 0.3,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Panel height",
+              "type": "range",
+              "value": 2.972,
+              "min": 0.3,
+              "max": 4.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "baseOffset",
+              "name": "Bottom above floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pattern",
+              "name": "Pattern",
+              "type": "select",
+              "value": "Vertical channels",
+              "options": [
+                "Vertical channels",
+                "Horizontal channels",
+                "Square grid",
+                "Plain"
+              ]
+            },
+            {
+              "id": "channelPitch",
+              "name": "Channel pitch",
+              "type": "range",
+              "value": 0.102,
+              "min": 0.03,
+              "max": 0.8,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "paddingDepth",
+              "name": "Padding depth",
+              "type": "range",
+              "value": 0.051,
+              "min": 0.01,
+              "max": 0.2,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "grooveWidth",
+              "name": "Groove width",
+              "type": "range",
+              "value": 0.008,
+              "min": 0,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "backerThk",
+              "name": "Backer thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "floatGap",
+              "name": "Float gap off wall",
+              "type": "range",
+              "value": 0.064,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "haloLed",
+              "name": "Halo LED behind panel",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "ledInset",
+              "name": "Halo inset from edge",
+              "type": "range",
+              "value": 0.02,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "trimLip",
+              "name": "Edge lip",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "trimWidth",
+              "name": "Lip width",
+              "type": "range",
+              "value": 0.013,
+              "min": 0.004,
+              "max": 0.12,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "ivory bouclé upholstery, light oak veneer lip, matte",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "upholstered headboard wall, soft vertical channels, warm halo glow, calm hotel bedroom",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Fabric/boucle.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Frame=Finishes/light-oak.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Plump",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "UPHOLSTERED PANEL — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a wall segment: local X runs along the segment, origin at its midpoint on the centre-line.\n\nWHAT IT IS\nupholstered headboard wall, soft vertical channels, warm halo glow, calm hotel bedroom\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Panel length: {length}\n- Panel height: {height}\n- Bottom above floor: {baseOffset}\n- Pattern: {pattern} (one of: Vertical channels / Horizontal channels / Square grid / Plain)\n- Channel pitch: {channelPitch}\n- Padding depth: {paddingDepth}\n- Groove width: {grooveWidth}\n- Backer thickness: {backerThk}\n- Float gap off wall: {floatGap}\n- Halo LED behind panel: {haloLed}\n- Halo inset from edge: {ledInset}\n- Edge lip: {trimLip}\n- Lip width: {trimWidth}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Panel length = {length}\n- Panel height = {height}\n- Padding depth = {paddingDepth}\n- Groove width = {grooveWidth}\n- Lip width = {trimWidth}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Backer",
+              "color": "#a8a29e",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_pads",
+              "kind": "polygon",
+              "name": "Pads",
+              "color": "#e7e5e4",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_lip",
+              "kind": "polygon",
+              "name": "Edge lip",
+              "color": "#b08a5e",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_halo",
+              "kind": "polygon",
+              "name": "Halo LED",
+              "color": "#fbbf24",
+              "layer": "Wall panel",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Backer",
+              "color": "#78716c",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_pads",
+              "kind": "polyhedron",
+              "name": "Pads",
+              "color": "#eae3d6",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lip",
+              "kind": "polyhedron",
+              "name": "Edge lip",
+              "color": "#b08a5e",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_halo",
+              "kind": "polyhedron",
+              "name": "Halo LED",
+              "color": "#fbbf24",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

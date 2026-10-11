@@ -1,0 +1,29 @@
+{
+ "id": "P5_SELECT",
+ "version": "0.3.0",
+ "scope": "either",
+ "summary": "Take the user's chosen option (and any parameter changes) forward -> selected.json + output/selected_plan.svg + output/planner_settings.json.",
+ "inputs": [
+  "work/selection.json \u2014 a 'Save settings' file from the planner app, or {\"option\": \"A\", \"params\": {...}, \"accepted\": [...]}",
+  "site.json, brief.json, rules.json"
+ ],
+ "outputs": [
+  "selected.json",
+  "output/selected_plan.svg",
+  "output/planner_settings.json",
+  "layer manifest (\"layers\": files + sha256, supplied / survived keys)"
+ ],
+ "checks": [
+  "selection typology == project typology",
+  "plot dimensions in the selection match site.json",
+  "parameters within the schema",
+  "no failing QC finding unless listed in selection.accepted with a reason (logged)"
+ ],
+ "manual": "The user picks the option (in the planner or in chat). The approval text for this task must name the option.",
+ "requires": [
+  "generate",
+  "qc",
+  "render_svg"
+ ],
+ "title": "User's chosen option -> selected.json"
+}

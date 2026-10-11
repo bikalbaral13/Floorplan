@@ -1,0 +1,137 @@
+{
+ "schema": "pipeline/1",
+ "id": "space-brief",
+ "title": "Space Brief Pipeline",
+ "version": "0.5.0",
+ "phase": "design",
+ "entry": {
+  "agents": "AGENTS.md",
+  "run": "python tools/run_task.py {CODE}",
+  "new_project": "python tools/new_project.py {CODE} --title \"...\" --plan <canvas.json> --refs <folder>",
+  "selftest": "python tools/selftest.py"
+ },
+ "kit": "0.3.1",
+ "inputs": [
+  {
+   "id": "plan",
+   "from": "project:inputs/plan.canvas.json",
+   "schema": "canvas.v1",
+   "required": true,
+   "note": "the drawing: editor Export JSON, the floorplan-tracer hand-off Projects/{CODE}/plan/{CODE}.canvas.json, or the program pipeline's Projects/{CODE}/program/plan_trace.json via tools/from_program.py"
+  },
+  {
+   "id": "refs",
+   "from": "project:inputs/refs/*",
+   "required": false,
+   "note": "reference images; optional refs.csv (file,title,for,url,tags) assigns them"
+  },
+  {
+   "id": "library",
+   "from": "project:inputs/library/**",
+   "required": false,
+   "note": "mirror of cloud-library items (Materials/, Objects/, Images/) offered in the app's Library picker; filled by R2 sync or the connector (agents/BRIEFING_AGENT.md §7)"
+  }
+ ],
+ "library_pins": [
+  {
+   "path": "library/Pipelines/_kit/",
+   "version": "0.3.1",
+   "local_copy": "_vendor/pipeline_kit"
+  },
+  {
+   "path": "library/Standards/DEFAULT.json",
+   "version": "1.0.0",
+   "local_copy": "standards/DEFAULT.json"
+  },
+  {
+   "path": "library/Standards/AADITHYAA.json",
+   "version": "1.0.0",
+   "local_copy": "standards/AADITHYAA.json"
+  },
+  {
+   "path": "library/Schemas/canvas.v1.schema.json",
+   "local_copy": "schemas/library/canvas.v1.schema.json"
+  },
+  {
+   "path": "library/Schemas/run.v1.schema.json",
+   "local_copy": "schemas/library/run.v1.schema.json"
+  },
+  {
+   "path": "library/Schemas/plan_trace.v1.schema.json",
+   "local_copy": "schemas/library/plan_trace.v1.schema.json"
+  }
+ ],
+ "outputs": {
+  "keep": [
+   {
+    "id": "views",
+    "local": "views/*.svg",
+    "to": "Projects/{CODE}/brief/views/",
+    "after": "S4_VIEWS"
+   },
+   {
+    "id": "views_png",
+    "local": "views/*.png",
+    "to": "Projects/{CODE}/brief/views/",
+    "after": "S4_VIEWS",
+    "binary": true
+   },
+   {
+    "id": "scope",
+    "local": "project:scope.json",
+    "to": "Projects/{CODE}/brief/scope.json",
+    "after": "S3_SCOPE"
+   },
+   {
+    "id": "apps",
+    "local": "project:apps.json",
+    "to": "Projects/{CODE}/brief/apps.json",
+    "after": "S7_PUBLISH_APPS"
+   },
+   {
+    "id": "decks",
+    "local": "decks/*.pptx",
+    "to": "Projects/{CODE}/brief/decks/",
+    "after": "S8_ARCHIVE",
+    "binary": true
+   },
+   {
+    "id": "deck_briefs",
+    "local": "decks/*.spacebrief.json",
+    "to": "Projects/{CODE}/brief/decks/",
+    "schema": "spacebrief.v1",
+    "after": "S8_ARCHIVE"
+   },
+   {
+    "id": "deck_index",
+    "local": "project:decks.json",
+    "to": "Projects/{CODE}/brief/decks.json",
+    "after": "S8_ARCHIVE"
+   },
+   {
+    "id": "roombrief",
+    "local": "decks/roombrief.json",
+    "to": "Projects/{CODE}/brief/roombrief.json",
+    "after": "S8_ARCHIVE"
+   },
+   {
+    "id": "report",
+    "local": "project:REPORT.md",
+    "to": "Projects/{CODE}/runs/space-brief/"
+   }
+  ],
+  "temp": [
+   "geo.all.json",
+   "geo.json",
+   "views.json",
+   "brief.json",
+   "refs/**",
+   "apps/**",
+   "archive/**",
+   "publish/**"
+  ]
+ },
+ "promotes": [
+  "library/Schemas/"
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "id": "P1b_PARCELS", "version": "0.2.0", "scope": "project",
+ "title": "Split the site into parcels, each with its own typology",
+ "summary": "work/parcels.json -> parcels/<P>/site.json + parcel.json (typology pin) and per-parcel task rows; adds project P6/P7 rows that merge the parcels.",
+ "inputs": ["site.json", "work/parcels.json: {\"split\": \"depth\", \"parcels\": [{\"code\": \"PA\", \"depth_ft\": 50, \"typology\": \"ID@ver\" | \"variant\": \"parcels/PA/typology\"}, ...]} (north to south; the last parcel may omit depth_ft)"],
+ "outputs": ["parcels/<P>/site.json", "parcels/<P>/parcel.json", "TASKS.csv rows <P>:P2-BRIEF ...", "output/parcels.svg"],
+ "checks": ["parcel codes unique, upper-case", "depths > 0 and sum to the site depth", "each pin loads and its plan has parcel-scope stages"],
+ "requires": [],
+ "manual": "Agree the split and the typology for each parcel with the user (AGENTS.md section 2) before writing work/parcels.json."
+}

@@ -1,12 +1,12 @@
 /**
- * The five project phases (header toggle) and the home phase of every pipeline / skill.
+ * The four project phases (header toggle) and the home phase of every pipeline / skill.
  *
- *   Program → Plan → Design → Build → Present
+ *   Program → Plan/Design → Build → Present
  *
  * One list so the toggle, the Navigator pipeline sections and — later — toolbars, skill ranking and
  * library filters all agree on where a pipeline belongs. Add a pipeline here when it is created.
  */
-export type Phase = "program" | "plan" | "design" | "build" | "present";
+export type Phase = "program" | "plan" | "build" | "present";
 
 export interface PhaseDef {
   id: Phase;
@@ -22,31 +22,28 @@ export const PHASES: PhaseDef[] = [
     id: "program",
     label: "Program",
     title: "Program: brief and feasibility — plot, setbacks, building type, unit mix, open space, parking, options",
-    pipelines: ["Program Pipeline"],
+    pipelines: ["Full Pipeline · 1-program"],
   },
   {
     id: "plan",
-    label: "Plan",
-    title: "Plan: import or trace the floor plan, set scale and levels, master-plan layout, pick the moodboard",
-    pipelines: ["Floorplan Tracer Pipeline", "Floorplan Tracer", "Scribble to Floorplan", "PDF Intake", "Master Plan Trace"],
-  },
-  {
-    id: "design",
-    label: "Design",
-    title: "Design: improve the plan with objects, materials, lighting and instancing",
-    pipelines: ["Floorplan Improver", "Moodboard Creator", "Material Creator", "Room Renderer", "Parametric Object Creator"],
+    label: "Plan/Design",
+    title: "Plan/Design: import or trace the floor plan, set scale and levels, master-plan layout, pick the moodboard, then improve it with objects, materials, lighting and instancing",
+    pipelines: [
+      "Floorplan Tracer Pipeline", "Floorplan Tracer", "Scribble to Floorplan", "PDF Intake", "Master Plan Trace",
+      "Full Pipeline · 2-plan-design", "Floorplan Improver", "Moodboard Creator", "Material Creator", "Room Renderer", "Parametric Object Creator",
+    ],
   },
   {
     id: "build",
     label: "Build",
     title: "Build: structure, services, quantities, cost, schedule and construction drawings",
-    pipelines: ["Build from Plan Deck", "Complete House Design", "Plane Frame Analysis", "EPANET Pipe Networks", "DXF Plan Drawings"],
+    pipelines: ["Full Pipeline · 3-build", "Complete House Design", "Plane Frame Analysis", "EPANET Pipe Networks", "DXF Plan Drawings"],
   },
   {
     id: "present",
     label: "Present",
     title: "Present: images, videos, walkthroughs, Unreal / Blender / SketchUp exports",
-    pipelines: ["Floorplan Renderer", "Interior Mesh Pipeline", "Exterior Mesh Pipeline", "Walkthrough Video generation Pipeline"],
+    pipelines: ["Floorplan Renderer", "Interior Mesh Pipeline", "Exterior Mesh Pipeline", "Full Pipeline · 4-present"],
   },
 ];
 

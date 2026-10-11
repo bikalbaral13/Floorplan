@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Cloud } from "lucide-react";
+import { ProjectStatusPanel } from "./ProjectStatusPanel";
+
+const FULL_PIPELINE_STAGES = [
+  { dir: "1-program", label: "1 · Program", badge: "Program" },
+  { dir: "2-plan-design", label: "2 · Plan/Design", badge: "Plan/Design" },
+  { dir: "3-build", label: "3 · Build", badge: "Build" },
+  { dir: "4-present", label: "4 · Present", badge: "Present" },
+];
 import { CloudInspectDialog } from "./dialogs/CloudInspectDialog";
 import { LibrarySelectionBox } from "./LibrarySelectionBox";
 import { PipelineTreeSection } from "./PipelineTreeSection";
@@ -89,12 +97,14 @@ export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
         <div className="flex min-h-0 flex-1 flex-col">
           <CloudInspectDialog variant="panel" open onOpenChange={() => {}} />
         </div>
-        {/* Read-only: the pipeline folders shipped with the app (public/interior-mesh-pipeline, public/floorplan-tracer-pipeline, public/exterior-mesh-pipeline, public/walkthrough-video-pipeline). */}
+        <ProjectStatusPanel />
+        {/* Read-only: the pipeline folders shipped with the app (public/interior-mesh-pipeline, public/floorplan-tracer-pipeline, public/exterior-mesh-pipeline, public/full-pipeline). */}
         <PipelineTreeSection />
         <PipelineTreeSection base="/floorplan-tracer-pipeline" title="Floorplan Tracer Pipeline" storageKey="bp.editor.tracerPipelineOpen" />
         <PipelineTreeSection base="/exterior-mesh-pipeline" title="Exterior Mesh Pipeline" storageKey="bp.editor.extPipelineOpen" />
-        <PipelineTreeSection base="/walkthrough-video-pipeline" title="Walkthrough Video generation Pipeline" storageKey="bp.editor.walkthroughPipelineOpen" />
-        <PipelineTreeSection base="/build-from-deck-pipeline" title="Build from Plan Deck" storageKey="bp.editor.deckPipelineOpen" />
+        {/* One project through the four phases. The standalone Program, Space Brief, Build from Plan Deck and
+            Walkthrough pipelines live on as its phase folders (originals archived 2026-10-11). */}
+        <PipelineTreeSection base="/full-pipeline" title="Full Pipeline" storageKey="bp.editor.fullPipelineOpen" stages={FULL_PIPELINE_STAGES} />
         <LibrarySelectionBox />
       </div>
       {/* Resize grip — the whole right edge (desktop only; the phone drawer has a fixed width). */}

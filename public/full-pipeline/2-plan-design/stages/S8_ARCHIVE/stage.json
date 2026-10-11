@@ -1,0 +1,5 @@
+{"id": "S8_ARCHIVE", "version": "0.2.0", "title": "Archive the brief decks the architect generated", "kind": "agent", "gate": false,
+ "summary": "The architect generates versioned brief decks in the app (Brief deck → Generate). The agent exports the decks collection and each version's package; the stage proves every .pptx against the hash the app recorded, re-judges the frozen data with the pipeline's trust rules, and writes the .pptx, spacebrief.json and roombrief.json per version.",
+ "inputs": ["apps.json", "work: archive/decks/<k>.json", "work: archive/assets/<asset id>.json"],
+ "outputs": ["work: decks/<CODE>_brief_I<n>_v<k>.pptx", "work: decks/<CODE>_brief_I<n>_v<k>.spacebrief.json", "work: decks/roombrief.json", "decks.json"],
+ "checks": ["every exported deck has its package", "pptx sha256 equals the app's record", "the pipeline's judgement of the frozen data equals the app's", "final brief validates against spacebrief.v1"]}

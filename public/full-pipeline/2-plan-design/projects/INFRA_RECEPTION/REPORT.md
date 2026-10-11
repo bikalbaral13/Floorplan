@@ -1,0 +1,69 @@
+- 2026-10-09T16:18:15 project created: Marian Office (INFRA 2024) (FIXTURE); plan plan.canvas.json
+- 2026-10-09T16:18:19 S1_INTAKE done: plan: 13 band segments, 2 spaces; 22 references [0 fail, 0 warn]
+- 2026-10-09T16:18:19 S2_GEOMETRY done: 13 band segments, 2 spaces, 5 facing wall runs, 8 objects
+- 2026-10-09T16:18:19 [decision] levels from convention (standards DEFAULT 1.0.0): ceiling_mm
+- 2026-10-09T16:18:27 S3_SCOPE done: scope: 2 space(s), FC +2700, soffit +3600, seed issue True
+- 2026-10-09T16:18:27 [decision] scope confirmed: FIXTURE — scope from the INFRA reception deck, 2026-10-09
+- 2026-10-09T16:18:28 S4_VIEWS done: plan + RCP + 5 elevations (A north, B east, C south, D south-west, E west) [0 fail, 0 warn]
+- 2026-10-09T16:18:29 S5_SCHEDULE done: 18 elements (floor 2, ceiling 2, partition 5, wall 4, soft 1, joinery 1, furniture 2, planting 1); 17 refs attached, 5 in the tray [0 fail, 0 warn]
+- 2026-10-09T16:18:29 S6_APPS done: router + 3 role pages, 33 files, 1.6 MB, 20 seed documents; site c622a6023a21
+- 2026-10-09T16:18:29 S7_PUBLISH_APPS blocked: publish work/apps/site and seed the store as stages/S7_PUBLISH_APPS/prompt.md says, then write apps.json
+- 2026-10-09T16:22:34 S7_PUBLISH_APPS done: published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (first), run 20261009T161819Z
+- 2026-10-09T16:22:34 [decision] apps published at https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe — share as Contributor with the client and modeler; architects as Editor
+- 2026-10-09T16:22:50 S8_COLLECT done: issue 1: 14 approved, 2 awaiting, 1 stale, 1 changes, 0 draft; comments 4 open / 2 to check / 14 closed [0 fail, 12 warn]
+- 2026-10-09T16:22:55 S9_FREEZE done: frozen at issue 1 with 10 outstanding item(s) [0 fail, 10 warn]
+- 2026-10-09T16:22:55 [decision] freeze signed off: FIXTURE — freeze for the regression deck, 2026-10-09
+- 2026-10-09T16:22:55 [decision] outstanding at freeze: CL-02 changes, WL-03 pending, JN-01 stale, FN-01 pending, fxp15 fixed (R3), fxp16 open (R4), fxp17 open (R4), fxp18 open (R4), fxp19 open (R4), fxp20 fixed (R4)
+- 2026-10-09T16:22:56 S10_DECK done: INFRA_RECEPTION_brief.pptx: 35 slides; spacebrief.final.json; roombrief.json (18 items) [0 fail, 0 warn]
+- 2026-10-09T16:22:56 S11_PUBLISH done: 21 outputs + run.json staged (not uploaded) under Projects/INFRA_RECEPTION/ [0 fail, 1 warn]
+- 2026-10-09T16:27:28 S5_SCHEDULE done: 18 elements (floor 2, ceiling 2, partition 5, wall 4, soft 1, joinery 1, furniture 2, planting 1); 17 refs attached, 5 in the tray [0 fail, 0 warn]
+- 2026-10-09T16:27:29 S6_APPS done: router + 3 role pages, 33 files, 1.6 MB, 20 seed documents; site 046e729e6292
+- 2026-10-09T16:28:17 S7_PUBLISH_APPS done: published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (first), run 20261009T161819Z
+- 2026-10-09T16:28:17 [decision] apps published at https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe — share as Contributor with the client and modeler; architects as Editor
+- 2026-10-09T16:28:36 S8_COLLECT done: issue 1: 14 approved, 2 awaiting, 1 stale, 1 changes, 0 draft; comments 4 open / 2 to check / 14 closed [0 fail, 12 warn]
+- 2026-10-09T16:28:36 S9_FREEZE done: frozen at issue 1 with 10 outstanding item(s) [0 fail, 10 warn]
+- 2026-10-09T16:28:36 [decision] freeze signed off: FIXTURE — freeze for the regression deck, 2026-10-09
+- 2026-10-09T16:28:36 [decision] outstanding at freeze: CL-02 Ceiling · Waiting lobby: client asked for changes, WL-03 Wall finish · Elev D (south-west): awaiting the client, JN-01 Reception desk: changed since the client decided, FN-01 Chairs ×2: awaiting the client, [R3] comment fixed, to check: The logo looks black; the actual colour is dark blue. Add a backlight., [R4] comment open: Add a white end profile. It can be rectangular; it need not follow the baffle curve., [R4] comment open: Raise the designer pendant a little; it hangs too low., [R4] comment open: All ducts to be oval in every view., [R4] comment open: Services look incomplete. Place all services properly., [R4] comment fixed, to check: The angle looks too low. Use eye level; keep the angle, adjust only the height.
+- 2026-10-09T16:28:37 S10_DECK done: INFRA_RECEPTION_brief.pptx: 35 slides; spacebrief.final.json; roombrief.json (18 items) [0 fail, 0 warn]
+- 2026-10-09T16:28:37 S11_PUBLISH done: 21 outputs + run.json staged (not uploaded) under Projects/INFRA_RECEPTION/ [0 fail, 1 warn]
+- 2026-10-09T16:56:35 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site 5cfe5dfb6929
+- 2026-10-09T16:57:32 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site 7c642577993f
+- 2026-10-09T16:57:47 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site f4b89edd0630
+- 2026-10-09T16:58:12 S7_PUBLISH_APPS done: published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (republish), run 20261009T161819Z
+- 2026-10-09T16:58:12 [decision] apps published at https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe — share as Contributor with the client and modeler; architects as Editor
+- 2026-10-09T16:58:13 S8_ARCHIVE done: 1 deck version(s): v1 (I1, 35 slides) [0 fail, 1 warn]
+- 2026-10-09T16:58:13 S9_PUBLISH done: 21 outputs + run.json staged (not uploaded) under Projects/INFRA_RECEPTION/ [0 fail, 1 warn]
+- 2026-10-09T17:34:39 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site 7bdf5d26386e [0 fail, 0 warn]
+- 2026-10-09T18:07:32 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site 22e0ec235721 [0 fail, 0 warn]
+- 2026-10-09T18:08:25 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site 13c8e04e3dd7 [0 fail, 0 warn]
+- 2026-10-09T18:09:05 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site d1bf057c3627 [0 fail, 0 warn]
+- 2026-10-09T18:12:35 S6_APPS done: router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site 915f7d2c6d4a [0 fail, 0 warn]
+- 2026-10-10T12:51:14 S1_INTAKE done: plan: 13 band segments, 2 spaces; 22 references; 50 library files [0 fail, 0 warn]
+- 2026-10-10T12:58:25 S2_GEOMETRY done: 13 band segments, 2 spaces, 5 facing wall runs, 8 objects
+- 2026-10-10T12:58:25 [decision] levels from convention (standards DEFAULT 1.0.0): ceiling_mm
+- 2026-10-10T12:58:30 S3_SCOPE done: scope: 2 space(s), FC +2700, soffit +3600, seed issue True
+- 2026-10-10T12:58:30 [decision] scope confirmed: FIXTURE — scope from the INFRA reception deck, 2026-10-09 (rerun after library input added, 2026-10-10)
+- 2026-10-10T12:58:31 S4_VIEWS done: plan + RCP + 5 elevations (A north, B east, C south, D south-west, E west) [0 fail, 0 warn]
+- 2026-10-10T12:58:31 S5_SCHEDULE done: 18 elements (floor 2, ceiling 2, partition 5, wall 4, soft 1, joinery 1, furniture 2, planting 1); 17 refs attached, 5 in the tray [0 fail, 0 warn]
+- 2026-10-10T12:58:32 S6_APPS done: router + 3 role pages, 34 files, 3.1 MB, 20 seed documents; site e9bc2bbda310 [0 fail, 0 warn]
+- 2026-10-10T12:58:32 S7_PUBLISH_APPS failed: published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (republish), run 20261009T161819Z [1 fail, 0 warn]
+- 2026-10-10T12:58:32 [decision] apps published at https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe — share as Contributor with the client and modeler; architects as Editor
+- 2026-10-10T13:00:05 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site ef238407c417 [0 fail, 0 warn]
+- 2026-10-10T13:00:09 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 610906031b29 [0 fail, 0 warn]
+- 2026-10-10T13:00:39 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site a39a899543cd [0 fail, 0 warn]
+- 2026-10-10T13:01:25 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 207aa74a461a [0 fail, 0 warn]
+- 2026-10-10T13:05:20 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 0122a4dc94d9 [0 fail, 0 warn]
+- 2026-10-10T13:05:29 S7_PUBLISH_APPS failed: published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (republish), run 20261009T161819Z [1 fail, 0 warn]
+- 2026-10-10T13:05:29 [decision] apps published at https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe — share as Contributor with the client and modeler; architects as Editor
+- 2026-10-10T13:17:22 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 1f5e499cde59 [0 fail, 0 warn]
+- 2026-10-10T17:23:17 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 20bfd18eb05e [0 fail, 0 warn]
+- 2026-10-11T02:23:19 S1_INTAKE done: plan: 13 band segments, 2 spaces; 22 references; 50 library files [0 fail, 0 warn]
+- 2026-10-11T02:23:19 S2_GEOMETRY done: 13 band segments, 2 spaces, 5 facing wall runs, 8 objects
+- 2026-10-11T02:23:19 [decision] levels from convention (standards DEFAULT 1.0.0): ceiling_mm
+- 2026-10-11T02:23:19 S3_SCOPE done: scope: 2 space(s), FC +2700, soffit +3600, seed issue True
+- 2026-10-11T02:23:19 [decision] scope confirmed: FIXTURE — rerun on pipeline_kit 0.2.0 + library standards, 2026-10-11
+- 2026-10-11T02:23:20 S4_VIEWS done: plan + RCP + 5 elevations (A north, B east, C south, D south-west, E west) [0 fail, 0 warn]
+- 2026-10-11T02:23:20 S5_SCHEDULE done: 18 elements (floor 2, ceiling 2, partition 5, wall 4, soft 1, joinery 1, furniture 2, planting 1); 17 refs attached, 5 in the tray [0 fail, 0 warn]
+- 2026-10-11T02:23:21 S6_APPS done: router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 84f9246a9e97 [0 fail, 0 warn]
+- 2026-10-11T02:23:21 S7_PUBLISH_APPS failed: published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (republish), run 20261009T161819Z [1 fail, 0 warn]
+- 2026-10-11T02:23:21 [decision] apps published at https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe — share as Contributor with the client and modeler; architects as Editor

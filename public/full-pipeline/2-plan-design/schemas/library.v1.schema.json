@@ -1,0 +1,12 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "library.v1",
+ "title": "spacebrief-library/1 — the cloud-library catalog the app offers",
+ "type": "object", "required": ["schema", "items"],
+ "properties": {
+  "schema": {"const": "spacebrief-library/1"},
+  "items": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "path", "title", "group"], "properties": {
+    "kind": {"enum": ["material", "object", "image"]}, "path": {"type": "string", "pattern": "^(Materials|Objects|Images)/"},
+    "hex": {"type": "string"}, "colors": {"type": "array"}, "finish": {"type": "string"}, "dims": {"type": "array"}, "finishes": {"type": "array"}}}}
+ }
+}

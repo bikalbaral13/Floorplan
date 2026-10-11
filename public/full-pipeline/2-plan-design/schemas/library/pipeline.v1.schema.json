@@ -1,0 +1,182 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://builderpluss.dev/library/Schemas/pipeline.v1.schema.json",
+ "title": "pipeline/1 — what a pipeline reads, pins, keeps and throws away",
+ "description": "Local copy of library/Schemas/pipeline.v1.schema.json. Never edit — re-copy from the library.",
+ "type": "object",
+ "required": [
+  "schema",
+  "id",
+  "title",
+  "version",
+  "phase",
+  "entry",
+  "inputs",
+  "library_pins",
+  "outputs"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "schema": {
+   "const": "pipeline/1"
+  },
+  "id": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9-]*$"
+  },
+  "title": {
+   "type": "string",
+   "minLength": 1
+  },
+  "version": {
+   "$ref": "#/$defs/semver"
+  },
+  "phase": {
+   "enum": [
+    "program",
+    "plan",
+    "design",
+    "build",
+    "present"
+   ]
+  },
+  "entry": {
+   "type": "object",
+   "required": [
+    "agents",
+    "run"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "agents": {
+     "type": "string"
+    },
+    "run": {
+     "type": "string"
+    },
+    "new_project": {
+     "type": "string"
+    },
+    "selftest": {
+     "type": "string"
+    }
+   }
+  },
+  "kit": {
+   "$ref": "#/$defs/semver"
+  },
+  "inputs": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "from",
+     "required"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "from": {
+      "type": "string"
+     },
+     "schema": {
+      "type": "string"
+     },
+     "required": {
+      "type": "boolean"
+     },
+     "note": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "library_pins": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "path"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "path": {
+      "type": "string",
+      "pattern": "^library/"
+     },
+     "version": {
+      "type": "string"
+     },
+     "local_copy": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "outputs": {
+   "type": "object",
+   "required": [
+    "keep",
+    "temp"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "keep": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "local",
+       "to"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "local": {
+        "type": "string"
+       },
+       "to": {
+        "type": "string",
+        "pattern": "^Projects/\\{CODE\\}/"
+       },
+       "schema": {
+        "type": "string"
+       },
+       "after": {
+        "type": "string"
+       },
+       "binary": {
+        "type": "boolean"
+       }
+      }
+     }
+    },
+    "temp": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "promotes": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "pattern": "^library/"
+   }
+  }
+ },
+ "$defs": {
+  "semver": {
+   "type": "string",
+   "pattern": "^\\d+\\.\\d+\\.\\d+$"
+  }
+ }
+}

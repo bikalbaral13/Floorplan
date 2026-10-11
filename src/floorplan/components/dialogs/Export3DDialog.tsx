@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MESH3D_FORMATS, MESH3D_UNIT_SCALE, type Mesh3DFormat, type Mesh3DOptions } from "../../export/flowMesh3d";
+import { MESH3D_FORMATS, MESH3D_UNIT_SCALE, type Mesh3DFormat, type Mesh3DOptions } from "../../export/flowMesh3dFormats";
 
 /** What the user picked, ready to hand to the canvas's `exportScene`. */
 export interface Export3DSettings extends Mesh3DOptions {

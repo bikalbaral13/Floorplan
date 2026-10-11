@@ -14,13 +14,18 @@ def save(pdir, rows, fields):
         w = csv.DictWriter(f, fieldnames=fields); w.writeheader()
         for r in rows: w.writerow({k: r.get(k, "") for k in fields})
 
-def get(rows, tid): return next(r for r in rows if r["task_id"] == tid)
+def get(rows, tid):
+    for r in rows:
+        if r["task_id"] == tid: return r
+    raise KeyError(f"task {tid} not in TASKS.csv")
 def deps(row): return [d for d in (row.get("depends_on") or "").split(";") if d]
 
 def next_runnable(rows, retry=("todo", "blocked", "failed")):
     """First row in `retry` states whose dependencies are all done / skipped (sheet order = priority)."""
     done = {r["task_id"] for r in rows if r["status"] in ("done", "skipped")}
     return next((r for r in rows if r["status"] in retry and all(d in done for d in deps(r))), None)
+
+def deps_done(rows, row): return not waiting_for(rows, row)
 
 def waiting_for(rows, row):
     return [d for d in deps(row) if get(rows, d)["status"] not in ("done", "skipped")]

@@ -1,0 +1,541 @@
+{
+  "version": 1,
+  "id": "pendant-with-math",
+  "title": "Pendant — one Math Engine, lathed shade, cord and canopy",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Pendant",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 3v6",
+        "M8 9h8l-1 10H9z",
+        "M12 3a1 1 0 100-1 1 1 0 000 1",
+        "M10 19h4"
+      ]
+    }
+  },
+  "description": "A parametric PENDANT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE over whatever the pendant hangs above. This is the fitting the master-bedroom plan asks for and the library did not have: `light-bulb-with-math` hangs a bare lamp on a cord, `chandelier-with-math` is a multi-arm statement piece, and neither draws a slim tube shade.\n\nTHE PENDANT IS POSITIONED FROM ITS BOTTOM, NOT ITS TOP. A lighting plan specifies the height of the aperture above the floor — \"bottom at 3'10\"\" — because that is what a person standing under it sees. So `bottomHeight` is the anchor, `bodyLength` grows the shade upward from it, and the cord takes up whatever slack is left to `ceilingHeight`. Move the ceiling and the shade does not move; only the cord gets longer. That is the opposite of the usual \"drop from ceiling\" parameterisation and it is the one that matches how the height gets specified.\n\nTHE SHADE IS A REVOLVE, AND IT HAS TO BE. The attached-object runtime resolves only Polyhedron, Loft, Tube and Ring; a Cylinder row carries its radius in a field, so nothing the Math Engine computes could drive it. The shade is therefore `mlathe` over a five-point profile that closes on the axis at both ends — which is what makes it a solid rather than a surface.\n\nTHREE FORMS, ONE BODY. Cylinder, Cone and Dome are three (top, mid) radius pairs fed to that same profile. The bottom radius is always the nominal one, so the aperture — the thing that reads in a render — stays put whichever form is chosen.\n\nCANOPY AND CORD ARE TUBES along the same axis, so neither needs a mesh, and the cord vanishes cleanly when the shade is tall enough to reach the canopy.\n\nDIMENSIONS AT THE DEFAULTS: a 51 mm brass cylinder 305 mm long, aperture at 1.168 m, canopy at 2.972 m, 1.498 m of cord, 320 lm at 2700 K.\n\nWHAT THIS CANNOT DO. There is no light cast, no IES distribution and no transparency — the diffuser is opaque geometry tinted warm, and the luminance figure is lumens over the aperture, a spacing sanity check rather than a photometric result. The cord is vertical: there is no swag, no cluster and no off-centre hang.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "diameter",
+              "name": "Shade diameter",
+              "type": "range",
+              "value": 0.0508,
+              "min": 0.02,
+              "max": 0.6,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "bodyLength",
+              "name": "Shade length",
+              "type": "range",
+              "value": 0.3048,
+              "min": 0.05,
+              "max": 1.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bottomHeight",
+              "name": "Shade bottom elevation",
+              "type": "range",
+              "value": 1.1684,
+              "min": 0.2,
+              "max": 3.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Canopy / ceiling elevation",
+              "type": "range",
+              "value": 2.9718,
+              "min": 1.5,
+              "max": 5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "cordRadius",
+              "name": "Cord radius",
+              "type": "range",
+              "value": 0.003,
+              "min": 0.001,
+              "max": 0.02,
+              "step": 0.0005,
+              "options": []
+            },
+            {
+              "id": "canopyRadius",
+              "name": "Canopy radius",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.01,
+              "max": 0.12,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "canopyHeight",
+              "name": "Canopy height",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shade",
+              "name": "Shade form",
+              "type": "select",
+              "value": "Cylinder",
+              "options": [
+                "Cylinder",
+                "Cone",
+                "Dome"
+              ]
+            },
+            {
+              "id": "openBottom",
+              "name": "Opal diffuser at the bottom",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "wallThk",
+              "name": "Shade wall thickness",
+              "type": "range",
+              "value": 0.0012,
+              "min": 0.0005,
+              "max": 0.01,
+              "step": 0.0001,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature (K)",
+              "type": "range",
+              "value": 2700,
+              "min": 2200,
+              "max": 6500,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "lumens",
+              "name": "Lamp output (lm)",
+              "type": "range",
+              "value": 320,
+              "min": 50,
+              "max": 3000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "showCord",
+              "name": "Show the cord",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shadeTransmission",
+              "name": "Shade transmission",
+              "type": "range",
+              "value": 0.12,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "lightGroupGain",
+              "name": "Light group gain",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 8,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "dimToKelvin",
+              "name": "Warm dim floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 4000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "showEmissiveSurface",
+              "name": "Draw the lit surface",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Objects/Photometry/…)",
+              "type": "text",
+              "value": "Objects/Photometry/LED/e27-globe-2700k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "pendants",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "opal glass shade, brushed brass canopy, fabric flex",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "warm pendant over a table, low hung, soft pool of light",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/ceramic.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Cord=Metal/brass-polished.json; Canopy=Metal/brass-polished.json; Diffuser=Emissive/diffuser.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "goboPath",
+              "name": "Gobo (Library/Objects/Photometry/gobo/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "sceneMembership",
+              "name": "Lighting scenes",
+              "type": "text",
+              "value": "Bright, Relax, Photo",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "PENDANT — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\nwarm pendant over a table, low hung, soft pool of light\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Shade diameter: {diameter}\n- Shade length: {bodyLength}\n- Shade bottom elevation: {bottomHeight}\n- Canopy / ceiling elevation: {mountHeight}\n- Cord radius: {cordRadius}\n- Canopy radius: {canopyRadius}\n- Canopy height: {canopyHeight}\n- Shade form: {shade} (one of: Cylinder / Cone / Dome)\n- Opal diffuser at the bottom: {openBottom}\n- Shade wall thickness: {wallThk}\n- Show the cord: {showCord}\n- Colour rendering index: {cri}\n- Dim level (%): {dimLevel}\n- Lamp radius (soft shadow): {lampRadius}\n- Shade transmission: {shadeTransmission}\n- Export a lamp (off = geometry only): {emitsLight}\n- Light group gain: {lightGroupGain}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nThis object emits light. Use these values:\n- Colour temperature (K): {kelvin}\n- Lamp output (lm): {lumens}\n- Warm dim floor: {dimToKelvin}\n- Draw the lit surface: {showEmissiveSurface}\nPlace the emitter where the real lamp or LED sits, make the diffuser / bulb surface emissive to match, and hide the emitter itself from camera where a real fitting would conceal it.\n\nCHECKS (measure after building)\n- Shade diameter = {diameter}\n- Shade length = {bodyLength}\n- Shade bottom elevation = {bottomHeight}\n- Canopy / ceiling elevation = {mountHeight}\n- Cord radius = {cordRadius}\n- Canopy radius = {canopyRadius}\n- Canopy height = {canopyHeight}\n- Lamp radius (soft shadow) = {lampRadius}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_shade",
+              "kind": "circle",
+              "name": "Shade",
+              "color": "#b45309",
+              "layer": "Pendant",
+              "radius": 0.0254,
+              "show": true
+            },
+            {
+              "id": "p2_canopy",
+              "kind": "circle",
+              "name": "Canopy",
+              "color": "#78716c",
+              "layer": "Pendant",
+              "radius": 0.035,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_shade",
+              "kind": "polyhedron",
+              "name": "Shade",
+              "color": "#b08d57",
+              "layer": "Pendant",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_canopy",
+              "kind": "tube",
+              "name": "Canopy",
+              "color": "#b08d57",
+              "layer": "Pendant",
+              "radius": 0.035,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cord",
+              "kind": "tube",
+              "name": "Cord",
+              "color": "#3f3f46",
+              "layer": "Pendant",
+              "radius": 0.003,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_diffuser",
+              "kind": "tube",
+              "name": "Diffuser",
+              "color": "#fef3c7",
+              "layer": "Pendant",
+              "radius": 0.024,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

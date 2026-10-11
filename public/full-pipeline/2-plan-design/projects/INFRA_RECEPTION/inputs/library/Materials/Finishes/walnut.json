@@ -1,0 +1,67 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "wood.walnut",
+  "title": "Wood — walnut",
+  "description": "Dark walnut. Same banded wave as oak with a tighter scale and a deeper pair of colours, because a veneer reads by its value against the oak next to it, not by a different grain algorithm.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "X",
+      "waveProfile": "SIN",
+      "scale": 3.4,
+      "distortion": 14,
+      "detail": 3,
+      "detailScale": 1.2,
+      "detailRoughness": 0.6,
+      "phaseOffset": 0,
+      "colorA": "#5a3b26",
+      "colorB": "#3a2418"
+    }
+  },
+  "pbr": {
+    "baseColor": "#4a2f1e",
+    "roughness": 0.4,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.002,
+      "samples": 4
+    },
+    "grain": {
+      "axis": "u",
+      "rotationDeg": 0,
+      "scaleU": 1,
+      "scaleV": 0.28
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.35,
+      "scale": 1
+    },
+    "coat": {
+      "weight": 0.25,
+      "roughness": 0.12,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.09,
+      "scale": 9
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#4a2f1e"
+  },
+  "dxf": {
+    "pattern": "WOOD2",
+    "scale": 1,
+    "angle": 0
+  }
+}

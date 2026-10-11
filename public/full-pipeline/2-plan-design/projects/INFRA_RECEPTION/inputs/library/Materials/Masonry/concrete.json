@@ -1,0 +1,53 @@
+{
+  "schema": "material/1",
+  "id": "concrete.fair-face",
+  "title": "Concrete — fair face",
+  "category": "Masonry",
+  "description": "In-situ fair-face concrete. Fine noise for the aggregate mottle; no directional grain.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 24,
+      "detail": 6,
+      "roughness": 0.55,
+      "lacunarity": 2,
+      "distortion": 0.15,
+      "noiseDimensions": "3D",
+      "colorA": "#b6b4ae",
+      "colorB": "#9a978f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#adaba5",
+    "roughness": 0.9,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.004,
+      "samples": 4
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.5,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.13,
+      "scale": 4
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 7,
+    "angle": 0,
+    "weight": 1,
+    "color": "#adaba5"
+  },
+  "dxf": {
+    "pattern": "AR-CONC",
+    "scale": 1,
+    "angle": 0
+  }
+}

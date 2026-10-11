@@ -1,0 +1,456 @@
+{
+  "version": 1,
+  "id": "baffle-ceiling-with-math",
+  "title": "Baffle Ceiling — straight or wave acoustic blades over a space, with an end-profile frame",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "space",
+    "name": "Baffle Ceiling",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 5h18",
+        "M5 5v6",
+        "M9 5v8",
+        "M13 5v6",
+        "M17 5v8",
+        "M21 5v6"
+      ]
+    }
+  },
+  "description": "A parametric BAFFLE CEILING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE. The blades run along the space's longest edge (Rotation turns them) and fill its bounding box less the inset. Use a rectangular ceiling-zone space for an angled room: the field is the host's box, not its outline.\n\nWAVE = THE BOTTOM EDGE, NOT THE BLADE. Each blade is cut into segments of Wave segment length; a segment's bottom sits at bottomLevel + A·(½ + ½·sin(2πu/λ + i·φ)), so the lowest edge is exactly bottomLevel and the wave travels across the field by φ per blade. The tops stay level at bottomLevel + A + height — a hung baffle has a straight top.\n\nCOLOUR is by row: Alternate puts odd blades on the Baffles B row, so two felt colours need no second object. END PROFILE caps the blade ends with a straight band (the deck's review: white, rectangular, need not follow the wave — slides 23, 27); Full frame also runs it down the long sides, which hides the wave from the side.\n\nDEFAULTS are the INFRA Reception spec: 25 mm blades, 150 mm deep, 50 mm clear, lowest edge 2700 FFL.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "profile",
+              "name": "Profile",
+              "type": "select",
+              "value": "Wave",
+              "options": [
+                "Straight",
+                "Wave"
+              ]
+            },
+            {
+              "id": "baffleThk",
+              "name": "Baffle thickness",
+              "type": "range",
+              "value": 0.025,
+              "min": 0.01,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "baffleHeight",
+              "name": "Baffle height",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.05,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "clearSpacing",
+              "name": "Clear spacing between baffles",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.01,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bottomLevel",
+              "name": "Lowest bottom edge (FFL)",
+              "type": "range",
+              "value": 2.7,
+              "min": 2,
+              "max": 5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "waveAmplitude",
+              "name": "Wave amplitude",
+              "type": "range",
+              "value": 0.12,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "waveLength",
+              "name": "Wave length",
+              "type": "range",
+              "value": 3,
+              "min": 0.5,
+              "max": 10,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "wavePhaseStep",
+              "name": "Phase shift per baffle (rad)",
+              "type": "range",
+              "value": 0.25,
+              "min": 0,
+              "max": 3.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "segLength",
+              "name": "Wave segment length",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "inset",
+              "name": "Inset from space edge",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "colourMode",
+              "name": "Colour mode",
+              "type": "select",
+              "value": "Alternate",
+              "options": [
+                "Alternate",
+                "Single"
+              ]
+            },
+            {
+              "id": "endProfile",
+              "name": "End profile",
+              "type": "select",
+              "value": "Ends",
+              "options": [
+                "None",
+                "Ends",
+                "Full frame"
+              ]
+            },
+            {
+              "id": "profileHeight",
+              "name": "End profile height",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.02,
+              "max": 0.8,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "profileThk",
+              "name": "End profile thickness",
+              "type": "range",
+              "value": 0.02,
+              "min": 0.005,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "acoustic felt baffles, painted aluminium end profile",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "suspended acoustic baffle ceiling",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "materialPath",
+              "name": "Material path",
+              "type": "text",
+              "value": "Fabric/felt.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "finishes",
+              "name": "Finishes",
+              "type": "text",
+              "value": "Baffles B=Fabric/felt.json; End profile=Metal/powder-coat.json; *=Fabric/felt.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specId",
+              "name": "Spec id",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specCategory",
+              "name": "Spec category",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specNote",
+              "name": "Spec note",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "deckSlides",
+              "name": "Deck slides",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "refImages",
+              "name": "Reference images",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "productUrl",
+              "name": "Product link",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_a",
+              "kind": "polygon",
+              "name": "Baffles A",
+              "color": "#2479AE",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_b",
+              "kind": "polygon",
+              "name": "Baffles B",
+              "color": "#0B5394",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_f",
+              "kind": "polygon",
+              "name": "End profile",
+              "color": "#e5e7eb",
+              "layer": "Ceiling",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_a",
+              "kind": "polyhedron",
+              "name": "Baffles A",
+              "color": "#2479AE",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_b",
+              "kind": "polyhedron",
+              "name": "Baffles B",
+              "color": "#0B5394",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_f",
+              "kind": "polyhedron",
+              "name": "End profile",
+              "color": "#FFFFFF",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

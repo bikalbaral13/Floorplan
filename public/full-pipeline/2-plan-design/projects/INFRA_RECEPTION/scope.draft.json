@@ -1,0 +1,49 @@
+{
+ "_about": "Proposed by S2. The user confirms or changes it at S3; the agent then writes scope.json.",
+ "spaces": [
+  {
+   "id": "L0-sp01f",
+   "label": "Reception",
+   "area": 46.416,
+   "selected": true
+  },
+  {
+   "id": "L0-sp021",
+   "label": "Waiting lobby",
+   "area": 34.247,
+   "selected": true
+  }
+ ],
+ "label": "Reception · Waiting lobby",
+ "client": "",
+ "levels": {
+  "ceiling_mm": 2700,
+  "soffit_mm": 3600,
+  "partition_mm": 2600,
+  "src": {
+   "ceiling_mm": "convention",
+   "soffit_mm": "plan",
+   "partition_mm": "plan"
+  }
+ },
+ "seed_issue": false,
+ "team": [
+  {
+   "role": "client",
+   "who": ""
+  },
+  {
+   "role": "modeler",
+   "who": ""
+  }
+ ],
+ "questions": [
+  "Which space(s) does this brief cover?",
+  "False-ceiling level (mm)? The plan does not say; the firm default is used.",
+  "Slab soffit (mm)?",
+  "Glazed partition head (mm)?",
+  "Client name for the title block?",
+  "Issue the plan-derived schedule to the client as I1 now, or after you fill the specs?",
+  "Who are the client and the 3D modeler?"
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "id": "S7_PUBLISH_APPS",
+ "version": "0.1.0",
+ "title": "Publish the apps and seed the brief",
+ "kind": "agent",
+ "gate": false,
+ "summary": "The agent publishes work/apps/site with the Artifact tool (capabilities from publish.json) and seeds the store with ArtifactData — first publish: all batches; republish: pipeline-owned meta fields + missing elements only. Then records apps.json.",
+ "inputs": [
+  "work: apps/publish.json",
+  "work: apps/dbseed/batches.json"
+ ],
+ "outputs": [
+  "apps.json"
+ ],
+ "checks": [
+  "apps.json names the artifact url",
+  "site_sha256 matches the current build (a rebuilt site must be republished)"
+ ]
+}

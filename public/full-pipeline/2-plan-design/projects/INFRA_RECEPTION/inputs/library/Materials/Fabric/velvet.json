@@ -1,0 +1,49 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.velvet",
+  "title": "Fabric — velvet drape",
+  "description": "Curtain velvet. The pile is a very fine noise; the sheen that makes velvet velvet comes from the sheen inputs on the Principled BSDF, which is why `sheen` lives in the pbr block here and nowhere else in the library.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 600,
+      "detail": 3,
+      "roughness": 0.6,
+      "distortion": 0.4,
+      "colorA": "#bdae99",
+      "colorB": "#a4957f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#b0a18b",
+    "roughness": 0.96,
+    "metallic": 0,
+    "sheen": 0.55,
+    "sheenTint": "#e8dcc6"
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.9,
+      "roughness": 0.12,
+      "tint": "#b9c6e8"
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 40
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#b0a18b"
+  },
+  "dxf": {
+    "pattern": "HOUND",
+    "scale": 0.05,
+    "angle": 0
+  }
+}

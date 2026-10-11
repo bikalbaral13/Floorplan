@@ -1,0 +1,30 @@
+{
+ "id": "P7_QC",
+ "version": "0.3.0",
+ "scope": "project",
+ "summary": "Final program QC: inputs unchanged, selection vs rules and brief (re-run with current files), hand-off present and consistent -> output/qc.md + output/qc.json.",
+ "inputs": [
+  "selected.json",
+  "rules.json",
+  "brief.json",
+  "output/plan_trace.json",
+  "work/selection.json (accepted findings)"
+ ],
+ "outputs": [
+  "output/qc.md",
+  "output/qc.json"
+ ],
+ "checks": [
+  "inputs/ unchanged since P1",
+  "every file in selected.json's layer manifest unchanged since P5 (params, standards, site, rules, brief, selection, typology / object files)",
+  "selection regenerates identically with the current typology version",
+  "no failing finding (accepted ones are reported as warnings)",
+  "plan_trace.json has a room per unit"
+ ],
+ "manual": "",
+ "requires": [
+  "generate",
+  "qc"
+ ],
+ "title": "Final program QC -> qc.md"
+}

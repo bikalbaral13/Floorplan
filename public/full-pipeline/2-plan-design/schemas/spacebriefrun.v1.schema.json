@@ -1,0 +1,20 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "spacebriefrun.v1",
+ "title": "spacebrief-run/1 — one agent run: store writes, their undo, and the record",
+ "description": "Produced only by tools/brief_agent.py compile. The app (Agent tab → Load agent run, or the agent through ArtifactData) applies `writes`; Undo applies `undo`. Writes are limited to elements/*, requests/*, agent/* (set/delete) and brief/meta {agent} (update); an element's issued snapshot and rev never change.",
+ "type": "object",
+ "required": ["schema", "id", "label", "at", "session", "writes", "undo", "base", "changes"],
+ "properties": {
+  "schema": {"const": "spacebrief-run/1"},
+  "id": {"type": "string", "pattern": "^run-[A-Za-z0-9_-]{4,40}$"},
+  "label": {"type": "string"}, "at": {"type": "string"}, "session": {"type": "string"}, "mode": {"type": "string"},
+  "model": {"type": "string"}, "summary": {"type": "string"}, "requests": {"type": "integer"},
+  "instructions": {"type": "array"},
+  "writes": {"type": "array", "items": {"type": "object", "required": ["op", "path"], "properties": {
+    "op": {"enum": ["set", "update", "delete"]}, "path": {"type": "string", "pattern": "^((elements|requests|agent)/[A-Za-z0-9_-]{1,64}|brief/meta)$"}, "data": {}}}},
+  "undo": {"type": "array"},
+  "base": {"type": "object", "additionalProperties": {"type": ["number", "null"]}},
+  "changes": {"type": "array", "items": {"type": "object", "required": ["id", "code", "fields"]}}
+ }
+}

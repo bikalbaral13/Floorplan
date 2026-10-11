@@ -1,0 +1,32 @@
+<title>%%TITLE%%</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>%%CSS%%</style>
+<div class="gate" id="gate">
+  <p class="lbl" id="g-proj">%%PROJECT%%</p>
+  <h1>%%SPACE%% brief</h1>
+  <p class="muted" id="g-msg">Checking your role on this project&hellip;</p>
+  <div class="roles" id="g-roles"></div>
+  <p class="small muted" id="g-build">Built by the space-brief pipeline %%VERSION%% &middot; run %%RUN%%</p>
+</div>
+<script>
+(async () => {
+  const ROLES = {architect: ['Architect', 'Author the brief, issue revisions, run reviews'], client: ['Client', 'Choose options and approve'], modeler: ['3D modeler', 'Work through the punch list']};
+  const msg = document.getElementById('g-msg'), box = document.getElementById('g-roles');
+  const card = (r, mine) => `<a class="rolecard" href="${r}.html"${mine ? ' style="border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)"' : ''}><b>${ROLES[r][0]}</b><span class="small muted">${ROLES[r][1]}</span></a>`;
+  let role = null, owner = false, local = true;
+  try {
+    if (window.claude && typeof window.claude.use === 'function'){
+      const [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+      if (db && user){ local = false; const me = await user.me(); owner = me.isOwner;
+        if (owner) role = 'architect';
+        else if (me.id){ const s = await db.doc('roster/' + me.id).get(); role = s.exists ? (s.data().role || null) : null; } }
+    }
+  } catch(e){ console.warn(e); }
+  if (local){ msg.textContent = 'Local preview: open any page.'; box.innerHTML = Object.keys(ROLES).map(r => card(r)).join(''); return; }
+  if (!role){ msg.textContent = 'You are not on this project’s team yet. Ask the architect to add you in Issue & team, then reload.'; return; }
+  msg.textContent = `You are the ${ROLES[role][0].toLowerCase()} on this project. Opening your page…`;
+  box.innerHTML = (role === 'architect' ? Object.keys(ROLES) : [role]).map(r => card(r, r === role)).join('');
+  setTimeout(() => { location.href = role + '.html'; }, 600);
+})();
+</script>

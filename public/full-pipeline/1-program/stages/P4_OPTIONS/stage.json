@@ -1,0 +1,32 @@
+{
+ "id": "P4_OPTIONS",
+ "version": "0.3.0",
+ "scope": "either",
+ "summary": "Run the typology generator for every option in the brief -> options/<ID>/ (option.json, option.svg, qc.json) + output/options.csv + output/OPTIONS.md.",
+ "inputs": [
+  "site.json",
+  "brief.json (confirmed)",
+  "rules.json (confirmed)",
+  "work/params.json (optional overrides the user asked for)"
+ ],
+ "outputs": [
+  "options/<ID>/option.json",
+  "options/<ID>/option.svg",
+  "options/<ID>/qc.json",
+  "output/options.csv",
+  "output/OPTIONS.md",
+  "layer manifest (\"layers\": files + sha256, supplied / survived keys)"
+ ],
+ "checks": [
+  "typology supports the site's road side",
+  "parameters within the typology schema",
+  "at least one option has no failing QC finding (else blocked: adjust work/params.json with the user)"
+ ],
+ "manual": "Show the user output/OPTIONS.md (and the planner app) and ask which option to take forward.",
+ "requires": [
+  "generate",
+  "qc",
+  "render_svg"
+ ],
+ "title": "Generate and compare typology options"
+}

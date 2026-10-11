@@ -1,0 +1,10 @@
+{
+ "id": "P5b_STAIR_SCHEDULE", "version": "0.2.0", "scope": "either",
+ "title": "Staircase schedule",
+ "summary": "Selected option's staircase (the typology's STAIR_* object) -> output/stair_schedule.csv; object QC (riser, tread, flight, comfort).",
+ "inputs": ["selected.json", "rules.json", "brief.json"],
+ "outputs": ["output/stair_schedule.csv"],
+ "checks": ["a staircase exists when the typology has more than one level or brief.future_floors", "the stair object's qc passes"],
+ "requires": ["generate"],
+ "manual": "Shared since 0.2.0 (VILLA_4BHK_G1). TOWNHOME_RENTAL 0.2.0 keeps its own +P5b_STAIR_SCHEDULE copy until its next version moves to this one."
+}

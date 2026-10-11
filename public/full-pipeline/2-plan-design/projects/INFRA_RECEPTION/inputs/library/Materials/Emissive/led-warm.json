@@ -1,0 +1,40 @@
+{
+  "schema": "material/1",
+  "category": "Emissive",
+  "id": "emissive.led.warm",
+  "title": "Emissive — warm LED strip",
+  "description": "Cove, halo, under-unit: the strips that are SEEN rather than the lights that DO the lighting. The scene's real illumination comes from the fixtures' own lamp data; this makes the strip itself read as bright.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "emission": {
+    "kelvin": 2800,
+    "luminance": 2600,
+    "useAsLight": false
+  },
+  "pbr": {
+    "baseColor": "#1a1a1a",
+    "roughness": 1,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0006,
+      "samples": 3
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#ffd9a8"
+  },
+  "dxf": {
+    "pattern": "SOLID",
+    "scale": 1,
+    "angle": 0
+  }
+}

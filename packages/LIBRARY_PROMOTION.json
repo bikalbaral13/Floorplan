@@ -1,0 +1,50 @@
+{
+ "schema": "library-promotion/1",
+ "date": "2026-10-11",
+ "status": "PUBLISHED 2026-10-11 with the user's approval (\"Ok\"); every file read back and verified",
+ "publish": [
+  {
+   "to": "library/Pipelines/_kit/0.2.0/",
+   "from": "packages/pipeline-kit/ (pipeline_kit/*, tests/test_kit.py, tools/vendor.py, README.md, CHANGELOG.md)",
+   "why": "units, semver, standards, state, interop + paths/tasks additions; both pipelines run on it (tests 25/25)"
+  },
+  {
+   "to": "library/Pipelines/index.json",
+   "change": [
+    "program: version 0.5.0, contract pipeline.json, uses_shared += 'pipeline_kit 0.2.0 (vendored)', outputs += 'Projects/{CODE}/program/plan_trace.json'",
+    "add space-brief 0.5.0 (phase design; inputs canvas.v1 or program plan_trace.v1; outputs Projects/{CODE}/brief/…; kit 0.2.0)",
+    "kit: version 0.2.0, adopted_by += program, space-brief (floorplan-tracer stays on 0.1.0 until re-vendored)",
+    "hand_offs += ['program', 'plan_trace.v1 → canvas.v1 (pipeline_kit.interop, space-brief tools/from_program.py)', 'space-brief']"
+   ]
+  },
+  {
+   "to": "library/Skills/Shared/pipeline-rules.md",
+   "change": "add rule 16 — Save and resume: after every approved task in a chat, pack the project (pipeline_kit.state) to Projects/<CODE>/<pipeline>/state.json and update Projects/index.json; resume from the index. Binary inputs never travel through the connector."
+  },
+  {
+   "to": "library/Standards/",
+   "change": "none — both pipelines now carry byte-identical copies of DEFAULT and AADITHYAA 1.0.0"
+  },
+  {
+   "to": "library/Schemas/plan_trace.v1.schema.json",
+   "change": "none — the schema already exists (2026-10-06). The program's villa trace broke it (ceiling_mm: null); fixed in program P6_HANDOFF 0.2.1, and both pipelines now validate against a local copy."
+  }
+ ],
+ "published": [
+  {
+   "path": "Pipelines/_kit/0.2.0/kit.json + parts/*.json (17)",
+   "note": "manifest + one hash-checked part per file (the connector writes only .json / .md; a single 63 kB write was too large). Vendoring from it reproduces the master byte for byte; its tests pass from the unpacked copy (28/28)."
+  },
+  {
+   "path": "Pipelines/_kit/0.2.0/README.md, CHANGELOG.md; Pipelines/_kit/README.md (latest 0.2.0)"
+  },
+  {
+   "path": "Pipelines/index.json",
+   "note": "program 0.5.0 (kit 0.2.0, contract), space-brief 0.5.0 added, kit 0.2.0 adopted_by, hand-offs program → space-brief and space-brief → build-from-deck, projects registry"
+  },
+  {
+   "path": "Skills/Shared/pipeline-rules.md",
+   "note": "rule 16: save and resume (pipeline_kit.state, Projects/index.json)"
+  }
+ ]
+}

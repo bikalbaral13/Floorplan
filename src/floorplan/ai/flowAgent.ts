@@ -4,8 +4,8 @@
 // iterating until the pipeline validates. It runs against a tiny host API (FlowAgentApi) that reads the live
 // graph and applies a new one through the SAME importFlowData path the Flow overlay uses — so an AI-built
 // flow is identical to a hand-drawn one. This supersedes the legacy one-shot "Generate flow with AI" panel.
-import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+// The AI SDK loads on the first run, not with the editor: it is only needed once someone sends a message.
+import type { ModelMessage } from "ai";
 import { z } from "zod";
 import type { Node, Edge } from "@xyflow/react";
 import { FLOW_TOOLS } from "../flow/flowTypes";
@@ -244,6 +244,7 @@ export interface RunFlowAgentParams {
 /** Run the flow-building loop: Gemini + tools over the live Flow graph until it stops calling tools (or the
  *  step cap). Returns the model's final plain-text summary and the number of steps. */
 export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: string; steps: number }> {
+  const [{ generateText, stepCountIs, tool }, { createGoogleGenerativeAI }] = await Promise.all([import("ai"), import("@ai-sdk/google")]);
   if (!p.apiKey.trim()) throw new Error("Gemini API key required (set it in Preferences)");
   if (!p.model.trim()) throw new Error("Gemini model id required (set it in Preferences)");
   const google = createGoogleGenerativeAI({ apiKey: p.apiKey.trim() });

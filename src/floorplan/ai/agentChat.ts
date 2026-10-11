@@ -8,8 +8,8 @@
 // "design" (canvas-design tools only) and "parametric" (object-library tools only); the node-graph Flow
 // builder is its own loop (flowAgent.ts). The legacy one-shot JSON rewrite (aiChat.ts) survives only as
 // this agent's `apply_model` bulk tool.
-import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+// The AI SDK loads on the first run, not with the editor: it is only needed once someone sends a message.
+import type { ModelMessage } from "ai";
 import { z } from "zod";
 import { listLibraryFiles, fetchLibraryJson } from "../libraryFiles";
 import { cloudLibraryBaseUrl } from "../cloudLibrary";
@@ -536,6 +536,7 @@ export interface RunAgentParams {
 /** Run the agentic loop: Gemini + tools over the live canvas until it stops calling tools (or the step cap).
  *  Returns the model's final plain-text summary and the number of steps taken. */
 export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; steps: number }> {
+  const [{ generateText, stepCountIs, tool }, { createGoogleGenerativeAI }] = await Promise.all([import("ai"), import("@ai-sdk/google")]);
   if (!p.apiKey.trim()) throw new Error("Gemini API key required (set it in Preferences)");
   if (!p.model.trim()) throw new Error("Gemini model id required (set it in Preferences)");
   const google = createGoogleGenerativeAI({ apiKey: p.apiKey.trim() });

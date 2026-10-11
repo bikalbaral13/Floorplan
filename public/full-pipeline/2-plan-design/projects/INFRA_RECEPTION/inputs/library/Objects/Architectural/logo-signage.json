@@ -1,0 +1,444 @@
+{
+  "version": 1,
+  "id": "logo-signage-with-math",
+  "title": "Logo Signage — raised letters on an optional panel, with a backlit halo",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Logo Signage",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 7h16v10H4z",
+        "M7 10v4",
+        "M10 10l2 4 2-4",
+        "M17 10v4"
+      ]
+    }
+  },
+  "description": "A parametric LOGO SIGNAGE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A WALL SEGMENT. Position slides it along the wall, Centre height sets it in elevation, Flip side picks the face. The letters are BLOCKS sized by count, height and aspect — the canvas cannot set type. The `text` param carries the real wording; the Blender stage replaces the blocks with extruded text of the same height, depth and colour.\n\nDEFAULTS are the INFRA Reception review: MARIAN, dark blue not black, backlit (slide 26).",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "position",
+              "name": "Position along wall (0–1)",
+              "type": "range",
+              "value": 0.5,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "centreHeight",
+              "name": "Centre height",
+              "type": "range",
+              "value": 1.9,
+              "min": 0.5,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "wallHalfThk",
+              "name": "Wall face offset from centreline",
+              "type": "range",
+              "value": 0.075,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "panelOn",
+              "name": "Backing panel",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "panelWidth",
+              "name": "Panel width",
+              "type": "range",
+              "value": 2.4,
+              "min": 0.3,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "panelHeight",
+              "name": "Panel height",
+              "type": "range",
+              "value": 0.7,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "panelThk",
+              "name": "Panel thickness",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.005,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "letterCount",
+              "name": "Letters",
+              "type": "range",
+              "value": 6,
+              "min": 1,
+              "max": 20,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "letterHeight",
+              "name": "Letter height",
+              "type": "range",
+              "value": 0.35,
+              "min": 0.05,
+              "max": 1.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "letterAspect",
+              "name": "Letter width / height",
+              "type": "range",
+              "value": 0.7,
+              "min": 0.2,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "letterGap",
+              "name": "Letter gap",
+              "type": "range",
+              "value": 0.06,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "letterDepth",
+              "name": "Letter depth",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.005,
+              "max": 0.2,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "standoff",
+              "name": "Standoff from face",
+              "type": "range",
+              "value": 0.025,
+              "min": 0,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "backlit",
+              "name": "Backlit halo",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "dark blue acrylic letters, backlit",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "backlit 3D logo",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "materialPath",
+              "name": "Material path",
+              "type": "text",
+              "value": "Finishes/lacquer.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "finishes",
+              "name": "Finishes",
+              "type": "text",
+              "value": "Halo=Emissive/led-warm.json; Panel=Finishes/oak-veneer.json; *=Finishes/lacquer.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "text",
+              "name": "Text (Blender sets real type)",
+              "type": "text",
+              "value": "MARIAN",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specId",
+              "name": "Spec id",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specCategory",
+              "name": "Spec category",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specNote",
+              "name": "Spec note",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "deckSlides",
+              "name": "Deck slides",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "refImages",
+              "name": "Reference images",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "productUrl",
+              "name": "Product link",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_sign",
+              "kind": "polygon",
+              "name": "Letters",
+              "color": "#0B2D6B",
+              "layer": "Signage",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_panel",
+              "kind": "polyhedron",
+              "name": "Panel",
+              "color": "#D0B38E",
+              "layer": "Signage",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_let",
+              "kind": "polyhedron",
+              "name": "Letters",
+              "color": "#0B2D6B",
+              "layer": "Signage",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_halo",
+              "kind": "polyhedron",
+              "name": "Halo",
+              "color": "#FFF4E0",
+              "layer": "Signage",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

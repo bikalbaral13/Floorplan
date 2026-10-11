@@ -1,0 +1,501 @@
+{
+  "version": 1,
+  "id": "cove-light-with-math",
+  "title": "Cove Light — the detail that hides the tape, with the cut-off angle that proves it",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Cove Light",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 14h18",
+        "M3 14v-3",
+        "M21 14v-3",
+        "M6 11h12",
+        "M8 8c1.5-2 6.5-2 8 0"
+      ]
+    }
+  },
+  "description": "A parametric COVE LIGHT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT — a wall. This is the DETAIL, not the tape: the board, the lip that hides the tape and the gap the light gets to open out across. `led-strip` is the tape on its own, for when the detail already exists in the model.\n\nTHE TAPE IS SET BACK FROM THE LIP, NOT FROM THE WALL. The lip is what conceals it, so the concealment is a distance between those two and has nothing to do with where the wall is. Move the wall and nothing about the concealment changes — which is correct, and would not be true of a setback measured the other way.\n\nTHE CUT-OFF ANGLE IS THE NUMBER TO LOOK AT. Sight the top of the lip against the near edge of the tape: below that angle the source is hidden, above it you are looking straight at a line of diodes. A 30 mm lip with the tape hard against it conceals nothing, and no amount of lumens fixes that.\n\nWASH HEIGHT IS THE SECOND NUMBER. The light has to open out across the gap between the tape and the slab. Under about 150 mm a cove reads as a bright stripe rather than a lit ceiling, so `washHeight` and `slotClear` are both reported rather than left for the eye.\n\nDIMENSIONS AT THE DEFAULTS: a 3 m run, 180 mm deep, board 250 mm below a 2.9 m slab, 90 mm lip, tape 40 mm behind it — a 65.8° cut-off and 246 mm of wash.\n\nWHAT THIS CANNOT DO. The cove is straight. A curved or stepped cove is several of these. The ceiling luminance is lumens over the wash area and is a sanity figure, not a simulation.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.1,
+              "max": 30,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "coveDepth",
+              "name": "Cove depth from the wall",
+              "type": "range",
+              "value": 0.18,
+              "min": 0.06,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "boardThk",
+              "name": "Cove board thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "lipHeight",
+              "name": "Lip height",
+              "type": "range",
+              "value": 0.09,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "lipThk",
+              "name": "Lip thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "slabHeight",
+              "name": "Slab soffit",
+              "type": "range",
+              "value": 2.9,
+              "min": 2,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "coveDrop",
+              "name": "Cove below the slab",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.02,
+              "max": 1.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "tapeSetback",
+              "name": "Tape set back from the lip",
+              "type": "range",
+              "value": 0.04,
+              "min": 0,
+              "max": 0.4,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "stripWidth",
+              "name": "Tape width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "lumensPerMetre",
+              "name": "Output per metre",
+              "type": "range",
+              "value": 900,
+              "min": 100,
+              "max": 3000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 2700,
+              "min": 1800,
+              "max": 8000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.006,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "lightGroupGain",
+              "name": "Light group gain",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 8,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "dimToKelvin",
+              "name": "Warm dim floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 4000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "showEmissiveSurface",
+              "name": "Draw the lit surface",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Objects/Photometry/…)",
+              "type": "text",
+              "value": "Objects/Photometry/LED/tape-warm-2700k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "cove",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "painted MDF cove board, plaster lip, anodised channel",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "concealed perimeter wash, no visible source, warm and even",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/paint-eggshell.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Tape=Emissive/led-warm.json; Lip=Finishes/plaster.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "goboPath",
+              "name": "Gobo (Library/Objects/Photometry/gobo/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "sceneMembership",
+              "name": "Lighting scenes",
+              "type": "text",
+              "value": "Relax, Night, Photo",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "COVE LIGHT — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a wall segment: local X runs along the segment, origin at its midpoint on the centre-line.\n\nWHAT IT IS\nconcealed perimeter wash, no visible source, warm and even\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Run length: {length}\n- Cove depth from the wall: {coveDepth}\n- Cove board thickness: {boardThk}\n- Lip height: {lipHeight}\n- Lip thickness: {lipThk}\n- Slab soffit: {slabHeight}\n- Cove below the slab: {coveDrop}\n- Tape set back from the lip: {tapeSetback}\n- Tape width: {stripWidth}\n- Colour rendering index: {cri}\n- Dim level (%): {dimLevel}\n- Lamp radius (soft shadow): {lampRadius}\n- Export a lamp (off = geometry only): {emitsLight}\n- Light group gain: {lightGroupGain}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nThis object emits light. Use these values:\n- Output per metre: {lumensPerMetre}\n- Colour temperature: {kelvin}\n- Warm dim floor: {dimToKelvin}\n- Draw the lit surface: {showEmissiveSurface}\nPlace the emitter where the real lamp or LED sits, make the diffuser / bulb surface emissive to match, and hide the emitter itself from camera where a real fitting would conceal it.\n\nCHECKS (measure after building)\n- Run length = {length}\n- Cove depth from the wall = {coveDepth}\n- Lip height = {lipHeight}\n- Slab soffit = {slabHeight}\n- Cove below the slab = {coveDrop}\n- Tape width = {stripWidth}\n- Lamp radius (soft shadow) = {lampRadius}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_board",
+              "kind": "polygon",
+              "name": "Cove board",
+              "color": "#e7e5e4",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_tape",
+              "kind": "polygon",
+              "name": "Tape",
+              "color": "#fbbf24",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_board",
+              "kind": "polyhedron",
+              "name": "Cove board",
+              "color": "#e7e5e4",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lip",
+              "kind": "polyhedron",
+              "name": "Lip",
+              "color": "#d6d3d1",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tape",
+              "kind": "polyhedron",
+              "name": "Tape",
+              "color": "#fde68a",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

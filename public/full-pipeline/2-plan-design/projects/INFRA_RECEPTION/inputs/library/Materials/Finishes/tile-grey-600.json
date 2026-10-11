@@ -1,0 +1,40 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "tile.grey-600",
+  "title": "Tile — grey porcelain 600×600",
+  "description": "Default floor for kitchens, bathrooms, utility and balconies: mid-grey matt porcelain in 600 mm squares with a fine light joint.",
+  "procedural": {
+    "type": "checker",
+    "blenderNode": "ShaderNodeTexChecker",
+    "params": {
+      "tileSize": 0.6,
+      "scale": 1.667,
+      "color1": "#a7a8a6",
+      "color2": "#9fa09e"
+    }
+  },
+  "pbr": {
+    "baseColor": "#a3a4a2",
+    "roughness": 0.42,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0015,
+      "samples": 3
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#a3a4a2"
+  },
+  "dxf": {
+    "pattern": "NET",
+    "scale": 12,
+    "angle": 0
+  }
+}

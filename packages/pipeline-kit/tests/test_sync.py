@@ -8,7 +8,7 @@ res = []
 def check(c, msg): res.append((bool(c), msg))
 tmp = tempfile.mkdtemp(prefix="sync_")
 try:
-    root = os.path.join(tmp, "pipe"); os.makedirs(root); open(os.path.join(root, "PIPELINE_ROOT"), "w").write("x")
+    root = os.path.join(tmp, "pipe"); os.makedirs(root); open(os.path.join(root, "PIPELINE_ROOT"), "w", encoding="utf-8").write("x")
     store = r2.LocalStore(os.path.join(tmp, "bucket"))
     for f in ("run.v1.schema.json",): store.put("library/Schemas/" + f, open(os.path.join(KIT, "schemas", f), "rb").read())
     store.put("library/Schemas/thing.v1.schema.json", json.dumps({"type": "object", "required": ["n"], "properties": {"n": {"type": "integer"}}}).encode())
@@ -29,7 +29,7 @@ try:
     P.save_json(os.path.join(pdir, "project.json"), {"code": "X", "work_dir": "../../../work/X"})
     fields = ["task_id", "stage", "title", "depends_on", "status", "approved"]
     T.save(pdir, [{"task_id": "BUILD", "stage": "BUILD", "status": "done"}, {"task_id": "REVIEW", "stage": "REVIEW", "depends_on": "BUILD", "status": "todo"}], fields)
-    open(os.path.join(pdir, "REPORT.md"), "w").write("# report\n"); P.save_json(os.path.join(pdir, "final.json"), {"ok": True})
+    open(os.path.join(pdir, "REPORT.md"), "w", encoding="utf-8").write("# report\n"); P.save_json(os.path.join(pdir, "final.json"), {"ok": True})
     wd = L.work_dir("X")
     P.save_json(os.path.join(wd, "out", "X.thing.json"), {"n": 3})
     for sub in ("a", "a/b"):

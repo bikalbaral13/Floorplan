@@ -1,0 +1,79 @@
+{
+ "typology": "TOWNHOME_RENTAL",
+ "typology_version": "0.2.0",
+ "app": "Town Home Rental Planner",
+ "saved": "2026-10-06T04:09:54.287Z",
+ "params": {
+  "plot_width_ft": 36,
+  "plot_west_ft": 106,
+  "plot_east_ft": 105.5,
+  "setback_west_ft": 0,
+  "setback_east_ft": 6,
+  "setback_front_ft": 10,
+  "setback_rear_ft": 5,
+  "court_ft": 12,
+  "front_share_pct": 50,
+  "passage_ft": 4,
+  "floor_height_ft": 10,
+  "max_riser_in": 7,
+  "tread_in": 10,
+  "flight_width_ft": 3.5,
+  "door1_pct": 50,
+  "door_width_ft": 3,
+  "door2_pct": 50,
+  "door3_pct": 50,
+  "door4_pct": 50,
+  "option": "E",
+  "stair_position": "E",
+  "stair_first_flight": "W",
+  "stair_turn": "R",
+  "drawing_north": "up"
+ },
+ "summary": {
+  "units": [
+   {
+    "n": 1,
+    "face": "North",
+    "w_ft": 15,
+    "d_ft": 39.25,
+    "area_sqft": 588.8
+   },
+   {
+    "n": 2,
+    "face": "North",
+    "w_ft": 15,
+    "d_ft": 39.25,
+    "area_sqft": 588.8
+   },
+   {
+    "n": 3,
+    "face": "East",
+    "w_ft": 30,
+    "d_ft": 19.625,
+    "area_sqft": 588.8
+   },
+   {
+    "n": 4,
+    "face": "East",
+    "w_ft": 30,
+    "d_ft": 19.625,
+    "area_sqft": 588.8
+   }
+  ],
+  "total_sqft": 2355,
+  "coverage_pct": 61.86,
+  "warnings": []
+ },
+ "title_block": {
+  "firm": "Aadithyaa Developers",
+  "tag": "Builders and developers",
+  "project": "Proposed 4 rental units (ground floor)",
+  "client": "",
+  "site": "36' x 106' plot (3,807 sq ft), road on the north",
+  "dwg": "AD/SUB/01",
+  "rev": "R0",
+  "drawn": "",
+  "checked": "",
+  "date": "06-10-2026"
+ }
+}

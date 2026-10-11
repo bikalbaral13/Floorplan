@@ -1,0 +1,22 @@
+{
+ "id": "P3_RULES",
+ "version": "0.2.0",
+ "scope": "either",
+ "summary": "Planning rules the program must meet (setbacks, coverage, stair, access) -> rules.json, confirmed by the user against the local authority's rules.",
+ "inputs": [
+  "typologies/<T>/typology.json rule_defaults (draft only)",
+  "the user's / authority's actual rules"
+ ],
+ "outputs": [
+  "rules.json"
+ ],
+ "checks": [
+  "status == confirmed with confirmed_on and source",
+  "side_setback_min_ft <= side_setback_max_ft",
+  "all numbers >= 0",
+  "coverage_max_pct in (0, 100]"
+ ],
+ "manual": "First run writes a draft from the typology defaults and returns blocked. These defaults are placeholders, not law: the agent asks the user for the authority (e.g. DTCP / CMDA / local body), the rule source and each value, then confirms.",
+ "requires": [],
+ "title": "Planning rules (confirm with user)"
+}

@@ -1,0 +1,820 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "pixelsPerMeter": 18.589,
+  "units": "m"
+ },
+ "nodes": [
+  {
+   "id": "n001",
+   "x": 0.0,
+   "y": -151.0
+  },
+  {
+   "id": "n002",
+   "x": 92.75,
+   "y": -151.0
+  },
+  {
+   "id": "n003",
+   "x": 111.501,
+   "y": -151.0
+  },
+  {
+   "id": "n004",
+   "x": 157.75,
+   "y": -151.0
+  },
+  {
+   "id": "n005",
+   "x": 176.499,
+   "y": -151.0
+  },
+  {
+   "id": "n006",
+   "x": 222.499,
+   "y": -151.0
+  },
+  {
+   "id": "n007",
+   "x": 0.0,
+   "y": -142.0
+  },
+  {
+   "id": "n008",
+   "x": 0.0,
+   "y": -113.001
+  },
+  {
+   "id": "n009",
+   "x": 0.0,
+   "y": -106.0
+  },
+  {
+   "id": "n010",
+   "x": 108.0,
+   "y": 0.0
+  },
+  {
+   "id": "n011",
+   "x": 222.499,
+   "y": 0.0
+  },
+  {
+   "id": "n012",
+   "x": 222.499,
+   "y": -110.0
+  },
+  {
+   "id": "n013",
+   "x": 222.499,
+   "y": -138.999
+  },
+  {
+   "id": "n014",
+   "x": 216.501,
+   "y": -6.501,
+   "attachments": [
+    {
+     "id": "L0-att024",
+     "objectId": "column-with-math",
+     "objectPath": "Architectural/column-with-math.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "shape": "Rectangular",
+      "length": 0.85,
+      "breadth": 0.8,
+      "height": 3.6
+     }
+    }
+   ]
+  },
+  {
+   "id": "n015",
+   "x": 154.001,
+   "y": -72.001,
+   "attachments": [
+    {
+     "id": "L0-datt002",
+     "objectId": "rug-with-math",
+     "objectPath": "Architectural/rug-with-math.json",
+     "params": {
+      "shape": "Round",
+      "length": 2.4,
+      "width": 2.4,
+      "fitMode": "Off"
+     }
+    }
+   ]
+  },
+  {
+   "id": "n016",
+   "x": 79.0,
+   "y": -79.94,
+   "attachments": [
+    {
+     "id": "L0-datt049",
+     "objectId": "reception-desk-with-math",
+     "objectPath": "Architectural/reception-desk-with-math.json",
+     "params": {
+      "length": 3.3,
+      "depth": 0.8,
+      "height": 0.75,
+      "ledgeRise": 0.3,
+      "sweep": "Left high",
+      "rotation": 44.5,
+      "flipSide": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "n017",
+   "x": 157.001,
+   "y": -89.0,
+   "attachments": [
+    {
+     "id": "L0-datt04c",
+     "objectId": "chair-with-math",
+     "objectPath": "Architectural/chair-with-math.json",
+     "params": {
+      "armStyle": "Tub arms",
+      "quilting": "Plain",
+      "piping": false,
+      "rotation": 155.22
+     }
+    }
+   ]
+  },
+  {
+   "id": "n018",
+   "x": 142.0,
+   "y": -61.0,
+   "attachments": [
+    {
+     "id": "L0-datt04f",
+     "objectId": "chair-with-math",
+     "objectPath": "Architectural/chair-with-math.json",
+     "params": {
+      "armStyle": "Tub arms",
+      "quilting": "Plain",
+      "piping": false,
+      "rotation": 121.61
+     }
+    }
+   ]
+  },
+  {
+   "id": "n019",
+   "x": 182.999,
+   "y": -10.501,
+   "attachments": [
+    {
+     "id": "L0-datt052",
+     "objectId": "sofa-with-math",
+     "objectPath": "Architectural/sofa-with-math.json",
+     "params": {
+      "depth": 0.9,
+      "legHeight": 0.08,
+      "length": 2.9,
+      "seats": 3,
+      "rotation": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "n020",
+   "x": 202.999,
+   "y": -58.0,
+   "attachments": [
+    {
+     "id": "L0-datt055",
+     "objectId": "sofa-with-math",
+     "objectPath": "Architectural/sofa-with-math.json",
+     "params": {
+      "depth": 0.9,
+      "legHeight": 0.08,
+      "length": 4.2,
+      "seats": 4,
+      "rotation": 270
+     }
+    }
+   ]
+  },
+  {
+   "id": "n021",
+   "x": 215.249,
+   "y": -55.499,
+   "attachments": [
+    {
+     "id": "L0-datt058",
+     "objectId": "planter-box-with-math",
+     "objectPath": "Architectural/planter-box-with-math.json",
+     "params": {
+      "shape": "Trough",
+      "height": 0.9,
+      "plants": 8,
+      "showPlants": true,
+      "length": 4.465,
+      "width": 0.511,
+      "rotation": 90,
+      "fitMode": "Off"
+     }
+    }
+   ]
+  },
+  {
+   "id": "n022",
+   "x": 222.499,
+   "y": -97.8
+  },
+  {
+   "id": "n023",
+   "x": 74.88,
+   "y": -32.507
+  },
+  {
+   "id": "n024",
+   "x": 140.949,
+   "y": -99.051
+  }
+ ],
+ "segments": [
+  {
+   "id": "L0-s001",
+   "fromNodeId": "n001",
+   "toNodeId": "n002",
+   "layer": "window",
+   "thickness": 1.8608,
+   "attachments": [
+    {
+     "id": "L0-att002",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-datt03d",
+     "objectId": "window-with-math",
+     "objectPath": "Architectural/window-with-math.json",
+     "params": {
+      "operation": "Fixed",
+      "fitMode": "Fill wall",
+      "sillHeight": 0,
+      "lintelHeight": 2.6,
+      "frameWidth": 0.04,
+      "width": 4.9895,
+      "panes": 8,
+      "wallDepth": 0.1
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Glass partition"
+  },
+  {
+   "id": "L0-s003",
+   "fromNodeId": "n003",
+   "toNodeId": "n004",
+   "layer": "window",
+   "thickness": 1.8608,
+   "attachments": [
+    {
+     "id": "L0-att004",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-datt03e",
+     "objectId": "window-with-math",
+     "objectPath": "Architectural/window-with-math.json",
+     "params": {
+      "operation": "Fixed",
+      "fitMode": "Fill wall",
+      "sillHeight": 0,
+      "lintelHeight": 2.6,
+      "frameWidth": 0.04,
+      "width": 2.488,
+      "panes": 4,
+      "wallDepth": 0.1
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Glass partition"
+  },
+  {
+   "id": "L0-s005",
+   "fromNodeId": "n005",
+   "toNodeId": "n006",
+   "layer": "window",
+   "thickness": 1.8608,
+   "attachments": [
+    {
+     "id": "L0-att006",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-datt03f",
+     "objectId": "window-with-math",
+     "objectPath": "Architectural/window-with-math.json",
+     "params": {
+      "operation": "Fixed",
+      "fitMode": "Fill wall",
+      "sillHeight": 0,
+      "lintelHeight": 2.6,
+      "frameWidth": 0.04,
+      "width": 2.4746,
+      "panes": 4,
+      "wallDepth": 0.1
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Glass partition"
+  },
+  {
+   "id": "L0-s007",
+   "fromNodeId": "n001",
+   "toNodeId": "n007",
+   "layer": "wall",
+   "thickness": 2.7902,
+   "attachments": [
+    {
+     "id": "L0-att008",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    }
+   ],
+   "label": "West wall"
+  },
+  {
+   "id": "L0-s009",
+   "fromNodeId": "n008",
+   "toNodeId": "n009",
+   "layer": "wall",
+   "thickness": 2.7902,
+   "attachments": [
+    {
+     "id": "L0-att00a",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    }
+   ],
+   "label": "West wall"
+  },
+  {
+   "id": "L0-s00b",
+   "fromNodeId": "n009",
+   "toNodeId": "n010",
+   "layer": "wall",
+   "thickness": 2.7902,
+   "attachments": [
+    {
+     "id": "L0-att00c",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    }
+   ],
+   "label": "Diagonal wall"
+  },
+  {
+   "id": "L0-s00d",
+   "fromNodeId": "n010",
+   "toNodeId": "n011",
+   "layer": "wall",
+   "thickness": 2.7902,
+   "attachments": [
+    {
+     "id": "L0-att00e",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    }
+   ],
+   "label": "South wall"
+  },
+  {
+   "id": "L0-s00f",
+   "fromNodeId": "n011",
+   "toNodeId": "n012",
+   "layer": "wall",
+   "thickness": 4.2792,
+   "attachments": [
+    {
+     "id": "L0-att010",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.23,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "baseColor": "#BDBDBD"
+     }
+    }
+   ],
+   "label": "East wall"
+  },
+  {
+   "id": "L0-s011",
+   "fromNodeId": "n013",
+   "toNodeId": "n006",
+   "layer": "wall",
+   "thickness": 4.2792,
+   "attachments": [
+    {
+     "id": "L0-att012",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.23,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "baseColor": "#BDBDBD"
+     }
+    }
+   ],
+   "label": "East wall"
+  },
+  {
+   "id": "L0-s015",
+   "fromNodeId": "n002",
+   "toNodeId": "n003",
+   "layer": "door",
+   "thickness": 1.8608,
+   "attachments": [
+    {
+     "id": "L0-att013",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-att014",
+     "objectId": "door-with-math",
+     "objectPath": "Architectural/door-with-math.json",
+     "params": {
+      "width": 1.009,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.1,
+      "lintelHeight": 2.1,
+      "panelStyle": "Flush",
+      "ironmongeryColor": "#111111"
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Door to visitor room 1"
+  },
+  {
+   "id": "L0-s018",
+   "fromNodeId": "n004",
+   "toNodeId": "n005",
+   "layer": "door",
+   "thickness": 1.8608,
+   "attachments": [
+    {
+     "id": "L0-att016",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-att017",
+     "objectId": "door-with-math",
+     "objectPath": "Architectural/door-with-math.json",
+     "params": {
+      "width": 1.009,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.1,
+      "lintelHeight": 2.1,
+      "panelStyle": "Flush",
+      "ironmongeryColor": "#111111"
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Door to visitor room 2"
+  },
+  {
+   "id": "L0-s01b",
+   "fromNodeId": "n007",
+   "toNodeId": "n008",
+   "layer": "door",
+   "thickness": 2.7902,
+   "attachments": [
+    {
+     "id": "L0-att019",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-att01a",
+     "objectId": "door-with-math",
+     "objectPath": "Architectural/door-with-math.json",
+     "params": {
+      "width": 1.56,
+      "leaves": "Double",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.15,
+      "lintelHeight": 2.1
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Entry from office (double)"
+  },
+  {
+   "id": "L0-s01e",
+   "fromNodeId": "n012",
+   "toNodeId": "n013",
+   "layer": "door",
+   "thickness": 4.2792,
+   "attachments": [
+    {
+     "id": "L0-att01c",
+     "objectId": "wall-with-math",
+     "objectPath": "Architectural/wall-with-math.json",
+     "params": {
+      "thickness": 0.23,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     }
+    },
+    {
+     "id": "L0-att01d",
+     "objectId": "door-with-math",
+     "objectPath": "Architectural/door-with-math.json",
+     "params": {
+      "width": 1.56,
+      "leaves": "Double",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.23,
+      "lintelHeight": 2.1
+     }
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Door to lift lobby (double)"
+  },
+  {
+   "id": "mn014",
+   "fromNodeId": "n014",
+   "toNodeId": "n014",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn015",
+   "fromNodeId": "n015",
+   "toNodeId": "n015",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn016",
+   "fromNodeId": "n016",
+   "toNodeId": "n016",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn017",
+   "fromNodeId": "n017",
+   "toNodeId": "n017",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn018",
+   "fromNodeId": "n018",
+   "toNodeId": "n018",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn019",
+   "fromNodeId": "n019",
+   "toNodeId": "n019",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn020",
+   "fromNodeId": "n020",
+   "toNodeId": "n020",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  },
+  {
+   "id": "mn021",
+   "fromNodeId": "n021",
+   "toNodeId": "n021",
+   "layer": "furniture",
+   "thickness": 0,
+   "attachments": []
+  }
+ ],
+ "spaces": [
+  {
+   "id": "L0-sp01f",
+   "nodeIds": [
+    "n022",
+    "n006",
+    "n001",
+    "n009",
+    "n023",
+    "n024"
+   ],
+   "label": "Reception",
+   "roomType": "room",
+   "attachments": [
+    {
+     "id": "L0-att020",
+     "objectId": "room-with-math",
+     "objectPath": "Architectural/room-with-math.json",
+     "params": {
+      "color": "Grey"
+     }
+    }
+   ]
+  },
+  {
+   "id": "L0-sp021",
+   "nodeIds": [
+    "n023",
+    "n024",
+    "n022",
+    "n011",
+    "n010"
+   ],
+   "label": "Waiting lobby",
+   "roomType": "area",
+   "attachments": [
+    {
+     "id": "L0-att022",
+     "objectId": "room-with-math",
+     "objectPath": "Architectural/room-with-math.json",
+     "params": {
+      "color": "Grey"
+     }
+    }
+   ]
+  }
+ ],
+ "layers": [
+  {
+   "id": "0"
+  },
+  {
+   "id": "image"
+  },
+  {
+   "id": "map"
+  },
+  {
+   "id": "dimension"
+  },
+  {
+   "id": "wall"
+  },
+  {
+   "id": "door"
+  },
+  {
+   "id": "window"
+  },
+  {
+   "id": "opening"
+  },
+  {
+   "id": "space"
+  },
+  {
+   "id": "column"
+  },
+  {
+   "id": "staircase"
+  },
+  {
+   "id": "finish"
+  },
+  {
+   "id": "ceiling"
+  },
+  {
+   "id": "lighting"
+  },
+  {
+   "id": "furniture"
+  },
+  {
+   "id": "signage"
+  },
+  {
+   "id": "camera"
+  }
+ ],
+ "imageUnderlay": null,
+ "graphAttrs": {
+  "source": "Designs/Decks/INFRA_RECEPTION.json",
+  "rebuilt_by": "space-brief tools/summary_to_canvas.py --bare"
+ }
+}

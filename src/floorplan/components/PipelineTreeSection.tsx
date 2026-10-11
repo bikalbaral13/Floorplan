@@ -16,8 +16,10 @@ const fmt = (b = 0) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1,
 
 /** Navigator section: a pipeline folder shipped with the app (public/<base>) — VIEW ONLY. Folders fold;
  *  a file opens in a new tab. Folded by default; the open state is remembered per browser and section. */
-export const PipelineTreeSection = ({ base = "/interior-mesh-pipeline", title = "Interior Mesh Pipeline", storageKey = "bp.editor.pipelineOpen" }:
-  { base?: string; title?: string; storageKey?: string }) => {
+/** `stages`: top-level folders shown as named stages (the Full Pipeline's four phases) — listed first, in this
+ *  order, with their label and a phase badge instead of the bare folder name. */
+export const PipelineTreeSection = ({ base = "/interior-mesh-pipeline", title = "Interior Mesh Pipeline", storageKey = "bp.editor.pipelineOpen", stages }:
+  { base?: string; title?: string; storageKey?: string; stages?: { dir: string; label: string; badge?: string }[] }) => {
   const BASE = base;
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(storageKey) === "1"; } catch { return false; } });
   const [root, setRoot] = useState<{ files: number; children: PNode[] } | null>(null);
@@ -80,7 +82,11 @@ export const PipelineTreeSection = ({ base = "/interior-mesh-pipeline", title = 
           className="flex w-full items-center gap-1.5 rounded py-[3px] pr-1.5 text-left hover:bg-white">
           {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
           {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{node.name}</span>
+          {(() => { const st = depth === 0 ? stages?.find((s) => s.dir === node.name) : undefined;
+            return st ? (<>
+              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-800">{st.label}<span className="pl-1.5 font-mono text-[10px] font-normal text-slate-400">{node.name}</span></span>
+              {st.badge && <span className="shrink-0 rounded-full bg-violet-50 px-1.5 text-[10px] font-semibold text-violet-700">{st.badge}</span>}
+            </>) : <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{node.name}</span>; })()}
           <span className="shrink-0 pl-2 font-mono text-[10px] text-slate-400">{node.files}</span>
         </button>
         {isOpen && node.children?.map((c) => <Row key={c.path} node={c} depth={depth + 1} />)}
@@ -102,7 +108,10 @@ export const PipelineTreeSection = ({ base = "/interior-mesh-pipeline", title = 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {error ? <p className="px-1 py-2 text-[11px] text-rose-600">Could not load the pipeline: {error}</p>
             : !root ? <p className="px-1 py-2 text-[11px] text-slate-400">Loading…</p>
-            : root.children.map((c) => <Row key={c.path} node={c} depth={0} />)}
+            : (stages ? [...root.children].sort((a, b) => {
+                const ia = stages.findIndex((s) => s.dir === a.name), ib = stages.findIndex((s) => s.dir === b.name);
+                return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+              }) : root.children).map((c) => <Row key={c.path} node={c} depth={0} />)}
         </div>
       )}
     </div>

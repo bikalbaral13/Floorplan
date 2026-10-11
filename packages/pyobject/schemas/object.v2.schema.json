@@ -1,0 +1,21 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "object.v2",
+ "title": "object/2 — parametric object with a Python source (browser Pyodide, pipelines, Blender)",
+ "type": "object",
+ "required": ["kind", "version", "parameters", "python"],
+ "properties": {
+  "kind": {"const": "parametric-object"},
+  "version": {"const": 2},
+  "meta": {"type": "object", "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "category": {"type": "string"}, "units": {"type": "string"}}},
+  "hostKind": {"enum": ["node", "segment", "space"]},
+  "description": {"type": "string"},
+  "units": {"type": "string", "description": "unit of length PARAMETERS (m default; ft for program objects); build() output is always metres"},
+  "functions": {"type": "array", "items": {"enum": ["build", "place", "qc", "bom", "compute", "lines", "schedule"]}},
+  "rule_keys": {"type": "object", "additionalProperties": {"type": "string"}},
+  "parameters": {"type": "array", "items": {"type": "object", "required": ["key"], "properties": {
+   "key": {"type": "string"}, "label": {"type": "string"}, "kind": {"enum": ["number", "select", "checkbox", "color", "text"]},
+   "min": {"type": "number"}, "max": {"type": "number"}, "step": {"type": "number"}, "unit": {"type": "string"}, "options": {"type": "array"}}}},
+  "python": {"type": "object", "required": ["source"], "properties": {"runtime": {"const": "pyodide"}, "entry": {"type": "string"}, "source": {"type": "string", "minLength": 1}}}
+ }
+}

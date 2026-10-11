@@ -20,7 +20,7 @@ function ensurePyodide() {
 }
 
 self.onmessage = async (e) => {
-  const { id, key, source, entry, params } = e.data;
+  const { id, key, source, entry, params, host } = e.data;
   try {
     const py = await ensurePyodide();
     let ns = namespaces.get(key);
@@ -32,9 +32,11 @@ self.onmessage = async (e) => {
     const fn = ns.get(entry || "build");
     if (!fn) throw new Error(`entry "${entry}" is not defined by the object's Python source`);
     const pyParams = py.toPy(params || {});
+    const pyHost = host ? py.toPy(host) : null;
     const t0 = performance.now();
-    const res = fn(pyParams);
+    const res = pyHost ? fn(pyParams, pyHost) : fn(pyParams);   // build(params, host) for host-aware sources
     pyParams.destroy();
+    if (pyHost) pyHost.destroy();
     const js = res.toJs({ dict_converter: Object.fromEntries });
     res.destroy();
     const transfers = [];
@@ -44,7 +46,7 @@ self.onmessage = async (e) => {
       transfers.push(positions.buffer, indices.buffer);
       return { name: m.name, color: m.color, material: m.material, positions, indices };
     });
-    self.postMessage({ id, ok: true, meshes, plan: js.plan || [], stats: { ...(js.stats || {}), ms: Math.round(performance.now() - t0) } }, transfers);
+    self.postMessage({ id, ok: true, meshes, plan: js.plan || [], planColors: js.planColors || undefined, stats: { ...(js.stats || {}), ms: Math.round(performance.now() - t0) } }, transfers);
   } catch (err) {
     self.postMessage({ id, ok: false, error: String((err && err.message) || err) });
   }

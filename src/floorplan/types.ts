@@ -775,6 +775,11 @@ export interface PobjFlowNode {
   bind?: Record<string, string>;
 }
 
+/** One pre-computed run of a Python object (made by `python -m pyobject bake`): the instance's params and host as
+ *  the editor will see them, and build()'s result with positions flattened. The editor shows it instantly and only
+ *  starts Pyodide when the params move off every baked set. */
+export interface PythonBaked { params: Record<string, unknown>; host?: number[][]; result: { meshes: { name: string; color?: string; material?: string; positions: number[]; indices: number[] }[]; plan: number[][][]; planColors?: (string | null)[]; stats?: Record<string, number> } }
+
 export interface ParametricObjectFile {
   kind: "parametric-object";
   version: number;
@@ -811,7 +816,9 @@ export interface ParametricObjectFile {
    *  (see python/pythonObjects.ts). Present INSTEAD of `geometry` / `spine`; `parameters` above are its inputs.
    *  Each mesh is `{name, color, positions: [x,y,z,…], indices: […]}` in object-local metres (+x across, +y
    *  away from the host anchor's "back", +z up); `plan` is a list of closed outlines for the 2D symbol. */
-  python?: { runtime?: string; entry: string; source: string };
+  /** `rotates: "self"` — the source applies the instance's rotation itself (objects translated from the Math
+   *  Engine by pyobject.spine2py), so the editor must not turn its output again. */
+  python?: { runtime?: string; entry: string; source: string; rotates?: "self"; baked?: PythonBaked[] };
   /** Optional explicit Flow decompilation: an ordered semantic node list that the "Edit in Flow" / import-to-
    *  flow path materialises into a wired graph (Object Node → these nodes). Positions + edges are DERIVED
    *  (never stored) so it survives node-schema changes. See {@link PobjFlowNode}. */
@@ -1265,6 +1272,25 @@ export interface Layer {
   locked: boolean;
   /** Paint order — higher values draw on top. Default `0` for the seed layer. */
   order: number;
+  /** Optional discipline group shown as a foldable block in the layer panel
+   *  (e.g. "Architectural", "Interior", "Structural", "MEP", "Exterior"). */
+  group?: string;
+}
+
+/** Discipline groups, in panel order. A group (house) shows these under it; the flat layer list too. */
+export const DISCIPLINES = ["Architectural", "Interior", "Structural", "MEP", "Exterior", "Annotation"] as const;
+export type Discipline = (typeof DISCIPLINES)[number];
+
+/** The discipline a layer belongs to: its explicit `group` when that names one, else by id / name. */
+export function disciplineOfLayer(id: string, name?: string, group?: string): Discipline {
+  if (group && (DISCIPLINES as readonly string[]).includes(group)) return group as Discipline;
+  const s = `${id} ${name ?? ""}`.toLowerCase();
+  if (/struct|column|beam|footing|slab|stair|plinth|strap|lintel/.test(s)) return "Structural";
+  if (/mep|elec|plumb|water|drain|storm|hvac|sewer|light|fixture|pipe|conduit|socket|switch/.test(s)) return "MEP";
+  if (/site|plot|road|setback|landscape|exterior|garden|parking|compound|boundary|sanitation|tree|pool|paving/.test(s)) return "Exterior";
+  if (/grid|annot|dimension|label|text|north/.test(s)) return "Annotation";
+  if (/wall|door|window|opening|space|room|^0\b/.test(s)) return "Architectural";
+  return "Interior";
 }
 
 /** Built-in default layer id. Always present in `FloorPlanModel.layers` and cannot be deleted. */

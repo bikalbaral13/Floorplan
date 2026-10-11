@@ -1,0 +1,66 @@
+{
+ "schema": "stages/1 (Build from Plan Deck commands and stages, moved out of pipeline.json)",
+ "entry": {
+  "agents": "AGENTS.md",
+  "intake": "python tools/intake.py <deck.pptx> <work_dir>/deck",
+  "draft": "python tools/brief.py <work_dir>/deck \"<project>\" \"<room>\" <work_dir>/deck/<room>.draft.json",
+  "finalize": "python tools/brief.py finalize <draft.json> projects/<CODE>/roombrief.curated.json projects/<CODE>/roombrief.json",
+  "geometry": "python tools/geometry.py projects/<CODE> <work_dir>/deck",
+  "publish": "node public/build-from-deck-pipeline/tools/publish.mjs public/build-from-deck-pipeline/projects/<CODE> pipeline-work/build-from-deck/deck  (repo root)",
+  "catalog": "node public/build-from-deck-pipeline/tools/catalog.mjs pipeline-work/build-from-deck/catalog.json (repo root)",
+  "objects": "node public/build-from-deck-pipeline/objects/build-objects.mjs (repo root) -> objects/out/",
+  "variant": "python tools/material_variant.py <base material.json> <#hex> <name> \"<title>\" \"<why>\"",
+  "resolve_check": "python tools/resolve_check.py projects/<CODE> pipeline-work/build-from-deck/catalog.json",
+  "publish_library": "node public/build-from-deck-pipeline/tools/publish-library.mjs public/build-from-deck-pipeline/projects/<CODE> (repo root)",
+  "compose": "python tools/compose.py projects/<CODE>",
+  "bake": "node tools/bakeplan/run.mjs projects/<CODE>/<CODE>.room.canvas.json --out pipeline-work/build-from-deck/<CODE>.baked.json (repo root)",
+  "preview": "python tools/preview_baked.py <baked.json> <out.png> --cut 2.0",
+  "drawings": "python tools/drawings.py projects/<CODE> pipeline-work/build-from-deck/<CODE>.baked.json pipeline-work/build-from-deck/dwg",
+  "render": "bash public/build-from-deck-pipeline/tools/render_room.sh <CODE> --res 960 --samples 24 (repo root; needs the Floorplan Renderer skill scripts in pipeline-work/build-from-deck/renderer)",
+  "qa": "python tools/qa.py projects/<CODE> pipeline-work/build-from-deck/render/plan.baked.json pipeline-work/build-from-deck/deck pipeline-work/build-from-deck/render/stills"
+ },
+ "work_dir": "<repo>/pipeline-work/build-from-deck (outside public/)",
+ "stages": [
+  {
+   "id": "S1_INTAKE",
+   "kind": "script",
+   "out": "deck.json + images/"
+  },
+  {
+   "id": "S2_BRIEF",
+   "kind": "script + agent",
+   "out": "roombrief.json (roombrief/1)"
+  },
+  {
+   "id": "S3_GEOMETRY",
+   "kind": "agent + script",
+   "out": "trace.px.json (agent reads plan pixels) -> plan.json (tracer-plan/1) + <CODE>.canvas.json via the Tracer exporter, zones snapped to walls, geometry_check.png"
+  },
+  {
+   "id": "S4_RESOLVE",
+   "kind": "script + agent",
+   "out": "resolve.json (deck-resolve/1): item -> object + real param ids + host + materials; new objects (objects/) and materials (materials/) published to R2"
+  },
+  {
+   "id": "S5_COMPOSE",
+   "kind": "script",
+   "out": "<CODE>.room.canvas.json (R2 Designs/Decks/<CODE>.json): every attachment = object params + spec_* + provenance; baked headless with tools/bakeplan"
+  },
+  {
+   "id": "S6_DRAWINGS",
+   "kind": "script",
+   "out": "<CODE>_drawings.dxf (R2010, 4 A1 layouts: A-101 plan 1:25, A-102 RCP 1:25, A-201 interior elevations 1:50, A-601 schedules) + PDF + PNGs; R2 Designs/Decks/<CODE>/"
+  },
+  {
+   "id": "S7_RENDER",
+   "kind": "blender",
+   "out": "<CODE>.blend (Cycles, deck materials, lamps from fixture photometry, deck cameras CAM-A/B/C + corners) + low-quality stills"
+  },
+  {
+   "id": "S8_QA",
+   "kind": "gate",
+   "out": "QA.md + qa_compare.png: deck review comments tested on baked geometry/params, coverage, deck render vs still (palette dE + mid-tone colour cast)"
+  }
+ ],
+ "status": "S1-S8 done for INFRA RECEPTION (2026-10-08)"
+}

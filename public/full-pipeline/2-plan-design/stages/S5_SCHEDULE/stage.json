@@ -1,0 +1,23 @@
+{
+ "id": "S5_SCHEDULE",
+ "version": "0.1.0",
+ "title": "Seed the element schedule",
+ "kind": "script",
+ "gate": false,
+ "summary": "Elements from spaces (floor, ceiling), wall runs (finish / glazed partition), doors and object groups; shapes placed on the derived sheets; references attached from refs.csv, the rest left in the tray.",
+ "inputs": [
+  "work: geo.json",
+  "work: views.json",
+  "inputs/refs"
+ ],
+ "outputs": [
+  "work: brief.json (spacebrief/1)",
+  "work: refs/*.jpg"
+ ],
+ "checks": [
+  "brief validates against spacebrief.v1",
+  "each scoped space has a floor and a ceiling element",
+  "each wall run has exactly one element",
+  "no spec value is invented (dims are src=plan or src=convention)"
+ ]
+}

@@ -80,13 +80,13 @@ class LocalStore:
     def _p(self, key): return os.path.join(self.root, *key.split("/"))
     def head(self, key):
         p = self._p(key)
-        return (open(p + ".sha256").read() if os.path.exists(p + ".sha256") else "") if os.path.exists(p) else None
+        return (open(p + ".sha256", encoding="utf-8").read() if os.path.exists(p + ".sha256") else "") if os.path.exists(p) else None
     def get(self, key):
         p = self._p(key)
         return open(p, "rb").read() if os.path.exists(p) else None
     def put(self, key, data, ctype=None):
         p = self._p(key); os.makedirs(os.path.dirname(p), exist_ok=True)
-        open(p, "wb").write(data); open(p + ".sha256", "w").write(sha256(data)); self.puts.append(key); return key
+        open(p, "wb").write(data); open(p + ".sha256", "w", encoding="utf-8").write(sha256(data)); self.puts.append(key); return key
     def public(self, key): return ""
 
 def default_store(start="."):

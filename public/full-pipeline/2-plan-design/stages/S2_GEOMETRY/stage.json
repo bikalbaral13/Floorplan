@@ -1,0 +1,21 @@
+{
+ "id": "S2_GEOMETRY",
+ "version": "0.1.0",
+ "title": "Read the plan geometry",
+ "kind": "script",
+ "gate": false,
+ "summary": "canvas.v1 → geo.all.json (metres): walls, openings, spaces, objects, wall runs; propose a scope with stated levels.",
+ "inputs": [
+  "inputs/plan.canvas.json",
+  "standards/DEFAULT.json"
+ ],
+ "outputs": [
+  "work: geo.all.json",
+  "scope.draft.json"
+ ],
+ "checks": [
+  "every band segment has a thickness",
+  "runs found",
+  "levels tagged src=plan or src=convention"
+ ]
+}

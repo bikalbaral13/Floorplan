@@ -1,0 +1,7 @@
+{
+ "code": "KINGSWOOD_EXT",
+ "title": "Kingswood exterior walkthrough (fixture)",
+ "standards": "DEFAULT",
+ "work_dir": "../../../../../pipeline-work/walkthrough/KINGSWOOD_EXT",
+ "fixture": true
+}

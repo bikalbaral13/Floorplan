@@ -1,0 +1,450 @@
+{
+  "version": 1,
+  "id": "plant-potted-with-math",
+  "title": "Potted Plant — leaves with a silhouette, not a faceted green dome",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Potted Plant",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 20v-7",
+        "M12 13c-4 0-6-3-6-6 3 0 6 2 6 6z",
+        "M12 13c4 0 6-3 6-6-3 0-6 2-6 6z",
+        "M9 20h6"
+      ]
+    }
+  },
+  "description": "A parametric POTTED PLANT on the six-node spine, and the replacement for the faceted green dome in view1.\n\nDROP IT ON A NODE. `plant` treats a canopy as one solid; this one draws leaves, because no material fixes a silhouette.\n\nEACH LEAF IS A KITE IN PLAN — stem, two shoulders, tip — swept a leaf-thickness in z. The kernel takes any quad, so a leaf costs exactly what a box costs, and eighteen of them at staggered heights and angles give a plant an outline.\n\nTHE ANGLES ARE PHYLLOTAXIS, NOT A GRID. 137.5 degrees between successive leaves is what a plant actually does, and it fills a circle without any two ever lining up — which is precisely the artefact an evenly-spaced fan would have.\n\nTHE DROOP IS IN WHERE THE LEAF STARTS, not in its own plane: a quad sweeps straight up, so a truly tilted leaf is not expressible here. Read from across a room, the two agree; read from 200 mm away they do not, and this object says so rather than pretending.\n\nFULLNESS IS LEAF AREA OVER CANOPY AREA — whether it reads full or sparse, which a leaf count alone cannot tell you because the leaves vary.\n\nDIMENSIONS AT THE DEFAULTS: a 320 mm pot, 450 mm trunk, 18 leaves in 3 tiers, canopy about 900 mm across and 1.2 m tall.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "potDia",
+              "name": "Pot diameter",
+              "type": "range",
+              "value": 0.32,
+              "min": 0.08,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "potHeight",
+              "name": "Pot height",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "soilDrop",
+              "name": "Soil below the rim",
+              "type": "range",
+              "value": 0.04,
+              "min": 0,
+              "max": 0.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "trunkHeight",
+              "name": "Trunk height",
+              "type": "range",
+              "value": 0.45,
+              "min": 0,
+              "max": 2.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "trunkRadius",
+              "name": "Trunk radius",
+              "type": "range",
+              "value": 0.022,
+              "min": 0.004,
+              "max": 0.12,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "leaves",
+              "name": "Leaves",
+              "type": "range",
+              "value": 18,
+              "min": 3,
+              "max": 80,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "tiers",
+              "name": "Tiers",
+              "type": "range",
+              "value": 3,
+              "min": 1,
+              "max": 8,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "leafLength",
+              "name": "Leaf length",
+              "type": "range",
+              "value": 0.34,
+              "min": 0.05,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "leafWidth",
+              "name": "Leaf width",
+              "type": "range",
+              "value": 0.13,
+              "min": 0.01,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "leafThk",
+              "name": "Leaf thickness",
+              "type": "range",
+              "value": 0.004,
+              "min": 0.001,
+              "max": 0.02,
+              "step": 0.0005,
+              "options": []
+            },
+            {
+              "id": "canopyRise",
+              "name": "Canopy rise",
+              "type": "range",
+              "value": 0.55,
+              "min": 0.05,
+              "max": 2.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "droop",
+              "name": "Droop",
+              "type": "range",
+              "value": 0.35,
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "seed",
+              "name": "Seed",
+              "type": "range",
+              "value": 5,
+              "min": 1,
+              "max": 99,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Organic/foliage.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Pot=Finishes/ceramic.json; Soil=Masonry/concrete.json; Trunk=Organic/bark.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "healthy green foliage, ivory ceramic pot, dark soil",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "large-leaved indoor plant in an ivory pot, healthy",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Soft",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "POTTED PLANT — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\nlarge-leaved indoor plant in an ivory pot, healthy\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Pot diameter: {potDia}\n- Pot height: {potHeight}\n- Soil below the rim: {soilDrop}\n- Trunk height: {trunkHeight}\n- Trunk radius: {trunkRadius}\n- Leaves: {leaves}\n- Tiers: {tiers}\n- Leaf length: {leafLength}\n- Leaf width: {leafWidth}\n- Leaf thickness: {leafThk}\n- Canopy rise: {canopyRise}\n- Droop: {droop}\n- Seed: {seed}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Pot height = {potHeight}\n- Soil below the rim = {soilDrop}\n- Trunk height = {trunkHeight}\n- Trunk radius = {trunkRadius}\n- Leaf length = {leafLength}\n- Leaf width = {leafWidth}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_pot",
+              "kind": "circle",
+              "name": "Pot",
+              "color": "#ece5da",
+              "layer": "Decor",
+              "show": true
+            },
+            {
+              "id": "p2_leaf",
+              "kind": "polygon",
+              "name": "Foliage",
+              "color": "#6b8f52",
+              "layer": "Decor",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_pot",
+              "kind": "tube",
+              "name": "Pot",
+              "color": "#ece5da",
+              "layer": "Decor",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_soil",
+              "kind": "tube",
+              "name": "Soil",
+              "color": "#3f342a",
+              "layer": "Decor",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_trunk",
+              "kind": "tube",
+              "name": "Trunk",
+              "color": "#6b5844",
+              "layer": "Decor",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_leaf",
+              "kind": "polyhedron",
+              "name": "Leaves",
+              "color": "#5f8546",
+              "layer": "Decor",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "schema": "material/1",
+  "category": "Organic",
+  "id": "organic.rattan",
+  "title": "Organic — rattan weave",
+  "description": "A checker at a weave pitch with a strong bump. The weave is the whole material: flatten the bump and it becomes a tan-coloured board, which is what every rattan cabinet front in a bad render is.",
+  "procedural": {
+    "type": "checker",
+    "blenderNode": "ShaderNodeTexChecker",
+    "params": {
+      "tileSize": 0.012,
+      "scale": 83.3,
+      "color1": "#cbab77",
+      "color2": "#a98a5c"
+    }
+  },
+  "pbr": {
+    "baseColor": "#bd9c6b",
+    "roughness": 0.6,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0012,
+      "samples": 4
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 1.5,
+      "scale": 1
+    },
+    "displacement": {
+      "scale": 0.003,
+      "midlevel": 0.5
+    },
+    "roughnessVariation": {
+      "amount": 0.1,
+      "scale": 18
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 4,
+    "angle": 45,
+    "weight": 1,
+    "color": "#bd9c6b"
+  },
+  "dxf": {
+    "pattern": "NET",
+    "scale": 0.3,
+    "angle": 45
+  }
+}

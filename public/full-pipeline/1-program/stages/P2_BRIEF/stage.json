@@ -1,0 +1,24 @@
+{
+ "id": "P2_BRIEF",
+ "version": "0.2.0",
+ "scope": "either",
+ "summary": "Program brief: typology, unit count, allowed facings, future floors, options to study -> brief.json (confirmed by the user).",
+ "inputs": [
+  "project.json (typology)",
+  "typologies/<T>/typology.json brief_defaults",
+  "the user's answers"
+ ],
+ "outputs": [
+  "brief.json"
+ ],
+ "checks": [
+  "status == confirmed (set only after the user confirms)",
+  "typology registered",
+  "unit_count == typology unit_count",
+  "facing_allowed within the typology's facings",
+  "options exist in the typology"
+ ],
+ "manual": "First run writes a draft and returns blocked with questions. The agent asks the user, edits brief.json, sets status=confirmed + confirmed_on, logs the answers in REPORT.md and reruns.",
+ "requires": [],
+ "title": "Program brief + typology match (confirm with user)"
+}

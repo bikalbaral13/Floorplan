@@ -1,0 +1,76 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "wood.oak.herringbone",
+  "title": "Wood — light oak herringbone",
+  "description": "Light oak laid in herringbone (INFRA Reception waiting lobby, deck slide 3). Blender has no herringbone node, so the LAYOUT is an additive block a consumer that knows it builds as real planks (plank length x width at 45 deg, alternating); a consumer that does not falls back to the procedural, a diagonal wave band in the same oak pair, which reads as wood at room scale but not as a pattern.",
+  "layout": {
+    "pattern": "herringbone",
+    "plankLength": 0.6,
+    "plankWidth": 0.1,
+    "angleDeg": 45,
+    "joint": 0.001,
+    "jointColor": "#8f7454",
+    "toneVariation": 0.12
+  },
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "DIAGONAL",
+      "waveProfile": "SIN",
+      "scale": 2.6,
+      "distortion": 9,
+      "detail": 3,
+      "detailScale": 1.1,
+      "detailRoughness": 0.55,
+      "phaseOffset": 0,
+      "colorA": "#d9c3a0",
+      "colorB": "#b99a72"
+    }
+  },
+  "pbr": {
+    "baseColor": "#ccb08a",
+    "roughness": 0.45,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0015,
+      "samples": 4
+    },
+    "grain": {
+      "axis": "u",
+      "rotationDeg": 45,
+      "scaleU": 1,
+      "scaleV": 0.3
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.35,
+      "scale": 1
+    },
+    "coat": {
+      "weight": 0.15,
+      "roughness": 0.2,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.1,
+      "scale": 8
+    }
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 5,
+    "angle": 45,
+    "weight": 1,
+    "color": "#ccb08a"
+  },
+  "dxf": {
+    "pattern": "AR-HBONE",
+    "scale": 0.26,
+    "angle": 0
+  }
+}

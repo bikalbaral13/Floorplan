@@ -1,0 +1,384 @@
+{
+ "schema": "run/1",
+ "run_id": "20261009T161819Z",
+ "project": "INFRA_RECEPTION",
+ "pipeline": {
+  "id": "space-brief",
+  "version": "0.2.0",
+  "kit": "0.1.0"
+ },
+ "agent": "claude",
+ "fixture": true,
+ "started": "2026-10-09T16:18:19+00:00",
+ "finished": "2026-10-09T16:58:13+00:00",
+ "status": "done",
+ "inputs": [
+  {
+   "id": "plan",
+   "local": "inputs/plan.canvas.json",
+   "sha256": "383737cc61caba9e2e5b02c5f802aa64f0f8bb273304548c84aeeadad7fef2c1",
+   "bytes": 15226
+  },
+  {
+   "id": "ref:baffle-colour.jpg",
+   "local": "inputs/refs/baffle-colour.jpg",
+   "sha256": "4dbb4a804b40df614c47a949e15e4ee57c83ac9037181e1b0f3db441fc08384a",
+   "bytes": 36716
+  },
+  {
+   "id": "ref:baffle.jpg",
+   "local": "inputs/refs/baffle.jpg",
+   "sha256": "463fdcff98e10b0f5a38f5dc56cd5cc52f5db7eef5b7e0e745ccf9f91bc6ca91",
+   "bytes": 69271
+  },
+  {
+   "id": "ref:brooklyn-glass.jpg",
+   "local": "inputs/refs/brooklyn-glass.jpg",
+   "sha256": "11d54a86c120370496c5d0181f1ed5a72f0f43a4de73800e77b6b28c554b7f6e",
+   "bytes": 70023
+  },
+  {
+   "id": "ref:concrete.jpg",
+   "local": "inputs/refs/concrete.jpg",
+   "sha256": "8a54ef455c46213ee78ae30653f0dbc480cc6f7c15e47aa025a8fdeb1e746bd3",
+   "bytes": 34183
+  },
+  {
+   "id": "ref:designer-pendant.jpg",
+   "local": "inputs/refs/designer-pendant.jpg",
+   "sha256": "6b9b0982fbe47c777a4c54fcb1e8db0c3432f92cc22adfa04687e775287e0d1f",
+   "bytes": 31332
+  },
+  {
+   "id": "ref:fluted.jpg",
+   "local": "inputs/refs/fluted.jpg",
+   "sha256": "dde57ecc9073d008fb4fee8118076b616e5ba93d1dd54aa8efed39b4b2ce36b3",
+   "bytes": 19582
+  },
+  {
+   "id": "ref:herringbone.jpg",
+   "local": "inputs/refs/herringbone.jpg",
+   "sha256": "b8755427ca386ea14ac10b8b9c93eed54ca5a39dbb6069cb3b6139c7e33409ad",
+   "bytes": 73661
+  },
+  {
+   "id": "ref:l-sofa.jpg",
+   "local": "inputs/refs/l-sofa.jpg",
+   "sha256": "2c455e3aa313db98e15bd63f70ea9760cd0a09409058762fe168f01991aafa2a",
+   "bytes": 24519
+  },
+  {
+   "id": "ref:logo.png",
+   "local": "inputs/refs/logo.png",
+   "sha256": "5b9ef435c09b20d341c293fe5770bb915b267f707a0f4cb147ba67a5a0142b4d",
+   "bytes": 28178
+  },
+  {
+   "id": "ref:lounge-chair.jpg",
+   "local": "inputs/refs/lounge-chair.jpg",
+   "sha256": "d6f78e44b3bebd23fc2c69828257a390b656f5ef13bffdf74c3d280a346295cc",
+   "bytes": 18520
+  },
+  {
+   "id": "ref:marble.jpg",
+   "local": "inputs/refs/marble.jpg",
+   "sha256": "b499c2afb85233d873ace387682cb9cadbd485aba56faf5fbf24355145d616f2",
+   "bytes": 16929
+  },
+  {
+   "id": "ref:moss-darker.jpg",
+   "local": "inputs/refs/moss-darker.jpg",
+   "sha256": "aeeb1a90aadd58c013610e8a82e10544484f2f35715459ff063de53d682eca80",
+   "bytes": 170656
+  },
+  {
+   "id": "ref:moss.jpg",
+   "local": "inputs/refs/moss.jpg",
+   "sha256": "57eb2940a1214d24341ddc631bc87d41df5f673c3b13bc75548522a47497524e",
+   "bytes": 185151
+  },
+  {
+   "id": "ref:open-ceiling.jpg",
+   "local": "inputs/refs/open-ceiling.jpg",
+   "sha256": "bef408f9cc5368a3d89ee5fe2978c8da66256a30fe62bd42e6ce73d430cb1621",
+   "bytes": 14112
+  },
+  {
+   "id": "ref:pendant-white.jpg",
+   "local": "inputs/refs/pendant-white.jpg",
+   "sha256": "f52acbef63370a30c7ccd3fddb51f332aabc1ca94bb1b8fa44b7f81474c0c6ad",
+   "bytes": 12969
+  },
+  {
+   "id": "ref:planter.jpg",
+   "local": "inputs/refs/planter.jpg",
+   "sha256": "267656e9b7ce1de73786a8330bd8ae628e3c236c9e04db8f547083a7064e3095",
+   "bytes": 15949
+  },
+  {
+   "id": "ref:reception-desk.jpg",
+   "local": "inputs/refs/reception-desk.jpg",
+   "sha256": "1b56d1cedee2b4d56db209267bf3e115c1b3d434492d71dc187802fd93384a26",
+   "bytes": 25766
+  },
+  {
+   "id": "ref:rug.jpg",
+   "local": "inputs/refs/rug.jpg",
+   "sha256": "89cd4515708091293e2f6ae4c510df5512d4ca98c8ddc833131e33ab9b6c457a",
+   "bytes": 88185
+  },
+  {
+   "id": "ref:services.jpg",
+   "local": "inputs/refs/services.jpg",
+   "sha256": "1f98af8000195937205a37b73556aa47934f37c8b59ab6f118bc228d5874b2b3",
+   "bytes": 91278
+  },
+  {
+   "id": "ref:stile-door.jpg",
+   "local": "inputs/refs/stile-door.jpg",
+   "sha256": "ce4d03536ea72e05ec8cf59a077c7477546c554d58d1978620a357570f2415e3",
+   "bytes": 62037
+  },
+  {
+   "id": "ref:table.jpg",
+   "local": "inputs/refs/table.jpg",
+   "sha256": "f3eb20fcaf60361c2ef82b459c061d427f2625177818dd6f0244dcd19cf3b733",
+   "bytes": 16791
+  },
+  {
+   "id": "ref:texture-wall.jpg",
+   "local": "inputs/refs/texture-wall.jpg",
+   "sha256": "a9da7cad03f68829e16469d8f2ed6f9c9dc5afabef84062d3f3768be5370b81f",
+   "bytes": 43538
+  }
+ ],
+ "library": [
+  {
+   "path": "library/Pipelines/_kit/",
+   "version": "0.1.0",
+   "source": "vendored"
+  },
+  {
+   "path": "library/Standards/DEFAULT.json",
+   "version": "1.0.0",
+   "sha256": "43f0a147825816e31eb0cc3c5b32996ee535a557040f278fddde4be068c1c2fa",
+   "source": "local_copy"
+  },
+  {
+   "path": "library/Schemas/canvas.v1.schema.json",
+   "source": "local_copy",
+   "sha256": "d8e942bda52bdeefb0f402df73c19be75e05809c5207883b7c7784d5bccaf0ba"
+  },
+  {
+   "path": "library/Schemas/run.v1.schema.json",
+   "source": "local_copy",
+   "sha256": "808d0607611095cd319d093e6149bf985b72ad8571f1aa5f669b250fd8925c6d"
+  }
+ ],
+ "outputs": [
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-D.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-D.svg",
+   "sha256": "52b46dcb3a6ad0684023058da14738ca9605228280d3b9cc984d3d099c76c296",
+   "bytes": 3562
+  },
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/rcp.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/rcp.svg",
+   "sha256": "61c2f864f2fe654e766fa8d347fea7322f8ca68481ffb52156bc28a81b0dedca",
+   "bytes": 7616
+  },
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-E.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-E.svg",
+   "sha256": "5224a46486aceba703a29a779d5703fd777d45ece82bc703b5339b7d25f038c6",
+   "bytes": 5432
+  },
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-A.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-A.svg",
+   "sha256": "e5a094d842a2a8fa4ed93146879e5ca9672ee5bc4d29e417af2f4ec008d7ebcc",
+   "bytes": 9380
+  },
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-C.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-C.svg",
+   "sha256": "68eee690d7a13b423c1551f6d5e17bdc690277ae9bf186361c2388b5ebc2278d",
+   "bytes": 4083
+  },
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/plan.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/plan.svg",
+   "sha256": "2d9fd235f1f828d68cc86ae75bfd02dc0203596d99e3118d4f8b2f2f9879ba9c",
+   "bytes": 13322
+  },
+  {
+   "id": "views",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-B.svg",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-B.svg",
+   "sha256": "2e0b0b46e88d2c062e769bb91351602f8de5ae377289b89d031af3854b224529",
+   "bytes": 6329
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/rcp.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/rcp.png",
+   "sha256": "2e11b33129ff04bc432be6d60a5668682f186215ceb591a843dae41a98a5e0cb",
+   "bytes": 56352,
+   "binary": true
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/plan.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/plan.png",
+   "sha256": "c3de851ccc71f01fc5e537df48c6cc0654ac09e8808d702b6b8c2f62ac1b3351",
+   "bytes": 100014,
+   "binary": true
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-E.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-E.png",
+   "sha256": "2b62b622a39c84298ea45df661675afb5de6588aef81a540ad2b07b27b49064d",
+   "bytes": 28304,
+   "binary": true
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-B.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-B.png",
+   "sha256": "d275cf17a61028beea90adb154636d6971abe3abdcc4602ecd1a3203ab3ad4a6",
+   "bytes": 43078,
+   "binary": true
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-C.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-C.png",
+   "sha256": "dbc31019e6a2f37e0525593008eab8ba3f8c21d2b4cca2cbf99f0714e69c668e",
+   "bytes": 33082,
+   "binary": true
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-A.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-A.png",
+   "sha256": "097f23b509c2b681758f9e541713ae3a241b8769484c58aab011cbff0da6bb58",
+   "bytes": 42772,
+   "binary": true
+  },
+  {
+   "id": "views_png",
+   "key": "Projects/INFRA_RECEPTION/brief/views/elev-D.png",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/views/elev-D.png",
+   "sha256": "a111756427a656bd632dd42d8669063f5e662c23f64a6e81a1f55c6bbdd8b8a9",
+   "bytes": 35587,
+   "binary": true
+  },
+  {
+   "id": "scope",
+   "key": "Projects/INFRA_RECEPTION/brief/scope.json",
+   "local": "scope.json",
+   "sha256": "75159f92c5c5c0a5728d056f5603516e20a7a55984eae1695b6e8766f06afe65",
+   "bytes": 614
+  },
+  {
+   "id": "apps",
+   "key": "Projects/INFRA_RECEPTION/brief/apps.json",
+   "local": "apps.json",
+   "sha256": "189733c7272b4be1249da899a014e51daeb19e43dfb7781e214b183028cc2933",
+   "bytes": 569
+  },
+  {
+   "id": "decks",
+   "key": "Projects/INFRA_RECEPTION/brief/decks/INFRA_RECEPTION_brief_I1_v1.pptx",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/decks/INFRA_RECEPTION_brief_I1_v1.pptx",
+   "sha256": "10eeee0fba2850a5e094656668f33ac8b3ba50adb1f86e78f9f84d92888801d0",
+   "bytes": 5293969,
+   "binary": true
+  },
+  {
+   "id": "deck_briefs",
+   "key": "Projects/INFRA_RECEPTION/brief/decks/INFRA_RECEPTION_brief_I1_v1.spacebrief.json",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/decks/INFRA_RECEPTION_brief_I1_v1.spacebrief.json",
+   "sha256": "ce0a32ecc3ceb72d73ff88383a0bae376e9d4bde153de672322406bdb2cfd770",
+   "bytes": 34074,
+   "schema": "spacebrief.v1"
+  },
+  {
+   "id": "deck_index",
+   "key": "Projects/INFRA_RECEPTION/brief/decks.json",
+   "local": "decks.json",
+   "sha256": "9983976abdf78570c705d96756a3da684040a35222f5bd01d0038034c2810d33",
+   "bytes": 552
+  },
+  {
+   "id": "roombrief",
+   "key": "Projects/INFRA_RECEPTION/brief/roombrief.json",
+   "local": "../../../../../pipeline-work/space-brief/INFRA_RECEPTION/decks/roombrief.json",
+   "sha256": "f4708cb85167d6b0f48427e62ef745733a26df695efe66c3236155969f81b2ff",
+   "bytes": 8047
+  },
+  {
+   "id": "report",
+   "key": "Projects/INFRA_RECEPTION/runs/space-brief/REPORT.md",
+   "local": "REPORT.md",
+   "sha256": "c7d92fbe67b74be72b24889f8ba4d010957ac080dcd97085399b6b44f5c6b4a0",
+   "bytes": 5157
+  }
+ ],
+ "tasks": [
+  {
+   "task_id": "S1_INTAKE",
+   "status": "done",
+   "notes": "plan: 13 band segments, 2 spaces; 22 references"
+  },
+  {
+   "task_id": "S2_GEOMETRY",
+   "status": "done",
+   "notes": "13 band segments, 2 spaces, 5 facing wall runs, 8 objects"
+  },
+  {
+   "task_id": "S3_SCOPE",
+   "status": "done",
+   "approved": "FIXTURE — scope from the INFRA reception deck, 2026-10-09",
+   "notes": "scope: 2 space(s), FC +2700, soffit +3600, seed issue True"
+  },
+  {
+   "task_id": "S4_VIEWS",
+   "status": "done",
+   "notes": "plan + RCP + 5 elevations (A north, B east, C south, D south-west, E west)"
+  },
+  {
+   "task_id": "S5_SCHEDULE",
+   "status": "done",
+   "notes": "18 elements (floor 2, ceiling 2, partition 5, wall 4, soft 1, joinery 1, furniture 2, planting 1); 17 refs attached, 5 in the tray"
+  },
+  {
+   "task_id": "S6_APPS",
+   "status": "done",
+   "notes": "router + 3 role pages, 33 files, 3.0 MB, 20 seed documents; site f4b89edd0630"
+  },
+  {
+   "task_id": "S7_PUBLISH_APPS",
+   "status": "done",
+   "notes": "published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (republish), run 20261009T161819Z"
+  },
+  {
+   "task_id": "S8_ARCHIVE",
+   "status": "done",
+   "notes": "1 deck version(s): v1 (I1, 35 slides)"
+  },
+  {
+   "task_id": "S9_PUBLISH",
+   "status": "done"
+  }
+ ],
+ "notes": "apps: https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe; decks: v1 I1"
+}

@@ -1,0 +1,424 @@
+{
+  "version": 1,
+  "id": "planter-box-with-math",
+  "title": "Planter Box — one Math Engine, box, soil, planting",
+  "category": "Outdoor",
+  "object": {
+    "hostKind": "node",
+    "name": "Planter Box",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M5 8h14l-1.5 12h-11z",
+        "M5 8h14",
+        "M9 8V5a3 3 0 016 0v3",
+        "M12 11v6"
+      ]
+    }
+  },
+  "description": "A parametric PLANTER BOX on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nFOUR WALLS AND A BASE AROUND A SOIL BLOCK, not a box with a lid, so the soil is its own piece at its own level and the published soil volume is the number a landscaper orders against. The rim and the soil level come out separately because the gap between them is what stops the soil washing over the edge.\n\nTHE PLANTING IS A CIRCLE ROW spread along the box at even pitch — the plan symbol for shrubs, one row for any number of them, from zero to eight. Zero plants is a legitimate answer: an empty trough is still a planter.\n\nTHREE SHAPES. Rectangular and Trough share the four-wall construction; Round abandons it for a ring, and takes the soil with it — a round pot with mitred corners would be nonsense.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 1.2,
+              "min": 0.3,
+              "max": 4,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 0.4,
+              "min": 0.2,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Height",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.15,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "wallThk",
+              "name": "Wall thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.01,
+              "max": 0.15,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "soilDepth",
+              "name": "Soil depth below rim",
+              "type": "range",
+              "value": 0.06,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "plants",
+              "name": "Plants",
+              "type": "range",
+              "value": 3,
+              "min": 0,
+              "max": 8,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "plantRadius",
+              "name": "Plant radius",
+              "type": "range",
+              "value": 0.16,
+              "min": 0.05,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "shape",
+              "name": "Shape",
+              "type": "select",
+              "value": "Rectangular",
+              "options": [
+                "Rectangular",
+                "Round",
+                "Trough"
+              ]
+            },
+            {
+              "id": "showPlants",
+              "name": "Show planting",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "light oak trough, matte, green planting",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "corten steel planter box, trailing greenery, gravel mulch",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/ceramic.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Foliage=Organic/foliage.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Soft",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "PLANTER BOX — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\ncorten steel planter box, trailing greenery, gravel mulch\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Length: {length}\n- Width: {width}\n- Height: {height}\n- Wall thickness: {wallThk}\n- Soil depth below rim: {soilDepth}\n- Plants: {plants}\n- Plant radius: {plantRadius}\n- Shape: {shape} (one of: Rectangular / Round / Trough)\n- Show planting: {showPlants}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Length = {length}\n- Width = {width}\n- Height = {height}\n- Soil depth below rim = {soilDepth}\n- Plant radius = {plantRadius}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_walls",
+              "kind": "polygon",
+              "name": "Walls",
+              "color": "#7c2d12",
+              "layer": "Landscape",
+              "show": true
+            },
+            {
+              "id": "p2_soil",
+              "kind": "polygon",
+              "name": "Soil",
+              "color": "#44403c",
+              "layer": "Landscape",
+              "show": true
+            },
+            {
+              "id": "p2_plant",
+              "kind": "circle",
+              "name": "Planting",
+              "color": "#166534",
+              "layer": "Landscape",
+              "show": true
+            },
+            {
+              "id": "p2_round",
+              "kind": "polygon",
+              "name": "Round pot",
+              "color": "#7c2d12",
+              "layer": "Landscape",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_walls",
+              "kind": "polyhedron",
+              "name": "Walls",
+              "color": "#7c2d12",
+              "layer": "Landscape",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_soil",
+              "kind": "polyhedron",
+              "name": "Soil",
+              "color": "#44403c",
+              "layer": "Landscape",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_plant",
+              "kind": "polyhedron",
+              "name": "Planting",
+              "color": "#166534",
+              "layer": "Landscape",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_round",
+              "kind": "polyhedron",
+              "name": "Round pot",
+              "color": "#7c2d12",
+              "layer": "Landscape",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

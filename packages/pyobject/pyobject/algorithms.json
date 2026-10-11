@@ -1,0 +1,166 @@
+{
+ "note": "GENERATED from packages/engine/src/expr/exprAlgorithms.ts + exprCatalog.ts by parity/dump_algorithms.ts — do not edit",
+ "algorithms": [
+  {
+   "qualified": "Algorithms.Inset",
+   "params": [
+    "P",
+    "inset"
+   ],
+   "returns": "Q",
+   "body": "E = shift(P, -1) - P\nn = perp(normalize(E))\nnp = shift(n, 1)\nM = (n + np) / (1 + dot(n, np))\nQ = P + inset * M"
+  },
+  {
+   "qualified": "Algorithms.ConvexHull",
+   "params": [
+    "P",
+    "tol"
+   ],
+   "returns": "Q",
+   "body": "X = col(P,0)\nY = col(P,1)\nDX = X - T(X)\nDY = Y - T(Y)\nDg = le(DX^2 + DY^2, 1e-9)\nA = atan2(DY, DX)\nAm = A - 100 * Dg\nmx = max(Am, 'rows')\nA2 = where(Dg, mx, Am)\nS = sort(A2, 'rows')\nG = shift(S, -1, 'cols') - S\nGw = G + 2 * PI * lt(G, 0)\nkeep = gt(max(Gw, 'rows'), PI + tol * PI / 180)\nH = compress(P, keep)\nc = mean(H, 'cols')\nR = sortby(H, angle(H - c))\nD = R - shift(R, 1)\nU = gt(sum(D^2, 'rows'), 1e-12)\nQ = compress(R, U)"
+  },
+  {
+   "qualified": "Algorithms.Voronoi",
+   "params": [
+    "P",
+    "seeds",
+    "jitter",
+    "gx"
+   ],
+   "returns": "E",
+   "body": "# Seeds\n_isM = cols(seeds) > 1\n_n = _isM ? rows(seeds) : (seeds > 0 ? seeds : 4)\n_x0 = min(col(P,0))\n_x1 = max(col(P,0))\n_y0 = min(col(P,1))\n_y1 = max(col(P,1))\n_w = max(_x1 - _x0, 1e-9)\n_h = max(_y1 - _y0, 1e-9)\n_gx = gx > 0 ? gx : max(1, min(_n, round(sqrt(_n * _w / _h))))\n_gy = ceil(_n / _gx)\n_k = arange(_n)\n_u = ((_k % _gx) + 0.5) / _gx\n_v = (floor(_k / _gx) + 0.5) / _gy\n_jx = jitter * sin(_k * 12.9898 + 1.3) / _gx\n_jy = jitter * sin(_k * 78.233 + 4.7) / _gy\nS = _isM ? seeds : hcat(_x0 + (_u + _jx) * _w, _y0 + (_v + _jy) * _h)\n# Cells\nn = rows(S)\nA = zeros(0,2)\nB = zeros(0,2)\nloop i in n:\n  si = row(S,i)\n  C = P\n  loop j in n:\n    sj = row(S,j)\n    m = (si + sj) / 2\n    nv = si - sj\n    d = dot(C - m, nv)\n    dn = shift(d, -1)\n    Cn = shift(C, -1)\n    t = d / (d - dn)\n    X = C + t * (Cn - C)\n    kv = ge(d, 0)\n    kx = abs(ge(d,0) - ge(dn,0))\n    C = compress(reshape(hcat(C, X), 2*rows(C), 2), reshape(hcat(kv, kx), 2*rows(C), 1))\n  end\n  A = vcat(A, C)\n  B = vcat(B, shift(C,-1))\nend\nE = hcat(A, B)"
+  },
+  {
+   "qualified": "Algorithms.MiteredJoin",
+   "params": [
+    "Ga",
+    "Gb",
+    "Gt",
+    "width",
+    "capEnds",
+    "merge"
+   ],
+   "returns": "Q",
+   "body": "_BIG = 1e18\n_TOL = merge\n_MAXM = 20\n_HWMIN = 0.0025\n_live = gt(len(Gb - Ga), 1e-9)\n_A0 = compress(Ga, _live)\n_B0 = compress(Gb, _live)\n_n = rows(_A0)\n_tk = compress(Gt, _live)\n_hw = max(where(gt(_tk, 0), _tk, width), 0.02) / 2\n_U = normalize(_B0 - _A0)\n_EX = vcat(col(_A0,0), col(_B0,0))\n_EY = vcat(col(_A0,1), col(_B0,1))\n_DEG = sum(le((_EX - T(_EX)) * (_EX - T(_EX)) + (_EY - T(_EY)) * (_EY - T(_EY)), _TOL * _TOL), 'rows')\n_free = capEnds > 0 ? eq(_DEG, 1) : zeros(2*_n,1)\nA = _A0 - sub(_free,0,0,_n,1) * _hw * _U\nB = _B0 + sub(_free,_n,0,_n,1) * _hw * _U\n_NP = vcat(A, B)\n_DIR = vcat(_U, 0 - _U)\n_HW = vcat(_hw, _hw)\n_k2 = arange(2 * _n)\n_R2 = T(_k2)\n_QX = col(_NP,0)\n_QY = col(_NP,1)\n_D2 = (_QX - T(_QX)) * (_QX - T(_QX)) + (_QY - T(_QY)) * (_QY - T(_QY))\n_NID = min(where(le(_D2, _TOL * _TOL), _R2, _BIG), 'rows')\n_ANG = angle(_DIR)\n_KEY = _NID * 1000 + _ANG + 180\nS = sortby(hcat(hcat(hcat(hcat(_NP, _DIR), _HW), _NID), _k2), _KEY)\n_sn = col(S,5)\n_EQ = eq(_sn, T(_sn))\n_FIRST = min(where(_EQ, _R2, _BIG), 'rows')\n_LAST = max(where(_EQ, _R2, 0 - _BIG), 'rows')\n_NEXTI = where(le(_k2 + 1, _LAST), _k2 + 1, _FIRST)\n_PREVI = where(ge(_k2 - 1, _FIRST), _k2 - 1, _LAST)\n_SN = eq(_NEXTI, _R2) @ S\n_SP = eq(_PREVI, _R2) @ S\nPos = sub(S,0,0,2*_n,2)\nDir = sub(S,0,2,2*_n,2)\nHw = col(S,4)\nLA = Pos + Hw * perp(Dir)\nRA = Pos + Hw * perpcw(Dir)\n_PosN = sub(_SN,0,0,2*_n,2)\n_DirN = sub(_SN,0,2,2*_n,2)\n_HwN = col(_SN,4)\n_RAN = _PosN + _HwN * perpcw(_DirN)\n_PosP = sub(_SP,0,0,2*_n,2)\n_DirP = sub(_SP,0,2,2*_n,2)\n_HwP = col(_SP,4)\n_LAP = _PosP + _HwP * perp(_DirP)\n_dn1 = cross(Dir, _DirN)\n_ok1 = gt(abs(_dn1), 1e-10)\n_t1 = cross(_RAN - LA, _DirN) / _dn1\nLC = where(_ok1, LA + _t1 * Dir, (LA + _RAN) / 2)\n_dn2 = cross(_DirP, Dir)\n_ok2 = gt(abs(_dn2), 1e-10)\n_t2 = cross(RA - _LAP, Dir) / _dn2\nRC = where(_ok2, _LAP + _t2 * _DirP, (_LAP + RA) / 2)\n_hwLA = max((Hw + _HwN) / 2, _HWMIN)\n_hwRA = max((_HwP + Hw) / 2, _HWMIN)\n_fL = min(1, _MAXM * _hwLA / max(len(LC - Pos), 1e-12))\n_fR = min(1, _MAXM * _hwRA / max(len(RC - Pos), 1e-12))\nLC = Pos + (LC - Pos) * _fL\nRC = Pos + (RC - Pos) * _fR\n_one = eq(_FIRST, _LAST)\nLC = where(_one, LA, LC)\nRC = where(_one, RA, RC)\n_BACK = eq(_k2, T(col(S,6)))\n_LCo = _BACK @ LC\n_RCo = _BACK @ RC\nLF = sub(_LCo,0,0,_n,2)\nRF = sub(_RCo,0,0,_n,2)\nLT = sub(_LCo,_n,0,_n,2)\nRT = sub(_RCo,_n,0,_n,2)\nQ = zeros(0,3)\nloop i in _n:\n  _a = row(A,i)\n  _b = row(B,i)\n  _u = row(_U,i)\n  _P4 = vcat(vcat(vcat(row(LF,i), row(LT,i)), row(RF,i)), row(RT,i))\n  _dd = _P4 - _a\n  _sd = cross(_u, _dd)\n  _al = dot(_dd, _u)\n  _mL = gt(_sd, 1e-9)\n  _mR = lt(_sd, 0 - 1e-9)\n  _L = sortby(compress(_P4, _mL), compress(_al, _mL))\n  _R = sortby(compress(_P4, _mR), 0 - compress(_al, _mR))\n  _ring = vcat(vcat(vcat(_a, _L), _b), _R)\n  Q = vcat(Q, hcat(_ring, fill(rows(_ring),1,i)))\nend"
+  },
+  {
+   "qualified": "Algorithms.Straight_skeleton",
+   "params": [
+    "P",
+    "merge"
+   ],
+   "returns": "E",
+   "body": "n0 = rows(P)\n_sa = sum(col(P,0) * col(shift(P,-1),1) - col(shift(P,-1),0) * col(P,1))\ns0 = _sa > 0 ? 1 : -1\n_BIG = 1e18\n_EPS = merge\n_EPT = 1e-9\n_VCAP = 50\nLIM = 6 * n0 + 8\nW = hcat(P, zeros(n0,1))\nEA = zeros(0,2)\nEB = zeros(0,2)\n_nid = 1\nloop it in LIM:\n  _p = min(col(W,2))\n  _sel = eq(col(W,2), _p)\n  _V0 = compress(sub(W,0,0,rows(W),2), _sel)\n  _REST = compress(W, 1 - _sel)\n  V = compress(_V0, ge(len(shift(_V0,-1) - _V0), _EPS))\n  m = rows(V)\n  _mm = max(m, 1)\n  _k = arange(m)\n  _Kr = T(_k)\n  _IDX = _k * m + _Kr\n  _VX = col(V,0)\n  _VY = col(V,1)\n  _Vn = shift(V,-1)\n  _Vp = shift(V,1)\n  Ed = _Vn - V\n  Le = len(Ed)\n  U = normalize(Ed)\n  Nm = perp(U) * s0\n  Np = shift(Nm,1)\n  vel = (Np + Nm) / (1 + dot(Np, Nm))\n  vel = vel * min(1, _VCAP / max(len(vel), 1e-12))\n  _velN = shift(vel,-1)\n  rate = dot(_velN - vel, U)\n  _tev = where(lt(rate, -1e-9), 0 - Le / rate, _BIG)\n  tE = min(_tev)\n  _ie = min(where(le(_tev, tE), _k, _BIG))\n  _d1 = V - _Vp\n  _d2 = _Vn - V\n  _crs = cross(_d1, _d2)\n  rfx = lt(_crs * s0, 0)\n  _cs = dot(normalize(_d1), normalize(_d2))\n  _spk = lt(_cs, -0.999)\n  _nsp = sum(_spk)\n  _is = min(where(_spk, _k, _BIG))\n  _vis = row(V, _is)\n  _qp = row(V, (_is - 1 + m) % _mm)\n  _qn = row(V, (_is + 1) % _mm)\n  _qq = len(_vis - _qp) <= len(_vis - _qn) ? _qp : _qn\n  _Vk = compress(V, 1 - eq(_k, _is))\n  _AX = T(_VX)\n  _AY = T(_VY)\n  _BX = T(col(_Vn,0))\n  _BY = T(col(_Vn,1))\n  _NX = T(col(Nm,0))\n  _NY = T(col(Nm,1))\n  _WX = col(vel,0)\n  _WY = col(vel,1)\n  _UX = T(_WX)\n  _UY = T(_WY)\n  _ZX = T(col(_velN,0))\n  _ZY = T(col(_velN,1))\n  _d0 = (_VX - _AX) * _NX + (_VY - _AY) * _NY\n  _rt = _WX * _NX + _WY * _NY - 1\n  _tsp = 0 - _d0 / _rt\n  _hx = _VX + _WX * _tsp\n  _hy = _VY + _WY * _tsp\n  _ax = _AX + _UX * _tsp\n  _ay = _AY + _UY * _tsp\n  _bx = _BX + _ZX * _tsp\n  _by = _BY + _ZY * _tsp\n  _ex = _bx - _ax\n  _ey = _by - _ay\n  _el2 = _ex * _ex + _ey * _ey\n  _sq = ((_hx - _ax) * _ex + (_hy - _ay) * _ey) / _el2\n  _exc = min(eq(_Kr, _k) + eq(_Kr, (_k - 1 + m) % _mm), 1)\n  _okS = rfx * ge(_tsp, 0) * gt(abs(_rt), 1e-6) * gt(_el2, 1e-12) * ge(_sq, -0.02) * le(_sq, 1.02) * (1 - _exc)\n  _tsv = where(_okS, _tsp, _BIG)\n  tS = min(_tsv)\n  _lin = min(where(le(_tsv, tS), _IDX, _BIG))\n  _ri = floor(_lin / _mm)\n  _ji = _lin - _ri * _mm\n  _DX = _VX - _AX\n  _DY = _VY - _AY\n  _D2 = _DX * _DX + _DY * _DY\n  _adj = min(eq(_Kr, _k) + eq(_Kr, (_k + 1) % _mm) + eq(_Kr, (_k - 1 + m) % _mm), 1)\n  _pk = le(_D2, _EPS * _EPS) * (1 - _adj) * lt(_k, _Kr)\n  _npn = sum(_pk)\n  _lp = min(where(_pk, _IDX, _BIG))\n  _pi = floor(_lp / _mm)\n  _pj = _lp - _pi * _mm\n  dead = m < 3 ? 1 : 0\n  spi = (1 - dead) * (_nsp > 0 ? 1 : 0)\n  pin = (1 - dead) * (1 - spi) * (_npn > 0 ? 1 : 0)\n  tEv = min(tE, tS)\n  _hasE = tEv < 1e17 ? 1 : 0\n  _doE = (1 - dead) * (1 - spi) * (1 - pin) * _hasE\n  spl = _doE * (tS < tE ? 1 : 0)\n  cls = dead + (1 - dead) * (1 - spi) * (1 - pin) * (1 - _hasE)\n  V2 = V + vel * tEv\n  _i2 = (_ie + 1) % _mm\n  _mid = (row(V2, _ie) + row(V2, _i2)) / 2\n  _Vm = where(eq(_k, _ie), _mid, V2)\n  _Ve = compress(_Vm, 1 - eq(_k, _i2))\n  _hit = row(V2, _ri)\n  _jj = (_ji - _ri + m) % _mm\n  _Vr = shift(V2, 0 - _ri)\n  _CA = vcat(sub(_Vr, 1, 0, _jj, 2), _hit)\n  _CB = vcat(sub(_Vr, _jj + 1, 0, m - 1 - _jj, 2), _hit)\n  _pmid = (row(V, _pi) + row(V, _pj)) / 2\n  _j2 = (_pj - _pi + m) % _mm\n  _Vq = shift(V, 0 - _pi)\n  _PA = vcat(sub(_Vq, 1, 0, _j2 - 1, 2), _pmid)\n  _PB = vcat(sub(_Vq, _j2 + 1, 0, m - 1 - _j2, 2), _pmid)\n  _cen = mean(V, 'cols')\n  _SA = _doE + cls > 0 ? V : (spi > 0 ? _vis : zeros(0,2))\n  _SB = _doE > 0 ? V2 : (cls > 0 ? V * 0 + _cen : (spi > 0 ? _qq : zeros(0,2)))\n  _kpE = gt(len(_SB - _SA), _EPT)\n  EA = vcat(EA, compress(_SA, _kpE))\n  EB = vcat(EB, compress(_SB, _kpE))\n  _Wk = vcat(_REST, hcat(_Vk, fill(rows(_Vk),1,_p)))\n  _Wp = vcat(vcat(_REST, hcat(_PA, fill(rows(_PA),1,_p))), hcat(_PB, fill(rows(_PB),1,_nid)))\n  _Ws = vcat(vcat(_REST, hcat(_CA, fill(rows(_CA),1,_p))), hcat(_CB, fill(rows(_CB),1,_nid)))\n  _Wg = vcat(_REST, hcat(_Ve, fill(rows(_Ve),1,_p)))\n  W = cls > 0 ? _REST : (spi > 0 ? _Wk : (pin > 0 ? _Wp : (spl > 0 ? _Ws : _Wg)))\n  _nid = pin + spl > 0 ? _nid + 1 : _nid\nend\n_ns = rows(EA)\n_SM = vcat(vcat(EA + (EB - EA) * 0.25, (EA + EB) / 2), EA + (EB - EA) * 0.75)\n_MX = col(_SM,0)\n_MY = col(_SM,1)\n_GX = T(col(P,0))\n_GY = T(col(P,1))\n_HX = T(col(shift(P,-1),0))\n_HY = T(col(shift(P,-1),1))\n_cr1 = ne(gt(_GY, _MY), gt(_HY, _MY))\n_xin = _GX + (_HX - _GX) * (_MY - _GY) / (_HY - _GY)\n_ins = sum(_cr1 * lt(_MX, _xin), 'rows') % 2\n_bex = _HX - _GX\n_bey = _HY - _GY\n_bt = min(1, max((_MX - _GX) * _bex + (_MY - _GY) * _bey, 0) / (_bex * _bex + _bey * _bey))\n_bdx = _MX - _GX - _bt * _bex\n_bdy = _MY - _GY - _bt * _bey\n_bd = min(_bdx * _bdx + _bdy * _bdy, 'rows')\n_ok = min(_ins + le(_bd, _EPS * _EPS), 1)\nkeep = sub(_ok,0,0,_ns,1) * sub(_ok,_ns,0,_ns,1) * sub(_ok,2*_ns,0,_ns,1)\nQA = compress(EA, keep)\nQB = compress(EB, keep)\nE = hcat(QA, QB)"
+  },
+  {
+   "qualified": "Algorithms.Optimise_rectangle",
+   "params": [
+    "P",
+    "lock",
+    "step",
+    "res"
+   ],
+   "returns": "R",
+   "body": "# Setup\n_rs = res > 0 ? res : 32\n_st = step > 0 ? step : 30\n_na = lock > 0 ? 1 : ceil(180 / _st)\n_x0 = min(col(P,0))\n_x1 = max(col(P,0))\n_y0 = min(col(P,1))\n_y1 = max(col(P,1))\n_cx = (_x0 + _x1) / 2\n_cy = (_y0 + _y1) / 2\n_np = rows(P)\n_bA = 0 - 1\n_bR = zeros(4,2)\n# Angle sweep\nloop a in _na:\n  _th = lock > 0 ? lock * PI / 180 : a * _st * PI / 180\n  _co = cos(0 - _th)\n  _si = sin(0 - _th)\n  _PX = (col(P,0) - _cx) * _co - (col(P,1) - _cy) * _si + _cx\n  _PY = (col(P,0) - _cx) * _si + (col(P,1) - _cy) * _co + _cy\n  _rx = min(_PX)\n  _ry = min(_PY)\n  _cs = max(max(max(_PX) - _rx, max(_PY) - _ry) / _rs, 1e-9)\n  _W = max(1, ceil((max(_PX) - _rx) / _cs))\n  _H = max(1, ceil((max(_PY) - _ry) / _cs))\n# Inside test — one pip pass on the corner LATTICE, one on the cell CENTRES\n  _LX = _rx + ones(_H+1,1) @ T(arange(_W+1)) * _cs\n  _LY = _ry + arange(_H+1) @ ones(1,_W+1) * _cs\n  _CI = ones(_H,1) @ T(arange(_W))\n  _RI = arange(_H) @ ones(1,_W)\n  _XC = _rx + (_CI + 0.5) * _cs\n  _YC = _ry + (_RI + 0.5) * _cs\n  _L = zeros(_H+1, _W+1)\n  _C = zeros(_H, _W)\n  loop e in _np:\n    _ea = row(_PX, e)\n    _fa = row(_PY, e)\n    _eb = row(_PX, (e + 1) % _np)\n    _fb = row(_PY, (e + 1) % _np)\n    _dv = _fb - _fa == 0 ? 1e-9 : _fb - _fa\n    _L = abs(_L - ne(gt(_fa, _LY), gt(_fb, _LY)) * lt(_LX, _ea + (_eb - _ea) * (_LY - _fa) / _dv))\n    _C = abs(_C - ne(gt(_fa, _YC), gt(_fb, _YC)) * lt(_XC, _ea + (_eb - _ea) * (_YC - _fa) / _dv))\n  end\n  _G = _C * sub(_L,0,0,_H,_W) * sub(_L,0,1,_H,_W) * sub(_L,1,0,_H,_W) * sub(_L,1,1,_H,_W)\n# Largest all-ones block — column runs, then a running minimum across widths\n  _UP = _G\n  loop u in _H:\n    _UP = _G * (shift(_UP,1) * gt(_RI,0) + 1)\n  end\n  _IX = _RI * _W + _CI\n  _mw = _UP\n  _aA = 0\n  _aW = 1\n  _aL = 0\n  loop w in _W:\n    _mw = min(_mw, shift(_UP, 0 - w, 'cols'))\n    _ar = (w + 1) * _mw * le(_CI + w + 1, _W)\n    _mx = max(_ar)\n    _aW = _mx > _aA ? w + 1 : _aW\n    _aL = _mx > _aA ? min(where(ge(_ar, _mx), _IX, 1e18)) : _aL\n    _aA = max(_aA, _mx)\n  end\n# Winning block → metres, corners rotated back to world\n  _j = floor(_aL / _W)\n  _i = _aL - _j * _W\n  _sf = 0.05 * _cs\n  _gx0 = _rx + _i * _cs + _sf\n  _gy0 = _ry + (_j - _aA / _aW + 1) * _cs + _sf\n  _gx1 = _rx + (_i + _aW) * _cs - _sf\n  _gy1 = _ry + (_j + 1) * _cs - _sf\n  _ra = _aA > 0 && _gx1 > _gx0 && _gy1 > _gy0 ? (_gx1 - _gx0) * (_gy1 - _gy0) : 0\n  _RL = vcat(vcat(vcat(hcat(_gx0,_gy0), hcat(_gx1,_gy0)), hcat(_gx1,_gy1)), hcat(_gx0,_gy1))\n  _cb = cos(_th)\n  _sb = sin(_th)\n  _RW = hcat((col(_RL,0) - _cx) * _cb - (col(_RL,1) - _cy) * _sb + _cx, (col(_RL,0) - _cx) * _sb + (col(_RL,1) - _cy) * _cb + _cy)\n  _bR = _ra > _bA ? _RW : _bR\n  _bA = max(_bA, _ra)\nend\nR = _bR"
+  },
+  {
+   "qualified": "Solid.Skin",
+   "params": [
+    "sections",
+    "idBase"
+   ],
+   "returns": "F",
+   "body": "_S = max(col(sections, 3)) + 1\n_Nn = rows(sections) / max(1, _S)\n_b = idBase\n_A0 = sub(sections, 0, 0, _Nn, 3)\nF = hcat(sortby(_A0, 0 - arange(_Nn)), fill(_Nn, 1, _b))\nloop i in _S - 1:\n  _A = sub(sections, i * _Nn, 0, _Nn, 3)\n  _B = sub(sections, (i + 1) * _Nn, 0, _Nn, 3)\n  _V = reshape(hcat(_A, shift(_A, -1), shift(_B, -1), _B), 4 * _Nn, 3)\n  F = vcat(F, hcat(_V, kron(arange(_Nn), ones(4, 1)) + (_b + 1 + i * _Nn)))\nend\n_AL = sub(sections, (_S - 1) * _Nn, 0, _Nn, 3)\nF = vcat(F, hcat(_AL, fill(_Nn, 1, _b + 1 + (_S - 1) * _Nn)))"
+  },
+  {
+   "qualified": "Solid.SoftBox",
+   "params": [
+    "box",
+    "roundTop",
+    "roundBase",
+    "roundPlan",
+    "stations",
+    "points"
+   ],
+   "returns": "M",
+   "body": "_eT = max(0, min(1, roundTop))\n_eB = max(0, min(1, roundBase))\n_eP = max(0, min(1, roundPlan))\n_S = stations > 0 ? max(2, round(stations)) : 12\n_Nr = points > 0 ? max(8, round(points)) : 24\n_q = 2 * max(1, round(_Nr / 8))\n_N = 4 * _q\n_x0 = sub(box, 0, 0, 1, 1)\n_y0 = sub(box, 0, 1, 1, 1)\n_z0 = sub(box, 0, 2, 1, 1)\n_x1 = sub(box, 0, 3, 1, 1)\n_y1 = sub(box, 0, 4, 1, 1)\n_z1 = sub(box, 0, 5, 1, 1)\n_D = 96\n_eta = (arange(_D + 1) / _D - 0.5) * PI\n_sh = sin(_eta)\n_ch = cos(_eta)\n_ev = where(ge(_sh, 0), fill(_D + 1, 1, _eT), fill(_D + 1, 1, _eB))\n_prof = resample(hcat(pow(abs(_ch), _ev), sign(_sh) * pow(abs(_sh), _ev)), _S)\n_Dp = 64\n_th = PI / 4 + arange(_Dp + 1) / _Dp * (PI / 2)\n_ct = cos(_th)\n_st = sin(_th)\n_arc = resample(hcat(sign(_ct) * pow(abs(_ct), _eP), sign(_st) * pow(abs(_st), _eP)), _q + 1)\n_qx = sub(_arc, 0, 0, _q, 1)\n_qy = sub(_arc, 0, 1, _q, 1)\n_cx = vcat(vcat(_qx, 0 - _qy), vcat(0 - _qx, _qy))\n_cy = vcat(vcat(_qy, _qx), vcat(0 - _qy, 0 - _qx))\n_o1 = ones(_N, 1)\n_rs = kron(sub(_prof, 0, 0, _S, 1), _o1)\n_zs = kron(sub(_prof, 0, 1, _S, 1), _o1)\n_sid = kron(arange(_S), _o1)\n_tx = kron(ones(_S, 1), _cx)\n_ty = kron(ones(_S, 1), _cy)\nM = hcat((_x0 + _x1) / 2 + (_x1 - _x0) / 2 * _rs * _tx, (_y0 + _y1) / 2 + (_y1 - _y0) / 2 * _rs * _ty, (_z0 + _z1) / 2 + (_z1 - _z0) / 2 * _zs, _sid)"
+  }
+ ],
+ "aliases": {
+  "math.floor": "floor",
+  "math.ceil": "ceil",
+  "math.round": "round",
+  "math.abs": "abs",
+  "math.sqrt": "sqrt",
+  "math.sign": "sign",
+  "math.pow": "pow",
+  "math.cos": "cos",
+  "math.sin": "sin",
+  "math.tan": "tan",
+  "math.atan2": "atan2",
+  "math.log": "log",
+  "math.log2": "log2",
+  "math.log10": "log10",
+  "math.exp": "exp",
+  "matrix.transpose": "T",
+  "matrix.inverse": "inv",
+  "matrix.solve": "solve",
+  "matrix.kron": "kron",
+  "matrix.rows": "rows",
+  "matrix.cols": "cols",
+  "matrix.reshape": "reshape",
+  "matrix.sub": "sub",
+  "matrix.row": "row",
+  "matrix.col": "col",
+  "matrix.hcat": "hcat",
+  "matrix.vcat": "vcat",
+  "matrix.eye": "eye",
+  "matrix.zeros": "zeros",
+  "matrix.ones": "ones",
+  "matrix.fill": "fill",
+  "matrix.range": "arange",
+  "matrix.diag": "diag",
+  "matrix.shift": "shift",
+  "matrix.sort": "sort",
+  "matrix.sortby": "sortby",
+  "matrix.compress": "compress",
+  "matrix.where": "where",
+  "vector.normalize": "normalize",
+  "vector.perp": "perp",
+  "vector.perpcw": "perpcw",
+  "vector.length": "len",
+  "vector.dot": "dot",
+  "vector.cross": "cross",
+  "vector.angle": "angle",
+  "reduce.sum": "sum",
+  "reduce.mean": "mean",
+  "reduce.product": "prod",
+  "reduce.min": "min",
+  "reduce.max": "max",
+  "compare.greater": "gt",
+  "compare.less": "lt",
+  "compare.greaterequal": "ge",
+  "compare.lessequal": "le",
+  "compare.equal": "eq",
+  "compare.notequal": "ne",
+  "shape.union": "union",
+  "shape.subtract": "subtract",
+  "shape.intersect": "intersect",
+  "shape.xor": "xor",
+  "shape.pointinside": "inpoly",
+  "solid.union": "munion",
+  "solid.subtract": "msubtract",
+  "solid.intersect": "mintersect",
+  "solid.cylinder": "mcyl",
+  "solid.prism": "mprism",
+  "solid.lathe": "mlathe",
+  "solid.geodesic": "geodesic",
+  "solid.sweep": "msweep",
+  "curve.bezier": "bezier",
+  "curve.bspline": "bspline",
+  "curve.nurbs": "nurbs",
+  "curve.catenary": "catenary",
+  "curve.arclength": "arclen",
+  "curve.resample": "resample"
+ }
+}

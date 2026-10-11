@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Town Home Rental Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --bg:#DDE2E7; --panel:#FFFFFF; --ink:#16202B; --ink2:#4E5A66; --line:#CBD1D7;
+  --accent:#0B6E99; --accent-bg:#E1F0F7; --warn:#8A5A00; --warn-bg:#FDF1D8; --float:rgba(255,255,255,.94);
+  --font:'Barlow',system-ui,'Segoe UI',Arial,sans-serif; --cond:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --lw:330px; --rw:300px;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0E1318;--panel:#1A222B;--ink:#E7ECF1;--ink2:#A3AFBB;--line:#2E3946;--accent:#5BB8E0;--accent-bg:#14303F;--warn:#F2C46B;--warn-bg:#3A2C10;--float:rgba(26,34,43,.94)}}
+:root[data-theme="dark"]{--bg:#0E1318;--panel:#1A222B;--ink:#E7ECF1;--ink2:#A3AFBB;--line:#2E3946;--accent:#5BB8E0;--accent-bg:#14303F;--warn:#F2C46B;--warn-bg:#3A2C10;--float:rgba(26,34,43,.94)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+button{font-family:inherit}
+.top{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);min-height:48px}
+.top h1{font-family:var(--cond);font-weight:600;font-size:20px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top h1{flex:0 0 auto}
+.top h1 .firm{display:block;font-family:var(--font);font-size:12px;font-weight:500;color:var(--ink2);line-height:1.1;margin-top:1px}
+.top .sp{flex:1}
+.tbtn{white-space:nowrap;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:6px;padding:6px 11px;font-size:14px;font-weight:500;cursor:pointer}
+.tbtn[aria-pressed="true"]{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
+.work{display:grid;grid-template-columns:var(--lw) minmax(0,1fr) var(--rw);min-height:0}
+body.noL{--lw:0px} body.noR{--rw:0px}
+body.noL #pL,body.noR #pR{display:none}
+.panel{background:var(--panel);overflow:auto;padding:14px 16px 24px;min-height:0}
+#pL{border-right:1px solid var(--line)} #pR{border-left:1px solid var(--line)}
+.sheetHead{display:none}
+h2{font-family:var(--cond);font-weight:600;font-size:17px;margin:16px 0 8px}
+.sec>h2:first-child{margin-top:0}
+.sec+.sec{margin-top:18px}
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:8px 11px;margin-bottom:6px;cursor:pointer;font:inherit}
+.opt b{font-family:var(--cond);font-weight:600;font-size:16px;margin-right:6px;color:var(--accent)}
+.opt small{display:block;color:var(--ink2);font-size:13px;line-height:1.35}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg)}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--ink2);font-size:14px;font-weight:500;padding:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.sl{display:grid;grid-template-columns:112px 1fr 52px;align-items:center;gap:8px;margin:4px 0}
+.sl label{font-size:14px;color:var(--ink2);line-height:1.2}
+.sl output{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.sl.dim{opacity:.4}
+.seg3{grid-template-columns:1fr 1fr 1fr!important;margin-top:6px}
+.seg4{grid-template-columns:repeat(4,1fr)!important}
+.mini{display:block;font-size:13px;color:var(--ink2);margin:10px 0 4px}
+.h2b{margin-top:14px!important}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px}
+.hint{font-size:13px;color:var(--ink2);margin:6px 0 0}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:9px 11px;font-size:13.5px;margin-top:10px}
+.warn:empty{display:none}
+.field{display:block;margin-bottom:10px}
+.field span{display:block;font-size:13px;color:var(--ink2);margin-bottom:3px}
+.field input,.field textarea,select{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.field textarea{resize:vertical;min-height:54px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.btn{font-size:15px;font-weight:600;border-radius:6px;padding:10px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff}
+.btn.sec2{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:progress}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.canvas{position:relative;overflow:hidden;touch-action:none;cursor:grab;min-height:0}
+.canvas.drag{cursor:grabbing}
+.canvas>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ui{position:absolute;z-index:2;background:var(--float);border:1px solid var(--line);border-radius:8px;cursor:default}
+.chips{display:flex;align-items:center;padding:3px;gap:2px;border:1px solid var(--line);border-radius:8px;background:var(--bg);overflow-x:auto;scrollbar-width:none;min-width:0;flex:0 1 auto}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:0 0 auto;border:0;background:transparent;color:var(--ink2);font-family:var(--cond);font-weight:600;font-size:16px;width:34px;height:30px;border-radius:6px;cursor:pointer}
+.chips button:hover{color:var(--ink)}
+.chips button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.chips .nt{width:auto;white-space:nowrap;padding:0 10px;font-family:var(--font);font-size:13px;font-weight:500;border-left:1px solid var(--line);border-radius:0 6px 6px 0}
+.stats{font-size:13px;color:var(--ink2);line-height:1.25;white-space:nowrap;text-align:right}
+.stats strong{display:block;color:var(--ink);font-family:var(--cond);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.zoom{right:12px;bottom:12px;display:flex;padding:3px;gap:2px}
+.zoom button{border:0;background:transparent;color:var(--ink);font-size:14px;font-weight:500;min-width:34px;height:32px;padding:0 8px;border-radius:6px;cursor:pointer}
+.zoom button:hover{background:var(--accent-bg)}
+.tabbar{display:none}
+#toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:9px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+#toast.show{opacity:1}
+
+@media (max-width:1500px){.stats .eu{display:none}}
+@media (max-width:1180px){ body:not(.forceR){--rw:0px} body:not(.forceR) #pR{display:none} }
+@media (max-width:900px){
+  .top .tbtn{display:none}
+  .work{grid-template-columns:1fr}
+  .panel{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));max-height:min(60dvh,520px);z-index:10;border:0!important;border-top:1px solid var(--line)!important;border-radius:14px 14px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);transform:translateY(110%);transition:transform .22s ease;display:block!important;padding-top:6px}
+  .sec{display:none}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;position:sticky;top:-6px;background:var(--panel);padding:6px 0 8px;margin-bottom:4px;z-index:1}
+  .sheetHead::before{content:"";position:absolute;left:50%;top:0;width:36px;height:4px;border-radius:2px;background:var(--line);transform:translateX(-50%)}
+  .sheetHead h3{font-family:var(--cond);font-size:18px;margin:6px 0 0}
+  .sheetHead button{border:0;background:transparent;color:var(--accent);font-size:15px;font-weight:600;padding:6px 4px;margin-top:6px;cursor:pointer}
+  body[data-tab="layout"] #pL,body[data-tab="setbacks"] #pL,body[data-tab="stair"] #pL,body[data-tab="export"] #pR{transform:none}
+  body[data-tab="layout"] .sec[data-s="layout"],body[data-tab="setbacks"] .sec[data-s="setbacks"],body[data-tab="stair"] .sec[data-s="stair"],body[data-tab="export"] .sec[data-s="export"],body[data-tab="export"] .sec[data-s="title"]{display:block}
+  .sec>h2:first-child{display:none}
+  body[data-tab="export"] .sec[data-s="title"]{margin-top:18px}
+  body[data-tab="export"] .sec[data-s="title"]>h2:first-child{display:block}
+  .h2b{display:block!important}
+  .sec+.sec{margin-top:0}
+  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border-top:1px solid var(--line);height:58px;z-index:11}
+  .tabbar button{border:0;background:transparent;color:var(--ink2);font-size:13px;font-weight:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}
+  .tabbar svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+  .tabbar button[aria-pressed="true"]{color:var(--accent)}
+  .top{flex-wrap:wrap;row-gap:8px;padding:8px 12px}
+  .top h1{flex:1 1 auto;min-width:0;font-size:18px}
+  .top .sp{display:none}
+  .stats{order:2}
+  .stats .eu{display:none}
+  .stats strong{font-size:15px}
+  .chips{order:3;flex:1 1 100%;justify-content:space-between}
+  .chips button{width:29px}
+  .chips .nt{padding:0 8px}
+  .stats .cv{display:none}
+  .zoom button.wide{display:none}
+}
+@media (prefers-reduced-motion:reduce){.panel{transition:none}}
+</style>
+</head>
+<body data-tab="">
+<header class="top">
+  <h1>Town Home Rental Planner<span class="firm" id="hdrFirm">Aadithyaa Developers</span></h1>
+  <div class="chips" id="chips" role="group" aria-label="Layout option"></div>
+  <span class="sp"></span>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <button class="tbtn" id="tgL" aria-pressed="true" onclick="togglePanel('L')">Layout</button>
+  <button class="tbtn" id="tgR" aria-pressed="true" onclick="togglePanel('R')">Export</button>
+</header>
+
+<div class="work">
+  <aside class="panel" id="pL" aria-label="Layout settings">
+    <div class="sheetHead"><h3 id="shL">Layout</h3><button onclick="closeSheet()">Done</button></div>
+    <section class="sec" data-s="layout">
+      <h2>Layout option</h2>
+      <div id="opts"></div>
+      <h2>Drawing orientation</h2>
+      <div class="seg"><button id="nUp" aria-pressed="true" onclick="setNorth(true)">North up</button><button id="nDn" aria-pressed="false" onclick="setNorth(false)">North down</button></div>
+      <p class="hint">North down turns the whole plan 180°. The site and facings stay the same.</p>
+    </section>
+    <section class="sec" data-s="setbacks">
+      <h2>Site</h2>
+      <div class="sl"><label for="pw">Plot width</label><input type="range" id="pw" min="20" max="60" step="0.5" value="36"><output id="pwv"></output></div>
+      <div class="sl"><label for="pwW">West side</label><input type="range" id="pwW" min="40" max="160" step="0.5" value="106"><output id="pwWv"></output></div>
+      <div class="sl"><label for="pwE">East side</label><input type="range" id="pwE" min="40" max="160" step="0.5" value="105.5"><output id="pwEv"></output></div>
+      <p class="hint" id="siteInfo"></p>
+      <h2 class="h2b">Setbacks</h2>
+      <div class="sl"><label for="sw">West setback</label><input type="range" id="sw" min="0" max="6" step="0.5" value="0"><output id="swv"></output></div>
+      <div class="sl"><label for="se">East setback</label><input type="range" id="se" min="0" max="6" step="0.5" value="6"><output id="sev"></output></div>
+      <div class="sl"><label for="fr">Front (road)</label><input type="range" id="fr" min="5" max="20" step="0.5" value="10"><output id="frv"></output></div>
+      <div class="sl"><label for="rr">Rear</label><input type="range" id="rr" min="3" max="10" step="0.5" value="5"><output id="rrv"></output></div>
+      <div class="sl"><label for="cg">Central court</label><input type="range" id="cg" min="0" max="20" step="0.5" value="12"><output id="cgv"></output></div>
+      <div class="sl"><label for="sh">Front row share</label><input type="range" id="sh" min="35" max="65" step="1" value="50"><output id="shv"></output></div>
+      <div class="sl" id="psRow"><label for="ps">Passage</label><input type="range" id="ps" min="3" max="6" step="0.5" value="4"><output id="psv"></output></div>
+      <p class="hint">Side setbacks are 0 or 3' to 6'. Only one side can be 0.</p>
+      <div class="warn" id="warn"></div>
+    </section>
+    <section class="sec" data-s="stair">
+      <h2>Staircase in court</h2>
+      <div class="sl"><label for="fh">Floor height</label><input type="range" id="fh" min="9" max="12" step="0.25" value="10"><output id="fhv"></output></div>
+      <div class="sl"><label for="rs">Max riser</label><input type="range" id="rs" min="5.5" max="7.5" step="0.25" value="7"><output id="rsv"></output></div>
+      <div class="sl"><label for="td">Tread</label><input type="range" id="td" min="9" max="12" step="0.5" value="10"><output id="tdv"></output></div>
+      <div class="sl"><label for="fw">Flight width</label><input type="range" id="fw" min="3" max="4.5" step="0.25" value="3.5"><output id="fwv"></output></div>
+      <div class="seg seg3" id="stPos"><button data-p="W" aria-pressed="false">West end</button><button data-p="C" aria-pressed="false">Centre</button><button data-p="E" aria-pressed="true">East end</button></div>
+      <label class="mini">First flight goes up towards</label>
+      <div class="seg seg4" id="stDir"><button data-v="N" aria-pressed="false">North</button><button data-v="E" aria-pressed="false">East</button><button data-v="S" aria-pressed="false">South</button><button data-v="W" aria-pressed="true">West</button></div>
+      <label class="mini">Turn at landing</label>
+      <div class="seg" id="stTurn"><button data-v="L" aria-pressed="false">Left</button><button data-v="R" aria-pressed="true">Right</button></div>
+      <p class="hint" id="stInfo"></p>
+      <h2 class="h2b">Door positions</h2>
+      <div class="sl"><label for="dw">Door width</label><input type="range" id="dw" min="2.5" max="4" step="0.25" value="3"><output id="dwv"></output></div>
+      <div class="sl"><label for="dp1">Unit 1 door</label><input type="range" id="dp1" min="0" max="100" step="1" value="50"><output id="dp1v"></output></div>
+      <div class="sl"><label for="dp2">Unit 2 door</label><input type="range" id="dp2" min="0" max="100" step="1" value="50"><output id="dp2v"></output></div>
+      <div class="sl"><label for="dp3">Unit 3 door</label><input type="range" id="dp3" min="0" max="100" step="1" value="50"><output id="dp3v"></output></div>
+      <div class="sl"><label for="dp4">Unit 4 door</label><input type="range" id="dp4" min="0" max="100" step="1" value="50"><output id="dp4v"></output></div>
+      <p class="hint">Position along the entrance wall: 0% is the west end of a north wall or the north end of an east wall.</p>
+      <div class="warn" id="warn2"></div>
+    </section>
+  </aside>
+
+  <section class="canvas" id="cv" aria-label="Drawing sheet. Drag to pan, pinch or scroll to zoom.">
+    <div class="ui zoom">
+      <button onclick="zoomBtn(1/1.3)" aria-label="Zoom in">+</button>
+      <button onclick="zoomBtn(1.3)" aria-label="Zoom out">−</button>
+      <button onclick="fitPlan()">Plan</button>
+      <button onclick="fitSheet()">Sheet</button>
+    </div>
+    <svg id="cvs" xmlns="http://www.w3.org/2000/svg"></svg>
+  </section>
+
+  <aside class="panel" id="pR" aria-label="Title block and export">
+    <div class="sheetHead"><h3 id="shR">Title block</h3><button onclick="closeSheet()">Done</button></div>
+    <section class="sec" data-s="export">
+      <h2>Export drawing</h2>
+      <label class="field"><span>Sheet size</span>
+        <select id="sheetSize"><option value="a3" id="a3opt">A3 landscape (1:150)</option><option value="a4">A4 landscape (fit, use scale bar)</option></select></label>
+      <div class="btns"><button class="btn" id="bPdf" onclick="exportPDF()">Export PDF</button><button class="btn sec2" id="bPng" onclick="exportPNG()">Export PNG</button></div>
+      <p class="hint">The title block is added to the exported sheet only.</p>
+      <h2 class="h2b">Settings file</h2>
+      <div class="btns"><button class="btn sec2" onclick="saveSettings()">Save settings</button><button class="btn sec2" onclick="$('loadIn').click()">Load settings</button></div>
+      <input type="file" id="loadIn" accept=".json,application/json" hidden>
+      <p class="hint">A JSON file with the option and every parameter. The program pipeline reads it as the selected option.</p>
+    </section>
+    <section class="sec" data-s="title">
+      <h2>Title block</h2>
+      <label class="field"><span>Firm name</span><input data-k="firm"></label>
+      <label class="field"><span>Firm address or tagline</span><input data-k="tag"></label>
+      <label class="field"><span>Project</span><input data-k="project"></label>
+      <label class="field"><span>Client or owner</span><input data-k="client"></label>
+      <label class="field"><span>Site address</span><textarea data-k="site"></textarea></label>
+      <div class="row2"><label class="field"><span>Drawing no.</span><input data-k="dwg"></label><label class="field"><span>Revision</span><input data-k="rev"></label></div>
+      <div class="row2"><label class="field"><span>Drawn by</span><input data-k="drawn"></label><label class="field"><span>Checked by</span><input data-k="checked"></label></div>
+      <label class="field"><span>Date</span><input data-k="date"></label>
+      <button class="btn sec2" style="width:100%" onclick="resetTB()">Reset title block</button>
+      <p class="hint">Saved in this browser. Drawing title and scale fill in from the layout.</p>
+    </section>
+  </aside>
+</div>
+
+<nav class="tabbar" aria-label="Settings">
+  <button data-t="layout" onclick="openTab('layout')"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M4 12h16M12 3v9"/></svg>Layout</button>
+  <button data-t="setbacks" onclick="openTab('setbacks')"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Setbacks</button>
+  <button data-t="stair" onclick="openTab('stair')"><svg viewBox="0 0 24 24"><path d="M4 20h4v-4h4v-4h4V8h4V4"/></svg>Stair, doors</button>
+  <button data-t="export" onclick="openTab('export')"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 19h14"/></svg>Export</button>
+</nav>
+<div id="toast" role="status"></div>
+
+<script>
+const PLOT={width:36,west:106,east:105.5,depth:105.5,area:3807};let PW=36,SCALE=150;
+let SC=304.8/150;
+const PX=70;
+const st={opt:'A',northUp:true,stair:'E',sdir:'W',sturn:'R'};
+const TB_DEFAULT={firm:'Aadithyaa Developers',tag:'Builders and developers',project:'Proposed 4 rental units (ground floor)',client:'',site:"36' x 106' plot (3,807 sq ft), road on the north",dwg:'AD/SUB/01',rev:'R0',drawn:'',checked:'',date:''};
+let TB={};
+const $=id=>document.getElementById(id);
+const mobile=()=>matchMedia('(max-width:900px)').matches;
+
+function today(){const d=new Date();return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear()}
+function loadTB(){let s=null;try{s=JSON.parse(localStorage.getItem('subdiv-tb')||'null')}catch(e){}TB=Object.assign({},TB_DEFAULT,{date:today()},s||{});fillTB()}
+function fillTB(){document.querySelectorAll('[data-k]').forEach(i=>{i.value=TB[i.dataset.k]||''})}
+function saveTB(){try{localStorage.setItem('subdiv-tb',JSON.stringify(TB))}catch(e){}}
+function resetTB(){TB=Object.assign({},TB_DEFAULT,{date:today()});saveTB();fillTB();render()}
+document.querySelectorAll('[data-k]').forEach(i=>i.addEventListener('input',()=>{TB[i.dataset.k]=i.value;saveTB();render()}));
+
+/* panels and sheets */
+function togglePanel(s){if(s==='L'){const off=document.body.classList.toggle('noL');$('tgL').setAttribute('aria-pressed',!off)}else{const on=document.body.classList.toggle('forceR');document.body.classList.toggle('noR',!on&&!wideR());if(wideR())document.body.classList.toggle('noR',!on);$('tgR').setAttribute('aria-pressed',on)}keepView()}
+function wideR(){return matchMedia('(min-width:1181px)').matches}
+function initPanels(){if(wideR()){document.body.classList.add('forceR');$('tgR').setAttribute('aria-pressed','true')}else $('tgR').setAttribute('aria-pressed','false')}
+const TABN={layout:'Layout',setbacks:'Setbacks',stair:'Stair and doors',export:'Export and title block'};
+function openTab(t){const cur=document.body.dataset.tab;document.body.dataset.tab=cur===t?'':t;document.querySelectorAll('.tabbar button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===document.body.dataset.tab));$('shL').textContent=TABN[t];$('shR').textContent=TABN[t]}
+function closeSheet(){document.body.dataset.tab='';document.querySelectorAll('.tabbar button').forEach(b=>b.setAttribute('aria-pressed','false'))}
+
+function setNorth(up){st.northUp=up;$('nUp').setAttribute('aria-pressed',up);$('nDn').setAttribute('aria-pressed',!up);render()}
+function snap(a,b){let v=+$(a).value;if(v>0&&v<3)v=v<1.5?0:3;$(a).value=v;if(v===0&&+$(b).value===0)$(b).value=3;render()}
+$('sw').addEventListener('input',()=>snap('sw','se'));$('se').addEventListener('input',()=>snap('se','sw'));
+['fr','rr','cg','ps','sh','fh','rs','td','fw','dp1','dp2','dp3','dp4','pw','pwW','pwE','dw'].forEach(id=>$(id).addEventListener('input',render));
+[['stDir','sdir'],['stTurn','sturn']].forEach(([id,k])=>document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{st[k]=b.dataset.v;document.querySelectorAll('#'+id+' button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()}));
+document.querySelectorAll('#stPos button').forEach(b=>b.onclick=()=>{st.stair=b.dataset.p;[['stDir','sdir'],['stTurn','sturn']].forEach(([id,k])=>document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{st[k]=b.dataset.v;document.querySelectorAll('#'+id+' button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()}));
+document.querySelectorAll('#stPos button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
+$('sheetSize').addEventListener('change',render);
+
+function f(v){v=Math.round(v*12)/12;let ft=Math.floor(v+1e-9),inch=Math.round((v-ft)*12);if(inch===12){ft++;inch=0}return ft+"'-"+inch+'"'}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function n0(v){return Math.round(v).toLocaleString('en-IN')}
+
+const OPTS={
+A:['2 + 2, side lane','All north facing. Rear pair opens onto the court'],
+B:['2 + 2, front passage','All north facing. Passage between front units to the court'],
+C:['4 stacked','All east facing on the east lane'],
+D:['1 + 3 stacked','Unit 1 north facing, units 2 to 4 east facing'],
+E:['2 front + 2 stacked rear','Front pair north, rear pair east facing'],
+F:['2 stacked front + 2 rear','Front pair east, rear pair north onto the court'],
+G:['Twin columns, spine passage','All east facing, west column on a central passage'],
+H:['2 front + rear twins','Front pair north, rear pair east on a rear passage'],
+I:['Stacked front + rear twins','All east facing, rear passage off the court'],
+J:['Mixed front + 2 rear','Front west north, front east east, rear pair north']};
+const KEYS=Object.keys(OPTS);
+function drawOpts(){
+  const el=$('opts');el.innerHTML='';KEYS.forEach(k=>{const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',st.opt===k);b.innerHTML=`<b>${k}</b>${OPTS[k][0]}<small>${OPTS[k][1]}</small>`;b.onclick=()=>{st.opt=k;render()};el.appendChild(b)});
+  const ch=$('chips');ch.innerHTML='';KEYS.forEach(k=>{const b=document.createElement('button');b.textContent=k;b.title=OPTS[k][0];b.setAttribute('aria-pressed',st.opt===k);b.onclick=()=>{st.opt=k;render()};ch.appendChild(b)});
+  const n=document.createElement('button');n.className='nt';n.textContent=st.northUp?'N ↑':'N ↓';n.title='Flip drawing orientation';n.onclick=()=>setNorth(!st.northUp);ch.appendChild(n)}
+
+function siteFromUI(){PLOT.width=+$('pw').value;PLOT.west=+$('pwW').value;PLOT.east=+$('pwE').value;PLOT.depth=Math.min(PLOT.west,PLOT.east);PLOT.area=PLOT.width*(PLOT.west+PLOT.east)/2;PW=PLOT.width;
+  SCALE=[100,150,200,250,300,400].find(n=>PW*304.8/n<=84&&PLOT.depth*304.8/n<=216)||400;SC=304.8/SCALE;}
+/* geometry in north-up site coordinates (feet). x: west to east, y: road (north) to rear */
+function compute(){
+  const W=+$('sw').value,E=+$('se').value,F=+$('fr').value,R=+$('rr').value,G=+$('cg').value,PS=+$('ps').value,SH=+$('sh').value/100;
+  const FH=+$('fh').value,RS=+$('rs').value,TD=+$('td').value,FW=+$('fw').value;
+  const risers=Math.ceil(FH*12/RS-1e-9),rAct=FH*12/risers,perF=Math.ceil(risers/2),treads=perF-1,run=treads*TD/12,SL=run+FW,SW=2*FW+1/3;
+  siteFromUI();const D=PLOT.depth,bw=PW-W-E,bd=D-F-R,x0=W,opt=st.opt;
+  const d1=(bd-G)*SH,d2=(bd-G)-d1,cy=F+d1,ry=cy+G,half=bw/2,cw=(bw-PS)/2;
+  const zones=[],units=[];
+  const usesEast=['C','D','E','F','G','H','I','J'].includes(opt);
+  const lane=usesEast?'E':(E>=W?'E':'W');
+  zones.push({x:0,y:0,w:PW,h:F,k:'access',lab:'FRONT SETBACK '+f(F)});
+  zones.push({x:0,y:D-R,w:PW,h:R,k:'open',lab:'REAR SETBACK '+f(R)});
+  if(W>0)zones.push({x:0,y:F,w:W,h:bd,k:lane==='W'?'access':'open',lab:(lane==='W'?'LANE ':'SETBACK ')+f(W),v:1});
+  if(E>0)zones.push({x:PW-E,y:F,w:E,h:bd,k:lane==='E'?'access':'open',lab:(lane==='E'?'LANE ':'SETBACK ')+f(E),v:1});
+  if(G>0)zones.push({x:x0,y:cy,w:bw,h:G,k:'court',lab:'OPEN COURT '+f(G)});
+  const U=(x,y,w,h,d)=>units.push({x,y,w,h,d,n:units.length+1});
+  const pas=(y,h)=>zones.push({x:x0+cw,y,w:PS,h,k:'access',lab:'PASSAGE '+f(PS),v:1});
+  const frontPair=d=>{U(x0,F,half,d1,d[0]);U(x0+half,F,half,d1,d[1])};
+  const rearPair=d=>{U(x0,ry,half,d2,d[0]);U(x0+half,ry,half,d2,d[1])};
+  const frontStack=d=>{U(x0,F,bw,d1/2,d[0]);U(x0,F+d1/2,bw,d1/2,d[1])};
+  const rearStack=d=>{U(x0,ry,bw,d2/2,d[0]);U(x0,ry+d2/2,bw,d2/2,d[1])};
+  const rearTwins=()=>{pas(ry,d2);U(x0,ry,cw,d2,'E');U(x0+cw+PS,ry,cw,d2,'E')};
+  switch(opt){
+    case 'A':frontPair('NN');rearPair('NN');break;
+    case 'B':{const fw=(bw-PS)/2;pas(F,d1);U(x0,F,fw,d1,'N');U(x0+fw+PS,F,fw,d1,'N');rearPair('NN');break}
+    case 'C':frontStack('EE');rearStack('EE');break;
+    case 'D':frontStack('NE');rearStack('EE');break;
+    case 'E':frontPair('NN');rearStack('EE');break;
+    case 'F':frontStack('EE');rearPair('NN');break;
+    case 'G':pas(F,d1);U(x0,F,cw,d1,'E');U(x0+cw+PS,F,cw,d1,'E');rearTwins();break;
+    case 'H':frontPair('NN');rearTwins();break;
+    case 'I':frontStack('EE');rearTwins();break;
+    case 'J':frontPair('NE');rearPair('NN');break;
+  }
+  units.forEach(u=>{u.face=u.d==='N'?'North':'East';u.a=u.w*u.h;u.dp=+$('dp'+u.n).value/100});
+  const DV={E:[1,0],W:[-1,0],N:[0,-1],S:[0,1]}[st.sdir],LN=[DV[1],-DV[0]],SV=st.sturn==='L'?LN:[-LN[0],-LN[1]];
+  const along=DV[0]!==0,wX=along?SL:SW,hY=along?SW:SL;
+  const sx=st.stair==='W'?x0:st.stair==='E'?x0+bw-wX:x0+(bw-wX)/2;
+  let stair=null;
+  if(G>0){const pt0=(u,v)=>[DV[0]*u+SV[0]*v,DV[1]*u+SV[1]*v];const cs=[pt0(0,0),pt0(SL,0),pt0(0,SW),pt0(SL,SW)];
+    const mnx=Math.min(...cs.map(c=>c[0])),mny=Math.min(...cs.map(c=>c[1]));const ox=sx-mnx,oy=cy-mny;
+    stair={x:sx,y:cy,w:wX,h:hY,o:[ox,oy],d:DV,sv:SV,run,FW,TD:TD/12,treads,risers,rAct,perF,SL,SW};
+    stair.pt=(u,v)=>[ox+DV[0]*u+SV[0]*v,oy+DV[1]*u+SV[1]*v];
+    const e=stair.pt(-2.5,FW/2);stair.entryOK=zones.some(z=>(z.k==='court'||z.k==='access')&&e[0]>z.x+0.05&&e[0]<z.x+z.w-0.05&&e[1]>z.y+0.05&&e[1]<z.y+z.h-0.05);}
+  const total=units.reduce((t,u)=>t+u.a,0);
+  const w=[],laneW=lane==='W'?W:E;
+  if(usesEast&&E===0)w.push('This option needs an east setback. With 0 on the east, the east-facing units have no way in.');
+  else if(laneW<4)w.push(`The ${f(laneW)} lane is walk-only, no two-wheelers to the court or rear units.`);
+  const w2=[];
+  if(G===0){w2.push('No court, so the staircase is not placed.');if(units.some(u=>u.d==='N'&&u.y>F+0.01))w.push('The rear north-facing units open onto the court. With no court they have no entrance.')}
+  else if(G<hY)w2.push(`The court (${f(G)}) is shallower than the staircase (${f(hY)} north to south). Widen the court, turn the stair, or narrow the flights.`);
+  else if(G-hY<3.5)w2.push(`Only ${f(G-hY)} is left beside the staircase in the court. Keep at least 3'-6" clear for access.`);
+  if(G>0&&wX>bw)w2.push(`The staircase (${f(wX)} east to west) is wider than the court (${f(bw)}).`);
+  if(stair&&!stair.entryOK)w2.push('The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court.');
+  if(units.some(u=>Math.min(u.w,u.h)<12))w.push("Some units are under 12' in one direction, which is cramped.");
+  if(total/PLOT.area>0.75)w.push('Ground coverage is above 75%. Check the limit your local authority allows.');
+  return{W,E,F,R,G,PS,SH,SW,SL,D,bw,bd,zones,units,stair,total,warn:w,warn2:w2,sp:{risers,rAct,perF,treads,run,SL,SW,TD,FW,FH}};
+}
+
+/* drawing (mm, A3 420 x 297) */
+function wrap(s,maxCh){const words=String(s||'').split(/\s+/).filter(Boolean),lines=[];let cur='';words.forEach(w=>{if((cur+' '+w).trim().length>maxCh&&cur){lines.push(cur);cur=w}else cur=(cur+' '+w).trim()});if(cur)lines.push(cur);return lines}
+function txt(x,y,s,sz,o={}){return `<text x="${x}" y="${y}" font-size="${sz}" font-family="Arial, Helvetica, sans-serif" fill="${o.c||'#1b1f24'}" font-weight="${o.b?'bold':'normal'}" text-anchor="${o.a||'start'}"${o.r?` transform="rotate(${o.r} ${x} ${y})"`:''}>${esc(s)}</text>`}
+function mtxt(x,y,lines,sz,lh,o){return lines.map((l,i)=>txt(x,y+i*lh,l,sz,o)).join('')}
+let PY=32;const X=ft=>PX+ft*SC,Y=ft=>PY+ft*SC;
+function dimH(x1,x2,y,label,o={}){const a=X(Math.min(x1,x2)),b=X(Math.max(x1,x2)),len=b-a,sz=o.sz||2.1,tw=label.length*sz*0.5;let s=`<line x1="${a}" y1="${y}" x2="${b}" y2="${y}" stroke="#1b1f24" stroke-width="0.18"/>`;
+  [a,b].forEach(x=>{s+=`<line x1="${x-0.9}" y1="${y+0.9}" x2="${x+0.9}" y2="${y-0.9}" stroke="#1b1f24" stroke-width="0.35"/>`;if(o.ext!=null)s+=`<line x1="${x}" y1="${o.ext}" x2="${x}" y2="${y+(o.ext>y?-1.4:1.4)}" stroke="#1b1f24" stroke-width="0.12"/>`});
+  const below=tw+1>len;s+=txt((a+b)/2,below?y+sz+0.8:y-0.8,label,sz,{a:'middle'});return s}
+function dimV(y1,y2,x,label,o={}){const a=Y(Math.min(y1,y2)),b=Y(Math.max(y1,y2)),len=b-a,sz=o.sz||2.1,tw=label.length*sz*0.5;let s=`<line x1="${x}" y1="${a}" x2="${x}" y2="${b}" stroke="#1b1f24" stroke-width="0.18"/>`;
+  [a,b].forEach(y=>{s+=`<line x1="${x-0.9}" y1="${y+0.9}" x2="${x+0.9}" y2="${y-0.9}" stroke="#1b1f24" stroke-width="0.35"/>`;if(o.ext!=null)s+=`<line x1="${o.ext}" y1="${y}" x2="${x+(o.ext>x?-1.4:1.4)}" y2="${y}" stroke="#1b1f24" stroke-width="0.12"/>`});
+  const off=tw+1>len;s+=txt(off?x+sz+0.6:x-0.8,(a+b)/2,label,sz,{a:'middle',r:-90});return s}
+/* door on screen side: top | bottom | left | right */
+function door(u){const r=+$('dw').value*SC,ux=X(u.x),uy=Y(u.y),uw=u.w*SC,uh=u.h*SC,m=0.5*SC;let s='';const ink='#1b1f24',acc='#0B6E99';const dp=st.northUp?u.dp:1-u.dp;
+  if(u.s==='top'||u.s==='bottom'){const h=ux+m+Math.max(0,uw-2*m-r)*dp,cx=h+r/2,top=u.s==='top',y=top?uy:uy+uh,sg=top?1:-1;
+    s+=`<line x1="${h}" y1="${y}" x2="${h+r}" y2="${y}" stroke="#ffffff" stroke-width="0.9"/>`;
+    s+=`<line x1="${h}" y1="${y}" x2="${h}" y2="${y+sg*r}" stroke="${ink}" stroke-width="0.3"/><path d="M ${h+r} ${y} A ${r} ${r} 0 0 ${top?1:0} ${h} ${y+sg*r}" fill="none" stroke="${ink}" stroke-width="0.15"/>`;
+    s+=`<polygon points="${cx-1.3},${y-sg*3.6} ${cx+1.3},${y-sg*3.6} ${cx},${y-sg*1.4}" fill="${acc}"/>`}
+  else{const right=u.s==='right',x=right?ux+uw:ux,h=uy+m+Math.max(0,uh-2*m-r)*dp,cy=h+r/2,sg=right?-1:1;
+    s+=`<line x1="${x}" y1="${h}" x2="${x}" y2="${h+r}" stroke="#ffffff" stroke-width="0.9"/>`;
+    s+=`<line x1="${x}" y1="${h}" x2="${x+sg*r}" y2="${h}" stroke="${ink}" stroke-width="0.3"/>`;
+    s+=right?`<path d="M ${x} ${h+r} A ${r} ${r} 0 0 1 ${x-r} ${h}" fill="none" stroke="${ink}" stroke-width="0.15"/>`:`<path d="M ${x+r} ${h} A ${r} ${r} 0 0 1 ${x} ${h+r}" fill="none" stroke="${ink}" stroke-width="0.15"/>`;
+    const ax=x-sg*3.6,bx=x-sg*1.4;s+=`<polygon points="${ax},${cy-1.3} ${ax},${cy+1.3} ${bx},${cy}" fill="${acc}"/>`}
+  return s}
+
+function buildSVG(c,exp){
+  const rot=!st.northUp,D=c.D;PY=rot?40:32;
+  /* screen transform: rotate site 180 degrees when north is down */
+  const tr=o=>rot?Object.assign({},o,{x:PW-o.x-o.w,y:D-o.y-o.h}):Object.assign({},o);
+  const sideOf=d=>rot?(d==='N'?'bottom':'left'):(d==='N'?'top':'right');
+  const zones=c.zones.map(tr),units=c.units.map(u=>Object.assign(tr(u),{s:sideOf(u.d)}));
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 297" width="420mm" height="297mm">`;
+  s+=`<defs><pattern id="hatch" width="1.8" height="1.8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.8" stroke="#9AA3AB" stroke-width="0.16"/></pattern></defs>`;
+  s+=exp?`<rect x="0" y="0" width="420" height="297" fill="#ffffff"/><rect x="20" y="10" width="390" height="277" fill="none" stroke="#1b1f24" stroke-width="0.7"/>`:`<rect x="12" y="4" width="306" height="289" fill="#ffffff"/>`;
+  /* road */
+  const ry=rot?Y(D)+4:PY-15;
+  s+=`<rect x="${X(0)-12}" y="${ry}" width="${PW*SC+24}" height="11" fill="#E8EBEE" stroke="#8b949c" stroke-width="0.15"/><line x1="${X(0)-12}" y1="${ry+5.5}" x2="${X(PW)+12}" y2="${ry+5.5}" stroke="#8b949c" stroke-width="0.2" stroke-dasharray="3 2"/>`;
+  s+=txt(X(PW/2),ry+4.6,'ROAD (NORTH)',2.4,{a:'middle',b:1});
+  zones.forEach(z=>{s+=`<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.w*SC}" height="${z.h*SC}" fill="${z.k==='access'?'#FFF2D2':z.k==='court'?'#E3F1E4':'url(#hatch)'}" stroke="#9AA3AB" stroke-width="0.1"/>`;
+    const cx=X(z.x+z.w/2),cy=Y(z.y+z.h/2);
+    if(z.k==='court'){}else if(z.v){if(z.w*SC>=4.5)s+=txt(cx+0.7,Y(z.y+z.h*0.2),z.lab,1.9,{a:'middle',r:-90,c:'#4E5A66'})}else if(z.h*SC>=4)s+=txt(cx,cy+0.7,z.lab,2,{a:'middle',c:'#4E5A66'})});
+  if(c.stair){const t=c.stair,P=(x,y)=>rot?[X(PW-x),Y(D-y)]:[X(x),Y(y)],Q=(u,v)=>{const q=t.pt(u,v);return P(q[0],q[1])},
+    ln=(a,b,w,col)=>{const p=Q(a[0],a[1]),q=Q(b[0],b[1]);return `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${col||'#1b1f24'}" stroke-width="${w}"/>`};
+    const r=tr(t);s+=`<rect x="${X(r.x)}" y="${Y(r.y)}" width="${r.w*SC}" height="${r.h*SC}" fill="#ffffff" stroke="#1b1f24" stroke-width="0.4"/>`;
+    const FW=t.FW,g=1/3,run=t.run,SL=t.SL,SW=t.SW,v2=FW+g;
+    s+=ln([0,FW],[run,FW],0.25)+ln([0,v2],[run,v2],0.25)+ln([run,0],[run,SW],0.2);
+    for(let i=1;i<=t.treads;i++){const k=i*t.TD;if(k<run-0.02)s+=ln([k,0],[k,FW],0.1)+ln([k,v2],[k,SW],0.1)}
+    const ul=FW/2,uu=v2+FW/2,xl=run+(SL-run)/2;
+    s+=ln([0.5,ul],[xl,ul],0.2,'#0B6E99')+ln([xl,ul],[xl,uu],0.2,'#0B6E99')+ln([xl,uu],[1.2,uu],0.2,'#0B6E99');
+    const tip=Q(1.0,uu),bk=Q(2.0,uu),dx=tip[0]-bk[0],dy=tip[1]-bk[1],dl=Math.hypot(dx,dy)||1,ux=dx/dl,uy=dy/dl;
+    s+=`<polygon points="${tip[0]},${tip[1]} ${tip[0]-ux*1.4-uy*0.8},${tip[1]-uy*1.4+ux*0.8} ${tip[0]-ux*1.4+uy*0.8},${tip[1]-uy*1.4-ux*0.8}" fill="#0B6E99"/>`;
+    const st0=Q(0,ul);s+=`<circle cx="${st0[0]}" cy="${st0[1]}" r="0.6" fill="#0B6E99"/>`;
+    const up=Q(-1.6,ul);s+=txt(up[0],up[1]+0.7,'UP',1.8,{a:'middle',b:1,c:'#0B6E99'});
+    const pos=st.stair,lx=pos==='W'?t.x+0.4:pos==='E'?t.x+t.w-0.4:t.x+t.w/2;let an=pos==='W'?'start':pos==='E'?'end':'middle';if(rot&&an!=='middle')an=an==='start'?'end':'start';
+    const czs=c.zones.find(z=>z.k==='court'),roomBelow=czs.y+czs.h-(t.y+t.h)>=3,sLab='STAIR '+f(t.SL)+' x '+f(t.SW),rLab=t.risers+' R @ '+t.rAct.toFixed(2)+'", T '+Math.round(t.TD*120)/10+'"';
+    const fL=t.x-czs.x,fR=czs.x+czs.w-(t.x+t.w),fxc=fR>=fL?(t.x+t.w+czs.x+czs.w)/2:(czs.x+t.x)/2,cm=P(fxc,czs.y+czs.h/2);
+    if(roomBelow){const sl=P(lx,t.y+t.h);s+=txt(sl[0],sl[1]+(rot?-1.2:2.6),sLab+', '+rLab,1.8,{a:an,c:'#4E5A66'});if(Math.max(fL,fR)>=7)s+=txt(cm[0],cm[1]+0.7,'OPEN COURT '+f(czs.h),1.9,{a:'middle',c:'#2F6B3A'})}
+    else{s+=txt(cm[0],cm[1]-2.6,'OPEN COURT '+f(czs.h),1.9,{a:'middle',c:'#2F6B3A'})+txt(cm[0],cm[1]+0.6,sLab,1.8,{a:'middle',c:'#4E5A66'})+txt(cm[0],cm[1]+3.2,rLab,1.8,{a:'middle',c:'#4E5A66'})}}
+  units.forEach(u=>{const ux=X(u.x),uy=Y(u.y),uw=u.w*SC,uh=u.h*SC,cx=ux+uw/2,cy=uy+uh/2;
+    s+=`<rect x="${ux}" y="${uy}" width="${uw}" height="${uh}" fill="#EAF4F8" stroke="#1b1f24" stroke-width="0.55"/>`;
+    s+=txt(cx,cy-3.6,'UNIT '+u.n,3,{a:'middle',b:1})+txt(cx,cy+0.4,f(u.w)+' x '+f(u.h),2,{a:'middle'})+txt(cx,cy+3.4,n0(u.a)+' sq ft',2,{a:'middle'})+txt(cx,cy+6.4,'Faces '+u.face,2,{a:'middle',c:'#0B6E99'});
+    s+=door(u)});
+  s+=`<rect x="${X(0)}" y="${Y(0)}" width="${PW*SC}" height="${D*SC}" fill="none" stroke="#1b1f24" stroke-width="0.8"/>`;
+  /* width chain along the rear row (rear edge is bottom when north up, top when north down) */
+  const rearY=Math.max(...c.units.map(u=>u.y));const rearRow=units.filter((u,i)=>Math.abs(c.units[i].y-rearY)<0.01);
+  const lft=rot?c.E:c.W,rgt=rot?c.W:c.E;
+  let xs=[0,PW,lft,PW-rgt];rearRow.forEach(u=>xs.push(u.x,u.x+u.w));xs=[...new Set(xs.map(v=>Math.round(v*1000)/1000))].sort((a,b)=>a-b);
+  const yb=rot?Y(0)-8:Y(D)+8,yo=rot?Y(0)-16:Y(D)+16,ext=rot?Y(0)-1:Y(D)+1;
+  for(let i=0;i<xs.length-1;i++)if(xs[i+1]-xs[i]>0.01)s+=dimH(xs[i],xs[i+1],yb,f(xs[i+1]-xs[i]),{ext});
+  s+=dimH(0,PW,yo,f(PW)+' (plot width)',{sz:2.3});
+  let ys=[0,D];units.forEach(u=>ys.push(u.y,u.y+u.h));zones.forEach(z=>ys.push(z.y,z.y+z.h));ys=[...new Set(ys.map(v=>Math.round(v*1000)/1000))].sort((a,b)=>a-b);
+  const xr=X(PW)+7;for(let i=0;i<ys.length-1;i++)if(ys[i+1]-ys[i]>0.01)s+=dimV(ys[i],ys[i+1],xr,f(ys[i+1]-ys[i]),{ext:X(PW)+1});
+  s+=dimV(0,D,xr+9,rot?f(PLOT.west)+' (west side)':f(PLOT.east)+' (east side)',{sz:2.3});
+  s+=dimV(0,D,X(0)-7,rot?f(PLOT.east)+' (east side)':f(PLOT.west)+' (west side)',{sz:2.3});
+  /* plan title */
+  const tl='TOWN HOME RENTAL LAYOUT, OPTION '+st.opt;
+  s+=txt(28,276.5,tl,3.6,{b:1})+`<line x1="28" y1="278" x2="${28+tl.length*1.95}" y2="278" stroke="#1b1f24" stroke-width="0.3"/>`;
+  s+=txt(28,282.2,OPTS[st.opt][0]+'. '+OPTS[st.opt][1]+'.',2.2)+txt(28,285.6,'Scale 1:'+SCALE+' on A3'+(rot?'. Drawn with north down.':''),2.2,{c:'#4E5A66'});
+  /* middle column */
+  const mx=176,nax=296,nay=34;
+  s+=`<circle cx="${nax}" cy="${nay}" r="9" fill="none" stroke="#1b1f24" stroke-width="0.3"/><g transform="rotate(${rot?180:0} ${nax} ${nay})"><polygon points="${nax},${nay-8} ${nax+3.2},${nay+5} ${nax},${nay+2.5}" fill="#1b1f24"/><polygon points="${nax},${nay-8} ${nax-3.2},${nay+5} ${nax},${nay+2.5}" fill="#ffffff" stroke="#1b1f24" stroke-width="0.25"/></g>`;
+  s+=txt(nax,rot?nay+14.5:nay-10.5,'N',3.4,{a:'middle',b:1});
+  s+=txt(mx,24,'LEGEND',2.8,{b:1});
+  [['#EAF4F8','#1b1f24','Rental unit (built-up)'],['#FFF2D2','#9AA3AB','Access: front yard, lane, court'],['#E3F1E4','#9AA3AB','Central open court with staircase'],['url(#hatch)','#9AA3AB','Open setback']].forEach((l,i)=>{const y=27+i*5;s+=`<rect x="${mx}" y="${y}" width="7" height="4" fill="${l[0]}" stroke="${l[1]}" stroke-width="0.25"/>`+txt(mx+10,y+3.2,l[2],2.3)});
+  const ly=48;s+=`<polygon points="${mx+2},${ly} ${mx+5},${ly} ${mx+3.5},${ly+2.2}" fill="#0B6E99"/><line x1="${mx+1}" y1="${ly+2.6}" x2="${mx+6}" y2="${ly+2.6}" stroke="#1b1f24" stroke-width="0.3"/>`+txt(mx+10,ly+3.2,'Entrance door ('+f(+$('dw').value)+' wide)',2.3);
+  const ty=64;s+=txt(mx,ty,'AREA STATEMENT',2.8,{b:1});
+  const cols=[mx,mx+24,mx+42,mx+80,mx+102],cw=[24,18,38,22,22],rh=5.2,rows=[['Item','Facing','Size','Sq ft','Sq m'],['Plot','',f(PW)+' x '+f((PLOT.west+PLOT.east)/2)+' avg',n0(PLOT.area),(PLOT.area*0.092903).toFixed(1)]];
+  c.units.forEach(u=>rows.push(['Unit '+u.n,u.face,f(u.w)+' x '+f(u.h),n0(u.a),(u.a*0.092903).toFixed(1)]));
+  rows.push(['Total built-up','','4 units',n0(c.total),(c.total*0.092903).toFixed(1)],['Open area','','',n0(PLOT.area-c.total),((PLOT.area-c.total)*0.092903).toFixed(1)],['Ground coverage','','',((c.total/PLOT.area)*100).toFixed(1)+'%','']);
+  const t0=ty+3;rows.forEach((r,i)=>{const y=t0+i*rh;if(i===0)s+=`<rect x="${mx}" y="${y}" width="124" height="${rh}" fill="#EEF1F4"/>`;
+    s+=`<line x1="${mx}" y1="${y+rh}" x2="${mx+124}" y2="${y+rh}" stroke="#1b1f24" stroke-width="${i===0||i===rows.length-3?0.25:0.12}"/>`;
+    r.forEach((v,j)=>{const num=j>=3;s+=txt(num?cols[j]+cw[j]-1.5:cols[j]+1.2,y+3.6,v,2.2,{a:num?'end':'start',b:i===0||r[0]==='Total built-up'})})});
+  s+=`<rect x="${mx}" y="${t0}" width="124" height="${rows.length*rh}" fill="none" stroke="#1b1f24" stroke-width="0.3"/>`;
+  cols.slice(1).forEach(x=>{s+=`<line x1="${x}" y1="${t0}" x2="${x}" y2="${t0+rows.length*rh}" stroke="#1b1f24" stroke-width="0.12"/>`});
+  const sy=t0+rows.length*rh+10;s+=txt(mx,sy,'SETBACKS',2.8,{b:1});
+  const sb=[['Front (road side)',c.F],['Rear',c.R],['West side',c.W],['East side',c.E]];
+  sb.push(['Central court',c.G]);if('BGHI'.includes(st.opt))sb.push(['Passage',c.PS]);if(c.stair){sb.push(['Staircase',null,f(c.sp.SL)+' x '+f(c.sp.SW)]);sb.push(['Stair start',null,'Up towards '+{N:'north',E:'east',S:'south',W:'west'}[st.sdir]+', turns '+(st.sturn==='L'?'left':'right')]);sb.push(['Risers / tread',null,c.sp.risers+' @ '+c.sp.rAct.toFixed(2)+'" / '+c.sp.TD+'"'])}
+  sb.forEach((r,i)=>{s+=txt(mx,sy+5.5+i*4.6,r[0],2.3)+txt(mx+60,sy+5.5+i*4.6,r[2]||f(r[1]),2.3,{a:'end'})});
+  const ny=sy+5.5+sb.length*4.6+8;s+=txt(mx,ny,'NOTES',2.8,{b:1});
+  const notes=['All dimensions are in feet and inches unless noted otherwise.','Unit sizes are gross. Wall thicknesses are not deducted.',"Plot dimensions are taken from the owner's sketch. Verify on site before setting out.",'Setbacks and ground coverage are subject to approval by the local planning authority.','Staircase in the central court is kept for future upper floors.','Do not scale this drawing. Use written dimensions.'];
+  let yy=ny+5;notes.forEach((nt,i)=>{const ls=wrap(nt,62);s+=txt(mx,yy,(i+1)+'.',2.2)+mtxt(mx+4,yy,ls,2.2,3.4);yy+=ls.length*3.4+1.2});
+  const bx=mx,by=262,u5=5*SC;s+=txt(bx,by-3,'GRAPHIC SCALE (FEET)',2.3,{b:1});
+  for(let i=0;i<4;i++)s+=`<rect x="${bx+i*u5}" y="${by}" width="${u5}" height="1.8" fill="${i%2?'#ffffff':'#1b1f24'}" stroke="#1b1f24" stroke-width="0.2"/>`;
+  [0,5,10,15,20].forEach((v,i)=>{s+=txt(bx+i*u5,by+5,String(v),2,{a:'middle'})});
+  if(exp){
+  /* title block */
+  const tx=318,tw=92,R2=tx+tw,cell=(y,h)=>`<rect x="${tx}" y="${y}" width="${tw}" height="${h}" fill="none" stroke="#1b1f24" stroke-width="0.3"/>`;
+  s+=`<rect x="${tx}" y="10" width="${tw}" height="277" fill="none" stroke="#1b1f24" stroke-width="0.6"/>`;
+  const firmL=wrap(TB.firm||'',20);s+=mtxt(tx+4,20,firmL.slice(0,2),5.2,6,{b:1,c:'#0B6E99'})+mtxt(tx+4,20+Math.min(2,firmL.length)*6+0.5,wrap(TB.tag,44).slice(0,2),2.3,3.2,{c:'#4E5A66'});
+  s+=`<line x1="${tx}" y1="48" x2="${R2}" y2="48" stroke="#1b1f24" stroke-width="0.6"/>`;
+  const blk=(y,h,label,val,sz,mc,ml,b)=>cell(y,h)+txt(tx+2.5,y+4,label,1.9,{c:'#4E5A66'})+mtxt(tx+2.5,y+8.6,wrap(val,mc).slice(0,ml),sz,sz*1.35,{b});
+  s+=blk(48,22,'PROJECT',TB.project,3,38,3,1)+blk(70,16,'CLIENT / OWNER',TB.client||'-',2.8,40,2,0)+blk(86,24,'SITE ADDRESS',TB.site,2.5,46,4,0);
+  s+=blk(110,30,'DRAWING TITLE','Town home rental layout, option '+st.opt+'. '+OPTS[st.opt][0]+' ('+OPTS[st.opt][1].toLowerCase()+')',2.7,42,4,1);
+  const half=(y,h,l1,v1,l2,v2,sz)=>`<rect x="${tx}" y="${y}" width="${tw/2}" height="${h}" fill="none" stroke="#1b1f24" stroke-width="0.3"/><rect x="${tx+tw/2}" y="${y}" width="${tw/2}" height="${h}" fill="none" stroke="#1b1f24" stroke-width="0.3"/>`+txt(tx+2.5,y+4,l1,1.9,{c:'#4E5A66'})+txt(tx+2.5,y+10,v1||'-',sz||2.8)+txt(tx+tw/2+2.5,y+4,l2,1.9,{c:'#4E5A66'})+txt(tx+tw/2+2.5,y+10,v2||'-',sz||2.8);
+  const a3=$('sheetSize').value==='a3';
+  s+=half(140,13,'SCALE',a3?'1:'+SCALE:'As per scale bar','SHEET SIZE',a3?'A3':'A4 (fit)',2.6)+half(153,13,'DATE',TB.date,'REVISION',TB.rev)+half(166,13,'DRAWN BY',TB.drawn,'CHECKED BY',TB.checked);
+  s+=cell(179,15)+txt(tx+2.5,183,'DRAWING NO.',1.9,{c:'#4E5A66'})+txt(tx+2.5,190.5,TB.dwg||'-',3.6,{b:1});
+  s+=cell(194,46)+txt(tx+2.5,198,"OWNER'S SIGNATURE",1.9,{c:'#4E5A66'});
+  s+=cell(240,47)+txt(tx+2.5,244,'ARCHITECT / ENGINEER',1.9,{c:'#4E5A66'})+txt(tx+2.5,283,TB.firm||'',2.2,{c:'#4E5A66'});
+  }
+  return s+`</svg>`;
+}
+
+/* canvas view: pan and zoom by viewBox */
+const cv=$('cv'),svgEl=$('cvs');let vb=null;
+function rect(){return cv.getBoundingClientRect()}
+function applyVB(){svgEl.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`)}
+function fitTo(b){const r=rect();if(!r.width||!r.height)return;const k=Math.max(b.w/r.width,b.h/r.height)*1.08;vb={w:r.width*k,h:r.height*k};vb.x=b.x+b.w/2-vb.w/2;vb.y=b.y+b.h/2-vb.h/2;applyVB()}
+function fitSheet(){fitTo({x:12,y:4,w:306,h:289})}
+function fitPlan(){mobile()?fitTo({x:40,y:-28,w:140,h:340}):fitTo({x:40,y:8,w:140,h:285})}
+function zoomAt(px,py,fac){const r=rect(),k=vb.w/r.width,sx=vb.x+(px-r.left)*k,sy=vb.y+(py-r.top)*k;const nw=Math.min(1400,Math.max(18,vb.w*fac));fac=nw/vb.w;vb.w*=fac;vb.h*=fac;vb.x=sx-(px-r.left)*vb.w/r.width;vb.y=sy-(py-r.top)*vb.h/r.height;applyVB()}
+function zoomBtn(fac){const r=rect();zoomAt(r.left+r.width/2,r.top+r.height/2,fac)}
+let lastSize=null;
+function keepView(){requestAnimationFrame(()=>{const r=rect();if(!vb||!lastSize){lastSize=[r.width,r.height];return}const k=vb.w/lastSize[0],cx=vb.x+vb.w/2,cy=vb.y+vb.h/2;vb.w=r.width*k;vb.h=r.height*k;vb.x=cx-vb.w/2;vb.y=cy-vb.h/2;lastSize=[r.width,r.height];applyVB()})}
+new ResizeObserver(keepView).observe(cv);
+const ptrs=new Map();let moved=0,pinch=null;
+cv.addEventListener('pointerdown',e=>{if(e.target.closest('.ui'))return;cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=0;cv.classList.add('drag');if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)}}});
+cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;const p=ptrs.get(e.pointerId),dx=e.clientX-p.x,dy=e.clientY-p.y;
+  if(ptrs.size===1){const k=vb.w/rect().width;vb.x-=dx*k;vb.y-=dy*k;applyVB();moved+=Math.abs(dx)+Math.abs(dy)}
+  p.x=e.clientX;p.y=e.clientY;
+  if(ptrs.size===2&&pinch){const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(d>0){zoomAt((a.x+b.x)/2,(a.y+b.y)/2,pinch.d/d);pinch.d=d}moved+=10}});
+function endPtr(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size){cv.classList.remove('drag');if(moved<6&&mobile())closeSheet()}}
+cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,Math.exp(e.deltaY*0.0015))},{passive:false});
+
+function render(){
+  const c=compute();
+  $('a3opt').textContent='A3 landscape (1:'+SCALE+')';$('siteInfo').textContent=`Plot area ${n0(PLOT.area)} sq ft (${(PLOT.area*0.092903).toFixed(1)} m²). Depth used for planning: ${f(PLOT.depth)} (shorter side). Drawing scale 1:${SCALE}.`;
+  ['sw','se','fr','rr','cg','ps','fh','fw','pw','pwW','pwE','dw'].forEach(id=>$(id+'v').textContent=f(+$(id).value));$('rsv').textContent=$('rs').value+'"';$('tdv').textContent=$('td').value+'"';[1,2,3,4].forEach(i=>$('dp'+i+'v').textContent=$('dp'+i).value+'%');
+  {const p=c.sp;$('stInfo').textContent=`${p.risers} risers of ${p.rAct.toFixed(2)}", 2 flights of ${p.perF} (${p.treads} treads each). Stair ${f(p.SL)} long x ${f(p.SW)} wide.`;}
+  $('warn2').innerHTML=c.warn2.map(esc).join('<br>');$('shv').textContent=$('sh').value+'%';
+  $('psRow').classList.toggle('dim',!'BGHI'.includes(st.opt));
+  $('hdrFirm').textContent=TB.firm||'';
+  drawOpts();
+  $('warn').innerHTML=c.warn.map(esc).join('<br>');
+  $('stats').innerHTML=`<span class="eu">Each unit ${c.units.map(u=>n0(u.a)).join(' / ')} sq ft</span><strong>${n0(c.total)} sq ft, ${(c.total/PLOT.area*100).toFixed(0)}%<span class="cv"> coverage</span></strong>`;$('stats').title='Total built-up and ground coverage';
+  const full=buildSVG(c);const inner=full.replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'');svgEl.innerHTML=inner;
+  if(!vb){mobile()?fitPlan():fitSheet();lastSize=[rect().width,rect().height]}else applyVB();
+}
+
+/* settings file (shared with program_pipeline typology TOWNHOME_RENTAL) */
+const TYPO_VERSION='0.2.0';
+const PMAP={plot_width_ft:'pw',plot_west_ft:'pwW',plot_east_ft:'pwE',setback_west_ft:'sw',setback_east_ft:'se',setback_front_ft:'fr',setback_rear_ft:'rr',court_ft:'cg',front_share_pct:'sh',passage_ft:'ps',floor_height_ft:'fh',max_riser_in:'rs',tread_in:'td',flight_width_ft:'fw',door1_pct:'dp1',door_width_ft:'dw',door2_pct:'dp2',door3_pct:'dp3',door4_pct:'dp4'};
+const SMAP={option:'opt',stair_position:'stair',stair_first_flight:'sdir',stair_turn:'sturn'};
+function getSettings(){const p={};for(const k in PMAP)p[k]=+$(PMAP[k]).value;for(const k in SMAP)p[k]=st[SMAP[k]];p.drawing_north=st.northUp?'up':'down';
+  const c=compute();return{typology:'TOWNHOME_RENTAL',typology_version:TYPO_VERSION,app:'Town Home Rental Planner',saved:new Date().toISOString(),params:p,
+  summary:{units:c.units.map(u=>({n:u.n,face:u.face,w_ft:+u.w.toFixed(3),d_ft:+u.h.toFixed(3),area_sqft:+u.a.toFixed(1)})),total_sqft:+c.total.toFixed(1),coverage_pct:+(c.total/PLOT.area*100).toFixed(2),warnings:c.warn.concat(c.warn2)},title_block:TB}}
+function syncSegs(){[['stPos','p','stair'],['stDir','v','sdir'],['stTurn','v','sturn']].forEach(([id,a,k])=>document.querySelectorAll('#'+id+' button').forEach(b=>b.setAttribute('aria-pressed',b.dataset[a]===st[k])))}
+function applySettings(o){if(!o||o.typology!=='TOWNHOME_RENTAL')throw new Error('type');const p=o.params||{};
+  for(const k in PMAP)if(p[k]!=null&&isFinite(p[k]))$(PMAP[k]).value=p[k];
+  for(const k in SMAP)if(typeof p[k]==='string')st[SMAP[k]]=p[k];
+  if(!OPTS[st.opt])st.opt='A';syncSegs();
+  if(o.title_block&&typeof o.title_block==='object'){TB=Object.assign({},TB,o.title_block);saveTB();fillTB()}
+  setNorth(p.drawing_north!=='down')}
+async function saveSettings(){const blob=new Blob([JSON.stringify(getSettings(),null,1)],{type:'application/json'});await saveFile(`townhome_rental_option${st.opt}.json`,blob)}
+$('loadIn').addEventListener('change',async e=>{const fl=e.target.files[0];if(!fl)return;try{applySettings(JSON.parse(await fl.text()));toast('Loaded '+fl.name)}catch(err){toast('That file is not a Town Home Rental Planner settings file')}e.target.value=''});
+
+/* export */
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2600)}
+function rasterize(pxPerMm){return new Promise((res,rej)=>{const svg=buildSVG(compute(),true).replace('width="420mm" height="297mm"',`width="${420*pxPerMm}" height="${297*pxPerMm}"`);
+  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=420*pxPerMm;c.height=297*pxPerMm;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);res(c)};
+  img.onerror=()=>rej(new Error('render'));img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)})}
+function fname(ext){const firm=(TB.firm||'Drawing').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');return `${firm}_TownHomeRental_Option${st.opt}_${st.northUp?'NorthUp':'NorthDown'}.${ext}`}
+async function saveFile(name,blob){
+  if(window.claude&&typeof window.claude.use==='function'){let dl=null;try{dl=await window.claude.use('downloads')}catch(e){}
+    if(dl){try{await dl.save({filename:name,data:blob});toast('Saved '+name)}catch(e){const code=e&&e.code;toast(code==='declined'?'Download cancelled':code==='rate_limited'?'A save prompt is already open':'Download is not available here')}return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('Saved '+name)}
+async function exportPNG(){const b=$('bPng');b.disabled=true;try{const c=await rasterize(8);const blob=await new Promise(r=>c.toBlob(r,'image/png'));await saveFile(fname('png'),blob)}catch(e){toast('Could not create the PNG')}b.disabled=false}
+async function exportPDF(){const b=$('bPdf');b.disabled=true;try{
+  if(!window.jspdf){toast('PDF library did not load. Check your connection.');b.disabled=false;return}
+  const a3=$('sheetSize').value==='a3';const c=await rasterize(8);const pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:a3?'a3':'a4',compress:true});
+  pdf.addImage(c.toDataURL('image/png'),'PNG',0,0,a3?420:297,a3?297:210,undefined,'FAST');pdf.setProperties({title:'Town home rental layout option '+st.opt,author:TB.firm||'',creator:TB.firm||''});
+  await saveFile(fname('pdf'),pdf.output('blob'))}catch(e){toast('Could not create the PDF')}b.disabled=false}
+
+initPanels();loadTB();render();
+</script>
+</body>
+</html>

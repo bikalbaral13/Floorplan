@@ -1,0 +1,509 @@
+{
+ "_about": "FIXTURE test inputs for INFRA_RECEPTION \u2014 merged by S8 only because project.json has fixture: true. Not a client's decisions.",
+ "rounds": [
+  {
+   "id": "r1",
+   "name": "R1",
+   "note": "First render"
+  },
+  {
+   "id": "r2",
+   "name": "R2",
+   "note": "Lounge view"
+  },
+  {
+   "id": "r3",
+   "name": "R3",
+   "note": "Desk view revised"
+  },
+  {
+   "id": "r4",
+   "name": "R4",
+   "note": "New angle"
+  },
+  {
+   "id": "r5",
+   "name": "R5",
+   "note": "Final renders"
+  }
+ ],
+ "renders": {
+  "rd1": {
+   "id": "rd1",
+   "round": "r1",
+   "view": "Reception desk",
+   "img": "asset:fx-r1-desk",
+   "w": 1600,
+   "h": 1002,
+   "order": 0
+  },
+  "rd2": {
+   "id": "rd2",
+   "round": "r2",
+   "view": "Lounge",
+   "img": "asset:fx-r2-lounge",
+   "w": 1600,
+   "h": 882,
+   "order": 1
+  },
+  "rd3": {
+   "id": "rd3",
+   "round": "r3",
+   "view": "Reception desk",
+   "img": "asset:fx-r3-desk",
+   "w": 1600,
+   "h": 1004,
+   "order": 2
+  },
+  "rd4": {
+   "id": "rd4",
+   "round": "r4",
+   "view": "Lounge from desk",
+   "img": "asset:fx-r4-lounge-c",
+   "w": 1600,
+   "h": 1004,
+   "order": 3
+  },
+  "rd5": {
+   "id": "rd5",
+   "round": "r5",
+   "view": "Reception desk",
+   "img": "asset:fx-r5-desk",
+   "w": 1600,
+   "h": 1004,
+   "order": 4
+  },
+  "rd6": {
+   "id": "rd6",
+   "round": "r5",
+   "view": "Lounge from desk",
+   "img": "asset:fx-r5-lounge-c",
+   "w": 1600,
+   "h": 1004,
+   "order": 5
+  }
+ },
+ "pins": {
+  "fxp01": {
+   "id": "fxp01",
+   "render": "rd1",
+   "x": 0.52,
+   "y": 0.42,
+   "element": "wl-5be9dd38",
+   "text": "Add the Marian logo on the moss wall.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791503600000
+  },
+  "fxp02": {
+   "id": "fxp02",
+   "render": "rd1",
+   "x": 0.5,
+   "y": 0.64,
+   "element": "jn-55cb9b55",
+   "text": "Add people and desktops at the reception counter.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791507200000
+  },
+  "fxp03": {
+   "id": "fxp03",
+   "render": "rd1",
+   "x": 0.3,
+   "y": 0.29,
+   "element": "cl-30d59784",
+   "text": "Add a black end profile to the baffle ceiling.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791510800000
+  },
+  "fxp04": {
+   "id": "fxp04",
+   "render": "rd2",
+   "x": 0.12,
+   "y": 0.62,
+   "element": "wl-85d840d9",
+   "text": "Change this wall to texture paint.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791514400000
+  },
+  "fxp05": {
+   "id": "fxp05",
+   "render": "rd2",
+   "x": 0.36,
+   "y": 0.22,
+   "element": "cl-30d59784",
+   "text": "Add the suspended designer pendant over the lounge.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791518000000
+  },
+  "fxp06": {
+   "id": "fxp06",
+   "render": "rd2",
+   "x": 0.78,
+   "y": 0.1,
+   "element": "cl-ccc232e3",
+   "text": "Ceiling services to be white.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791521600000
+  },
+  "fxp07": {
+   "id": "fxp07",
+   "render": "rd2",
+   "x": 0.43,
+   "y": 0.8,
+   "element": "fn-e95d87ef",
+   "text": "Change the chair colour to sage green.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791525200000
+  },
+  "fxp08": {
+   "id": "fxp08",
+   "render": "rd2",
+   "x": 0.24,
+   "y": 0.86,
+   "element": "fn-e95d87ef",
+   "text": "Change the metal legs to timber legs.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791528800000
+  },
+  "fxp09": {
+   "id": "fxp09",
+   "render": "rd2",
+   "x": 0.4,
+   "y": 0.95,
+   "element": "sf-b6e71d87",
+   "text": "Change the rug.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791532400000
+  },
+  "fxp10": {
+   "id": "fxp10",
+   "render": "rd2",
+   "x": 0.92,
+   "y": 0.58,
+   "element": "dr-3ff19374",
+   "text": "Stile glass door with a black frame; glass top level with the moss wall top.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791536000000
+  },
+  "fxp11": {
+   "id": "fxp11",
+   "render": "rd2",
+   "x": 0.17,
+   "y": 0.6,
+   "element": "wl-cf2f0ab4",
+   "text": "Add an image to the TV displays.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791539600000
+  },
+  "fxp12": {
+   "id": "fxp12",
+   "render": "rd3",
+   "x": 0.71,
+   "y": 0.16,
+   "element": "cl-ccc232e3",
+   "text": "The suspended light overlaps the duct. Check the services.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791543200000
+  },
+  "fxp13": {
+   "id": "fxp13",
+   "render": "rd3",
+   "x": 0.38,
+   "y": 0.42,
+   "element": "wl-5be9dd38",
+   "text": "The moss looks too light. Make it a little darker.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791546800000
+  },
+  "fxp14": {
+   "id": "fxp14",
+   "render": "rd3",
+   "x": 0.8,
+   "y": 0.58,
+   "element": null,
+   "text": "The workstation is placed in the wrong direction. Check the layout.",
+   "status": "closed",
+   "uid": "u_fixture_architect00000",
+   "at": 1791550400000
+  },
+  "fxp15": {
+   "id": "fxp15",
+   "render": "rd3",
+   "x": 0.52,
+   "y": 0.48,
+   "element": "wl-5be9dd38",
+   "text": "The logo looks black; the actual colour is dark blue. Add a backlight.",
+   "status": "open",
+   "uid": "u_fixture_architect00000",
+   "at": 1791554000000
+  },
+  "fxp16": {
+   "id": "fxp16",
+   "render": "rd4",
+   "x": 0.3,
+   "y": 0.22,
+   "element": "cl-30d59784",
+   "text": "Add a white end profile. It can be rectangular; it need not follow the baffle curve.",
+   "status": "open",
+   "uid": "u_fixture_architect00000",
+   "at": 1791557600000,
+   "reopenedAt": 1791608000000
+  },
+  "fxp17": {
+   "id": "fxp17",
+   "render": "rd4",
+   "x": 0.37,
+   "y": 0.42,
+   "element": "cl-30d59784",
+   "text": "Raise the designer pendant a little; it hangs too low.",
+   "status": "open",
+   "uid": "u_fixture_architect00000",
+   "at": 1791561200000
+  },
+  "fxp18": {
+   "id": "fxp18",
+   "render": "rd4",
+   "x": 0.42,
+   "y": 0.04,
+   "element": "cl-ccc232e3",
+   "text": "All ducts to be oval in every view.",
+   "status": "open",
+   "uid": "u_fixture_architect00000",
+   "at": 1791564800000
+  },
+  "fxp19": {
+   "id": "fxp19",
+   "render": "rd4",
+   "x": 0.62,
+   "y": 0.1,
+   "element": "cl-ccc232e3",
+   "text": "Services look incomplete. Place all services properly.",
+   "status": "open",
+   "uid": "u_fixture_architect00000",
+   "at": 1791568400000
+  },
+  "fxp20": {
+   "id": "fxp20",
+   "render": "rd4",
+   "x": 0.55,
+   "y": 0.55,
+   "element": null,
+   "text": "The angle looks too low. Use eye level; keep the angle, adjust only the height.",
+   "status": "open",
+   "uid": "u_fixture_architect00000",
+   "at": 1791572000000
+  }
+ },
+ "roster": {
+  "u_fixture_client00000000": {
+   "role": "client"
+  },
+  "u_fixture_modeler0000000": {
+   "role": "modeler"
+  },
+  "u_fixture_intruder000000": {
+   "role": "modeler"
+  }
+ },
+ "inputs": {
+  "u_fixture_client00000000": {
+   "decisions": {
+    "fl-12454d9b": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "fl-f2add142": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "cl-ccc232e3": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "dr-9325c4c0": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "wl-85d840d9": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "wl-cf2f0ab4": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "wl-f2619de2": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "dr-3ff19374": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "dr-ceed05ce": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "dr-30d996e0": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "dr-8652841b": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "sf-b6e71d87": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "fn-7b196786": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "pl-633ec55c": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791644000000,
+     "choice": null,
+     "note": ""
+    },
+    "cl-30d59784": {
+     "state": "changes",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791647600000,
+     "choice": null,
+     "note": "Baffle end profile must be white and rectangular, and keep the pendant clear of the ducts."
+    },
+    "jn-55cb9b55": {
+     "state": "approved",
+     "rev": 0,
+     "issue": 1,
+     "at": 1791640400000,
+     "choice": null,
+     "note": "Approved the desk from the deck sketch."
+    }
+   },
+   "fixes": {},
+   "replies": {
+    "fxr1": {
+     "pin": "fxp16",
+     "text": "Please keep it clear of the duct too.",
+     "at": 1791611600000
+    }
+   },
+   "comments": {
+    "fxc1": {
+     "render": "rd6",
+     "x": 0.33,
+     "y": 0.78,
+     "text": "Can the rug be a little smaller?",
+     "element": "sf-b6e71d87",
+     "at": 1791662000000
+    }
+   }
+  },
+  "u_fixture_modeler0000000": {
+   "decisions": {},
+   "fixes": {
+    "fxp15": {
+     "at": 1791590000000
+    },
+    "fxp16": {
+     "at": 1791593600000
+    },
+    "fxp20": {
+     "at": 1791597200000
+    }
+   },
+   "replies": {
+    "fxr2": {
+     "pin": "fxp20",
+     "text": "Camera lowered to 1600 mm eye level.",
+     "at": 1791600800000
+    }
+   },
+   "comments": {}
+  },
+  "u_fixture_intruder000000": {
+   "decisions": {
+    "wl-5be9dd38": {
+     "state": "approved",
+     "rev": 1,
+     "issue": 1,
+     "at": 1791651200000,
+     "choice": null,
+     "note": "looks fine"
+    }
+   },
+   "fixes": {},
+   "replies": {},
+   "comments": {}
+  }
+ }
+}

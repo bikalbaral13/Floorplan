@@ -1,0 +1,519 @@
+{
+  "version": 1,
+  "id": "chair-with-math",
+  "title": "Chair (mesh) — upholstered tub armchair, quilted shell, piped seams, splayed oak legs",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Chair",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M6 20l1-6",
+        "M18 20l-1-6",
+        "M5 14h14",
+        "M5 14V8a7 5 0 0114 0v6",
+        "M5 11h3",
+        "M16 11h3"
+      ]
+    }
+  },
+  "description": "A parametric UPHOLSTERED DINING ARMCHAIR on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE, A SEGMENT OR A SPACE. On a segment or a space the chair faces along the host's direction; Rotation turns it about its host and Flip side swaps which way it looks. At rotation 0 the back is at -x.\n\nWHAT IT BUILDS. A tub SHELL that wraps the back and runs forward as the arms, a thick SEAT with a rolled edge and a crowned top, self PIPING along the seat edge and the shell's top, and four TAPERED ROUND LEGS splayed out and raked back. Four mesh rows, four material bindings: cream faux leather on the upholstery, light oak on the legs.\n\nTHE SHELL IS ONE LOFT, NOT THREE BOXES. Its plan line is the centreline of the shell's thickness — a quarter superellipse round each back corner, then straight to the arm tip — resampled by arc length. Every station carries the same ring (outer face, half-round top, inner face, foot), so back and arms are one continuous surface. Height along the line is flat across the back, smoothsteps through the corners to arm height, falls gently along the arm and rolls down onto the seat at the tip.\n\nTHE QUILTING IS A DISPLACEMENT OF THE INNER FACE, not added geometry: two waves at ±45° in the unrolled (arc length, height) plane, multiplied and square-rooted, so the stitch lines stay put and every diamond puffs toward the sitter. Measured from the back centre, the pattern is symmetric at every width. A plain border frames it above the seat, under the roll and before the arm turns down. Channel and Plain are the other two faces.\n\nTHE SEAT IS THE SHELL'S OWN FOOT closed across the front: its back and sides are the shell's outer face pushed out 2.5 mm, so the shell stands exactly on the seat edge at every width and wrap, and the seat piping covers the one seam where they meet. Section: eased foot, straight side, a roll on a stated radius (Edge character), then a low crown closed by scaling toward the middle.\n\nPIPING is a circle swept along a rail by parallel transport, so it does not twist where the shell turns the corner and climbs down the arm. LEGS are horizontal slices of a tilted cone, so the foot sits flat on the floor and the top meets the underside flat at any splay.\n\nONE DETAIL DIAL sets every sample count: Blocky (low poly, no quilt or piping) / Medium / Fine / Smooth. Fine is ~12k faces.\n\nDIMENSIONS AT THE DEFAULTS: about 0.57 × 0.64 m over the splayed feet, seat at 0.48 m, arms at 0.65 m, back top 0.84 m.\n\nWHAT THIS CANNOT DO. The quilt is a displacement, so its buttons are not separate parts. The shell is a single thickness, not a frame under foam. The arm tip closes with a flat cap on a small section.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "width",
+              "name": "Overall width",
+              "type": "range",
+              "value": 0.56,
+              "min": 0.42,
+              "max": 0.8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Overall depth",
+              "type": "range",
+              "value": 0.58,
+              "min": 0.42,
+              "max": 0.8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "seatHeight",
+              "name": "Seat height",
+              "type": "range",
+              "value": 0.48,
+              "min": 0.38,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "cushionThk",
+              "name": "Seat body thickness",
+              "type": "range",
+              "value": 0.1,
+              "min": 0.05,
+              "max": 0.18,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backTop",
+              "name": "Back height above the seat",
+              "type": "range",
+              "value": 0.36,
+              "min": 0.15,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "armStyle",
+              "name": "Arms",
+              "type": "select",
+              "value": "Tub arms",
+              "options": [
+                "Tub arms",
+                "Low arms",
+                "Armless"
+              ]
+            },
+            {
+              "id": "armHeight",
+              "name": "Arm height (from floor)",
+              "type": "range",
+              "value": 0.65,
+              "min": 0.52,
+              "max": 0.78,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "shellThk",
+              "name": "Shell thickness",
+              "type": "range",
+              "value": 0.065,
+              "min": 0.035,
+              "max": 0.12,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backCurve",
+              "name": "Back wrap (share of half-width)",
+              "type": "range",
+              "value": 0.55,
+              "min": 0.15,
+              "max": 0.95,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "backRake",
+              "name": "Back rake (deg)",
+              "type": "range",
+              "value": 9,
+              "min": 0,
+              "max": 20,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "quilting",
+              "name": "Inner back quilting",
+              "type": "select",
+              "value": "Diamond",
+              "options": [
+                "Diamond",
+                "Channel",
+                "Plain"
+              ]
+            },
+            {
+              "id": "quiltPitch",
+              "name": "Quilt pitch (m)",
+              "type": "range",
+              "value": 0.075,
+              "min": 0.04,
+              "max": 0.16,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "quiltAspect",
+              "name": "Quilt diamond height / width",
+              "type": "range",
+              "value": 1.15,
+              "min": 0.6,
+              "max": 2,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "quiltDepth",
+              "name": "Quilt puff depth (m)",
+              "type": "range",
+              "value": 0.008,
+              "min": 0,
+              "max": 0.02,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "piping",
+              "name": "Piping on the seams",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "pipingDia",
+              "name": "Piping diameter (m)",
+              "type": "range",
+              "value": 0.009,
+              "min": 0.004,
+              "max": 0.016,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "legSize",
+              "name": "Leg diameter at the top",
+              "type": "range",
+              "value": 0.042,
+              "min": 0.025,
+              "max": 0.07,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "legFootDia",
+              "name": "Leg diameter at the foot",
+              "type": "range",
+              "value": 0.024,
+              "min": 0.012,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "legSplay",
+              "name": "Leg splay (deg)",
+              "type": "range",
+              "value": 8,
+              "min": 0,
+              "max": 16,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "detail",
+              "name": "Mesh detail",
+              "type": "select",
+              "value": "Fine",
+              "options": [
+                "Blocky",
+                "Medium",
+                "Fine",
+                "Smooth"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "edgeCharacter",
+              "name": "Edge character",
+              "type": "select",
+              "value": "Soft",
+              "options": [
+                "Crisp",
+                "Soft",
+                "Plump"
+              ],
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "cream faux-leather shell and seat with self piping, diamond-quilted inner back, solid light-oak tapered legs",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "modern upholstered dining armchair, tub back wrapping into arms, diamond quilting, piped seams, splayed oak legs",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/leather-cream.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Legs=Finishes/light-oak.json; Piping=Finishes/leather-cream.json; Seat=Finishes/leather-cream.json; Shell=Finishes/leather-cream.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "CHAIR — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\nmodern upholstered dining armchair, tub back wrapping into arms, diamond quilting, piped seams, splayed oak legs\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Overall width: {width}\n- Overall depth: {depth}\n- Seat height: {seatHeight}\n- Seat body thickness: {cushionThk}\n- Back height above the seat: {backTop}\n- Arms: {armStyle} (one of: Tub arms / Low arms / Armless)\n- Arm height (from floor): {armHeight}\n- Shell thickness: {shellThk}\n- Back wrap (share of half-width): {backCurve}\n- Back rake (deg): {backRake}\n- Inner back quilting: {quilting} (one of: Diamond / Channel / Plain)\n- Quilt pitch (m): {quiltPitch}\n- Quilt diamond height / width: {quiltAspect}\n- Quilt puff depth (m): {quiltDepth}\n- Piping on the seams: {piping}\n- Piping diameter (m): {pipingDia}\n- Leg diameter at the top: {legSize}\n- Leg diameter at the foot: {legFootDia}\n- Leg splay (deg): {legSplay}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Overall width = {width}\n- Overall depth = {depth}\n- Seat height = {seatHeight}\n- Arm height (from floor) = {armHeight}\n- Quilt puff depth (m) = {quiltDepth}\n- Leg diameter at the top = {legSize}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_legs",
+              "kind": "polygon",
+              "name": "Legs",
+              "color": "#b88a5a",
+              "layer": "Chair",
+              "show": true
+            },
+            {
+              "id": "p2_seat",
+              "kind": "polygon",
+              "name": "Seat",
+              "color": "#e9e0d0",
+              "layer": "Chair",
+              "show": true
+            },
+            {
+              "id": "p2_shell",
+              "kind": "polygon",
+              "name": "Shell",
+              "color": "#d9ccb7",
+              "layer": "Chair",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_shell",
+              "kind": "polyhedron",
+              "name": "Shell",
+              "color": "#e6dccb",
+              "layer": "Chair",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_seat",
+              "kind": "polyhedron",
+              "name": "Seat",
+              "color": "#ebe2d2",
+              "layer": "Chair",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_piping",
+              "kind": "polyhedron",
+              "name": "Piping",
+              "color": "#d8ccb8",
+              "layer": "Chair",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#c49a6c",
+              "layer": "Chair",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

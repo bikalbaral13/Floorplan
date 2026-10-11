@@ -1,0 +1,451 @@
+{
+ "run_id": "20261009T161819Z",
+ "inputs": [
+  {
+   "id": "plan",
+   "local": "inputs/plan.canvas.json",
+   "sha256": "383737cc61caba9e2e5b02c5f802aa64f0f8bb273304548c84aeeadad7fef2c1",
+   "bytes": 15226
+  },
+  {
+   "id": "ref:baffle-colour.jpg",
+   "local": "inputs/refs/baffle-colour.jpg",
+   "sha256": "4dbb4a804b40df614c47a949e15e4ee57c83ac9037181e1b0f3db441fc08384a",
+   "bytes": 36716
+  },
+  {
+   "id": "ref:baffle.jpg",
+   "local": "inputs/refs/baffle.jpg",
+   "sha256": "463fdcff98e10b0f5a38f5dc56cd5cc52f5db7eef5b7e0e745ccf9f91bc6ca91",
+   "bytes": 69271
+  },
+  {
+   "id": "ref:brooklyn-glass.jpg",
+   "local": "inputs/refs/brooklyn-glass.jpg",
+   "sha256": "11d54a86c120370496c5d0181f1ed5a72f0f43a4de73800e77b6b28c554b7f6e",
+   "bytes": 70023
+  },
+  {
+   "id": "ref:concrete.jpg",
+   "local": "inputs/refs/concrete.jpg",
+   "sha256": "8a54ef455c46213ee78ae30653f0dbc480cc6f7c15e47aa025a8fdeb1e746bd3",
+   "bytes": 34183
+  },
+  {
+   "id": "ref:designer-pendant.jpg",
+   "local": "inputs/refs/designer-pendant.jpg",
+   "sha256": "6b9b0982fbe47c777a4c54fcb1e8db0c3432f92cc22adfa04687e775287e0d1f",
+   "bytes": 31332
+  },
+  {
+   "id": "ref:fluted.jpg",
+   "local": "inputs/refs/fluted.jpg",
+   "sha256": "dde57ecc9073d008fb4fee8118076b616e5ba93d1dd54aa8efed39b4b2ce36b3",
+   "bytes": 19582
+  },
+  {
+   "id": "ref:herringbone.jpg",
+   "local": "inputs/refs/herringbone.jpg",
+   "sha256": "b8755427ca386ea14ac10b8b9c93eed54ca5a39dbb6069cb3b6139c7e33409ad",
+   "bytes": 73661
+  },
+  {
+   "id": "ref:l-sofa.jpg",
+   "local": "inputs/refs/l-sofa.jpg",
+   "sha256": "2c455e3aa313db98e15bd63f70ea9760cd0a09409058762fe168f01991aafa2a",
+   "bytes": 24519
+  },
+  {
+   "id": "ref:logo.png",
+   "local": "inputs/refs/logo.png",
+   "sha256": "5b9ef435c09b20d341c293fe5770bb915b267f707a0f4cb147ba67a5a0142b4d",
+   "bytes": 28178
+  },
+  {
+   "id": "ref:lounge-chair.jpg",
+   "local": "inputs/refs/lounge-chair.jpg",
+   "sha256": "d6f78e44b3bebd23fc2c69828257a390b656f5ef13bffdf74c3d280a346295cc",
+   "bytes": 18520
+  },
+  {
+   "id": "ref:marble.jpg",
+   "local": "inputs/refs/marble.jpg",
+   "sha256": "b499c2afb85233d873ace387682cb9cadbd485aba56faf5fbf24355145d616f2",
+   "bytes": 16929
+  },
+  {
+   "id": "ref:moss-darker.jpg",
+   "local": "inputs/refs/moss-darker.jpg",
+   "sha256": "aeeb1a90aadd58c013610e8a82e10544484f2f35715459ff063de53d682eca80",
+   "bytes": 170656
+  },
+  {
+   "id": "ref:moss.jpg",
+   "local": "inputs/refs/moss.jpg",
+   "sha256": "57eb2940a1214d24341ddc631bc87d41df5f673c3b13bc75548522a47497524e",
+   "bytes": 185151
+  },
+  {
+   "id": "ref:open-ceiling.jpg",
+   "local": "inputs/refs/open-ceiling.jpg",
+   "sha256": "bef408f9cc5368a3d89ee5fe2978c8da66256a30fe62bd42e6ce73d430cb1621",
+   "bytes": 14112
+  },
+  {
+   "id": "ref:pendant-white.jpg",
+   "local": "inputs/refs/pendant-white.jpg",
+   "sha256": "f52acbef63370a30c7ccd3fddb51f332aabc1ca94bb1b8fa44b7f81474c0c6ad",
+   "bytes": 12969
+  },
+  {
+   "id": "ref:planter.jpg",
+   "local": "inputs/refs/planter.jpg",
+   "sha256": "267656e9b7ce1de73786a8330bd8ae628e3c236c9e04db8f547083a7064e3095",
+   "bytes": 15949
+  },
+  {
+   "id": "ref:reception-desk.jpg",
+   "local": "inputs/refs/reception-desk.jpg",
+   "sha256": "1b56d1cedee2b4d56db209267bf3e115c1b3d434492d71dc187802fd93384a26",
+   "bytes": 25766
+  },
+  {
+   "id": "ref:rug.jpg",
+   "local": "inputs/refs/rug.jpg",
+   "sha256": "89cd4515708091293e2f6ae4c510df5512d4ca98c8ddc833131e33ab9b6c457a",
+   "bytes": 88185
+  },
+  {
+   "id": "ref:services.jpg",
+   "local": "inputs/refs/services.jpg",
+   "sha256": "1f98af8000195937205a37b73556aa47934f37c8b59ab6f118bc228d5874b2b3",
+   "bytes": 91278
+  },
+  {
+   "id": "ref:stile-door.jpg",
+   "local": "inputs/refs/stile-door.jpg",
+   "sha256": "ce4d03536ea72e05ec8cf59a077c7477546c554d58d1978620a357570f2415e3",
+   "bytes": 62037
+  },
+  {
+   "id": "ref:table.jpg",
+   "local": "inputs/refs/table.jpg",
+   "sha256": "f3eb20fcaf60361c2ef82b459c061d427f2625177818dd6f0244dcd19cf3b733",
+   "bytes": 16791
+  },
+  {
+   "id": "ref:texture-wall.jpg",
+   "local": "inputs/refs/texture-wall.jpg",
+   "sha256": "a9da7cad03f68829e16469d8f2ed6f9c9dc5afabef84062d3f3768be5370b81f",
+   "bytes": 43538
+  },
+  {
+   "id": "lib:Objects/MEP/duct.json",
+   "local": "inputs/library/Objects/MEP/duct.json",
+   "sha256": "fe270b2825f994763373e6fbb75067c5ab5caa1c9b7ce2b0d19f82f9f1b4471d",
+   "bytes": 9651
+  },
+  {
+   "id": "lib:Objects/MEP/services-ceiling.json",
+   "local": "inputs/library/Objects/MEP/services-ceiling.json",
+   "sha256": "f98b9ffa8f158e4388024e70619c786fd3f2b40399ca5e33fd10b70aba87a040",
+   "bytes": 14515
+  },
+  {
+   "id": "lib:Objects/Architectural/armchair.json",
+   "local": "inputs/library/Objects/Architectural/armchair.json",
+   "sha256": "a8a48c7ad2d8a7dbcdb0a9b41f27d742213db5ce01c2abeae3d80e24220a9971",
+   "bytes": 14378
+  },
+  {
+   "id": "lib:Objects/Architectural/baffle-ceiling.json",
+   "local": "inputs/library/Objects/Architectural/baffle-ceiling.json",
+   "sha256": "cc53b42b376ed0a9b5be55ccabf3f04124a8c2704c3281eaea38a00e50df569c",
+   "bytes": 13134
+  },
+  {
+   "id": "lib:Objects/Architectural/chair.json",
+   "local": "inputs/library/Objects/Architectural/chair.json",
+   "sha256": "0c15938b710f0cd2a42e24e56281cf9d2421d6b547ab0727160ce9bd03f75333",
+   "bytes": 19118
+  },
+  {
+   "id": "lib:Objects/Architectural/cove-light.json",
+   "local": "inputs/library/Objects/Architectural/cove-light.json",
+   "sha256": "a9e844e4043b533585140a7ebd6ba97845e1edbdb51507c2dfbc1ec6956ab337",
+   "bytes": 17590
+  },
+  {
+   "id": "lib:Objects/Architectural/door.json",
+   "local": "inputs/library/Objects/Architectural/door.json",
+   "sha256": "4befcf15381d5bdd1236b93cae673f4bd08550fe6e414a37d48cf91b1dbdab83",
+   "bytes": 26936
+  },
+  {
+   "id": "lib:Objects/Architectural/downlight.json",
+   "local": "inputs/library/Objects/Architectural/downlight.json",
+   "sha256": "2909e4e806d9464a1882a03c26b972e572b32ad7c9b567cbce9218ff213e946a",
+   "bytes": 18760
+  },
+  {
+   "id": "lib:Objects/Architectural/false-ceiling.json",
+   "local": "inputs/library/Objects/Architectural/false-ceiling.json",
+   "sha256": "8e38c54b1297bd5d6719694f5e63867c556c54ac40fab0edb514ce0dfb275bfb",
+   "bytes": 21678
+  },
+  {
+   "id": "lib:Objects/Architectural/fluted-panel.json",
+   "local": "inputs/library/Objects/Architectural/fluted-panel.json",
+   "sha256": "80a8bf32400238502cd5741873b86a8b6dc83d7f94f9176eb32c53e1bae5c4a2",
+   "bytes": 14684
+  },
+  {
+   "id": "lib:Objects/Architectural/linear-profile.json",
+   "local": "inputs/library/Objects/Architectural/linear-profile.json",
+   "sha256": "567a9c3865b7cbe6050c3d36f43540354e986e4b9e2b6838c0924b81c0a3379a",
+   "bytes": 16874
+  },
+  {
+   "id": "lib:Objects/Architectural/logo-signage.json",
+   "local": "inputs/library/Objects/Architectural/logo-signage.json",
+   "sha256": "f1f28e4244a299d333c55727dc69266465163b0e8ff26e59967934aaa0dc0310",
+   "bytes": 12216
+  },
+  {
+   "id": "lib:Objects/Architectural/pendant.json",
+   "local": "inputs/library/Objects/Architectural/pendant.json",
+   "sha256": "e712bb49207b224eafd7bf1edcabf00072546bbfca52e0ed63e71c26b5f4fdbf",
+   "bytes": 19517
+  },
+  {
+   "id": "lib:Objects/Architectural/plant-potted.json",
+   "local": "inputs/library/Objects/Architectural/plant-potted.json",
+   "sha256": "1adf520b937fe052e7906276f3cbb8b0088930de1a65c6d0f08cb37bf57cadd1",
+   "bytes": 14899
+  },
+  {
+   "id": "lib:Objects/Architectural/planter-box.json",
+   "local": "inputs/library/Objects/Architectural/planter-box.json",
+   "sha256": "8309ca7aa8a101fddddf867d0f53ada2976f0b31c32fc9a7f792dbb6df10a9e9",
+   "bytes": 13699
+  },
+  {
+   "id": "lib:Objects/Architectural/reception-desk.json",
+   "local": "inputs/library/Objects/Architectural/reception-desk.json",
+   "sha256": "c81f69e048a5a4aa399958ae8eaf46a7a7eadb44823b4bff8d0c1e6f4c4b6a44",
+   "bytes": 12419
+  },
+  {
+   "id": "lib:Objects/Architectural/rug.json",
+   "local": "inputs/library/Objects/Architectural/rug.json",
+   "sha256": "ba48797d8f5a314d3e1514592d7d3ce894cf85d19b7a53f0a6ed303132815284",
+   "bytes": 15962
+  },
+  {
+   "id": "lib:Objects/Architectural/sofa.json",
+   "local": "inputs/library/Objects/Architectural/sofa.json",
+   "sha256": "5955ba39423318ae5480019ca0cbfb791f038b4a32bed730b5c7622239bf24c3",
+   "bytes": 20631
+  },
+  {
+   "id": "lib:Objects/Architectural/table.json",
+   "local": "inputs/library/Objects/Architectural/table.json",
+   "sha256": "a247440ac11b35f981258987cca06caebadcf76c761712fef28270396e1c96d7",
+   "bytes": 14098
+  },
+  {
+   "id": "lib:Objects/Architectural/upholstered-panel.json",
+   "local": "inputs/library/Objects/Architectural/upholstered-panel.json",
+   "sha256": "6b255865dee1dbcffce93226c48813a5efd14ca079cf2934ed06f4592168a0e0",
+   "bytes": 16266
+  },
+  {
+   "id": "lib:Materials/Masonry/concrete.json",
+   "local": "inputs/library/Materials/Masonry/concrete.json",
+   "sha256": "ef0a56a16aa1b1827b1614ef820de1849f1d8c69d92e5608cb9dc08496496c1a",
+   "bytes": 1051
+  },
+  {
+   "id": "lib:Materials/Masonry/stone.json",
+   "local": "inputs/library/Materials/Masonry/stone.json",
+   "sha256": "ca25ee99e7c8bd6180ef76275327c59f94954221a5d650fe26ca742e37738800",
+   "bytes": 1186
+  },
+  {
+   "id": "lib:Materials/Fabric/boucle.json",
+   "local": "inputs/library/Materials/Fabric/boucle.json",
+   "sha256": "fb2405f3cd4456db6efe7f62bb563fc8cb53c96e8bd7adf68eaeb2b95d86cf13",
+   "bytes": 1276
+  },
+  {
+   "id": "lib:Materials/Fabric/chenille-grey.json",
+   "local": "inputs/library/Materials/Fabric/chenille-grey.json",
+   "sha256": "0b4a7dc6ab2f3e2232bbc7d5df0bc0ce078cffe201df06cb35377a0623906513",
+   "bytes": 1301
+  },
+  {
+   "id": "lib:Materials/Fabric/felt-0B5394.json",
+   "local": "inputs/library/Materials/Fabric/felt-0B5394.json",
+   "sha256": "e2e54d01d9b9adbd007f397106f5a2b135dd5fc224f6a501ee377a85099fcc99",
+   "bytes": 1220
+  },
+  {
+   "id": "lib:Materials/Fabric/rug-pile-sage.json",
+   "local": "inputs/library/Materials/Fabric/rug-pile-sage.json",
+   "sha256": "260603e417a0994914aaeca8d7dd0d6591706e5b87624aa9ef5bbe25b9ecbbb0",
+   "bytes": 1208
+  },
+  {
+   "id": "lib:Materials/Fabric/rug-plain-ivory.json",
+   "local": "inputs/library/Materials/Fabric/rug-plain-ivory.json",
+   "sha256": "e19a12c4be9703413825f8985ebe93971aee49f8242e11670cde662fc8ab1c36",
+   "bytes": 5053
+  },
+  {
+   "id": "lib:Materials/Fabric/velvet.json",
+   "local": "inputs/library/Materials/Fabric/velvet.json",
+   "sha256": "37e26d763a10f9b7b0d7a6c295e908b2fcbf7d99e23631fe1bb3329abfd367eb",
+   "bytes": 1106
+  },
+  {
+   "id": "lib:Materials/Emissive/led-warm.json",
+   "local": "inputs/library/Materials/Emissive/led-warm.json",
+   "sha256": "c34350dbed99a474788f48d9977841d3e0732ab343c515478abe1061180dd484",
+   "bytes": 877
+  },
+  {
+   "id": "lib:Materials/Finishes/lacquer-charcoal.json",
+   "local": "inputs/library/Materials/Finishes/lacquer-charcoal.json",
+   "sha256": "f97055c6db8d46b22a29ee647b4d8f0a983607658c95139dddf14b478140a1a9",
+   "bytes": 950
+  },
+  {
+   "id": "lib:Materials/Finishes/leather-cream.json",
+   "local": "inputs/library/Materials/Finishes/leather-cream.json",
+   "sha256": "22ecaae834ce24a311226bcb87f10320943d0d186bce684947cf651579c64ec6",
+   "bytes": 1442
+  },
+  {
+   "id": "lib:Materials/Finishes/light-oak.json",
+   "local": "inputs/library/Materials/Finishes/light-oak.json",
+   "sha256": "8ee1cde230862ee2258a9d637b998f44f088fb099b2869bad8bc388049b6848f",
+   "bytes": 1545
+  },
+  {
+   "id": "lib:Materials/Finishes/marble.json",
+   "local": "inputs/library/Materials/Finishes/marble.json",
+   "sha256": "799d2b0ac8621cf8a373e11f112833a08136b92223c576c6ddd25213454659db",
+   "bytes": 1263
+  },
+  {
+   "id": "lib:Materials/Finishes/oak-herringbone.json",
+   "local": "inputs/library/Materials/Finishes/oak-herringbone.json",
+   "sha256": "ebad2a2f61307c2ab83416c1f44ddf1752de20f6804b7a17772ef7e5a07150a4",
+   "bytes": 1848
+  },
+  {
+   "id": "lib:Materials/Finishes/oak-plank-light.json",
+   "local": "inputs/library/Materials/Finishes/oak-plank-light.json",
+   "sha256": "8aca7a1c7cba96e4633e3bb214423af0edb607dc848362272d75c52612eecc71",
+   "bytes": 1331
+  },
+  {
+   "id": "lib:Materials/Finishes/oak-veneer.json",
+   "local": "inputs/library/Materials/Finishes/oak-veneer.json",
+   "sha256": "4116265b8162b2bb4463e4fbcdbab6df3199c4aa4fc1c63a8760575394399411",
+   "bytes": 1538
+  },
+  {
+   "id": "lib:Materials/Finishes/paint-eggshell.json",
+   "local": "inputs/library/Materials/Finishes/paint-eggshell.json",
+   "sha256": "c8eb0c9627d7c2b19569d929dba416c835d0172780f8d7c48a9498896e762c31",
+   "bytes": 1281
+  },
+  {
+   "id": "lib:Materials/Finishes/paint-matte-white.json",
+   "local": "inputs/library/Materials/Finishes/paint-matte-white.json",
+   "sha256": "387499d09d2c0dc845c4ec6359047d6a5869dbf712ba4a62d360d8c6c37c7382",
+   "bytes": 1024
+  },
+  {
+   "id": "lib:Materials/Finishes/plaster.json",
+   "local": "inputs/library/Materials/Finishes/plaster.json",
+   "sha256": "9a5acdb50783d71d2604de879dfa91ac6902a95560bf135caaf4baf1f671980e",
+   "bytes": 1048
+  },
+  {
+   "id": "lib:Materials/Finishes/quartz.json",
+   "local": "inputs/library/Materials/Finishes/quartz.json",
+   "sha256": "f99c5f0b95b121f376f566bb4fa02eed720d4902cc7e73fd8a8816c213403904",
+   "bytes": 1116
+  },
+  {
+   "id": "lib:Materials/Finishes/terrazzo.json",
+   "local": "inputs/library/Materials/Finishes/terrazzo.json",
+   "sha256": "a2a6312978e83df6a5433fdb9ca791e9039f3dd1569694036449dc012f93817c",
+   "bytes": 1129
+  },
+  {
+   "id": "lib:Materials/Finishes/tile-grey-600.json",
+   "local": "inputs/library/Materials/Finishes/tile-grey-600.json",
+   "sha256": "703d5a0a98f7bf3822407f7e6cb575c7e1598c333e8cffd86ec09219a86f870c",
+   "bytes": 837
+  },
+  {
+   "id": "lib:Materials/Finishes/walnut.json",
+   "local": "inputs/library/Materials/Finishes/walnut.json",
+   "sha256": "1bf803f10d30f8015521b7afcf943ced8cc27d2becb7bc8058574c322c990bff",
+   "bytes": 1414
+  },
+  {
+   "id": "lib:Materials/Organic/leaf-glossy.json",
+   "local": "inputs/library/Materials/Organic/leaf-glossy.json",
+   "sha256": "040c44f731af5200acde2b457e69622dba1f31fb2e1ee96ee0648cc7a2ae83df",
+   "bytes": 1395
+  },
+  {
+   "id": "lib:Materials/Organic/moss-preserved.json",
+   "local": "inputs/library/Materials/Organic/moss-preserved.json",
+   "sha256": "2df3ad2b331bc606919ad40b999fa05ca9d93b42e7d9894e9774cb47b0ba1265",
+   "bytes": 1399
+  },
+  {
+   "id": "lib:Materials/Organic/rattan.json",
+   "local": "inputs/library/Materials/Organic/rattan.json",
+   "sha256": "2e63b0016625eead2e3a5ee6147362a67f60236adda309e947b760256f043edc",
+   "bytes": 1142
+  },
+  {
+   "id": "lib:Materials/Glazing/glass.json",
+   "local": "inputs/library/Materials/Glazing/glass.json",
+   "sha256": "c6280da333d349abc608aaf6ac13eb4def2523e2ba3613476f634a6a84c83e9e",
+   "bytes": 794
+  },
+  {
+   "id": "lib:Materials/Metal/aluminium-anodised.json",
+   "local": "inputs/library/Materials/Metal/aluminium-anodised.json",
+   "sha256": "97866e64d6c970c4ea15fc50bc311ad9629932797879a790a1fcd47824f1d70a",
+   "bytes": 952
+  },
+  {
+   "id": "lib:Materials/Metal/brass.json",
+   "local": "inputs/library/Materials/Metal/brass.json",
+   "sha256": "12fe0b899ebcb2ebd1eab3b2e68d009c26f6da5f6da25153a5613441a78fd9a9",
+   "bytes": 1351
+  },
+  {
+   "id": "lib:Materials/Metal/matte-black.json",
+   "local": "inputs/library/Materials/Metal/matte-black.json",
+   "sha256": "b6b2bef3f94a56aa434cb14d0ec6f1700cb6c09ae21abf60d65a88bd554889c9",
+   "bytes": 1208
+  }
+ ],
+ "pixelsPerMeter": 18.589,
+ "counts": {
+  "segments": 21,
+  "walls": 13,
+  "spaces": 2,
+  "refs": 22,
+  "library_files": 50
+ }
+}

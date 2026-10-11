@@ -1,0 +1,23 @@
+{
+ "kit": "pipeline_kit",
+ "version": "0.3.1",
+ "source": "app repo packages/pipeline-kit",
+ "files": {
+  "VERSION": "79e3f22ca37c7fdf4c29ae3648d6b008c3cb6547260a453409275470919dc674",
+  "__init__.py": "ac4b0144d56fa7d99bface8c6eaa1306b8096c2fe0c1c72f9fc33aa6fb46a8d8",
+  "findings.py": "5491a16f7c518d3aa4afd787e9ae79b6bda819b54f1605a94ec175a8cd335ffb",
+  "interop.py": "b66ac91fa0f8d2f6cb9d8f0889cae4f4114c8d401d0d0873bfab433ebb019d05",
+  "paths.py": "32a62ec30baa3d8da3dbb0d31effb73fa7c50a877f5350422d831f20162ffaf7",
+  "r2.py": "05080714c3f8ba4f2a5b0ba950768dc462008270f5b38149fe6bd85e3330dfbc",
+  "report.py": "4f0592ea8186186d9d7e1b3d99991a682ab7549ae17d3487ac60436087e47c6a",
+  "runner.py": "a0b57c7a7122734abb476a336d77e908b5c8398a5a29d7593d149fc7d1e5562c",
+  "semver.py": "4eb9c105fbf242a3acc2d0c8dd0ee75dd9820d4d2c5fcdaa83954a0134052a7d",
+  "stage.py": "1ea7e38a8fd97ef6859c618e1a3192e38f82b377dcd38ad00fd2e71fd08549b8",
+  "standards.py": "f4b5bc74030b104ef21c78dffe50fdc7db8dc357c9b0caf7fb28ef16a357cdc5",
+  "state.py": "59a1d45a77b9f728db38b387e3675dfa4b4de8cb6139dd377a8480e97d9fd047",
+  "sync.py": "6b8e2005e12a81c611ea409170002fadf75020595fc4d6fe418c8fd2ca112d76",
+  "tasks.py": "53f16f57cc695664f30ced25e3271b0a1998068936fd7821ccd2b307a3e8ee04",
+  "units.py": "920cd7e54405257f91b5834b9fd1e8e30cfab5ecae331c46bb98895d4d50f0b2"
+ },
+ "rule": "never edit \u2014 change the master, run its tests, re-vendor"
+}

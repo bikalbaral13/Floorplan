@@ -1,0 +1,43 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://builderpluss.dev/library/Schemas/spacebrief.v1.schema.json",
+ "title": "spacebrief/1 — the interior brief of one space: derived drawings, element schedule, references, decisions",
+ "description": "Produced by the space-brief pipeline (S5 seed, S10 final). Elements start from the plan (space, wall run, opening, object group) and carry the architect's spec; the final file adds each element's issued revision, the client's effective decision and the review comments. MASTER in the pipeline's schemas/; promote to library/Schemas with the user's approval.",
+ "type": "object",
+ "required": ["schema", "project", "space", "levels", "sheets", "references", "elements"],
+ "properties": {
+  "schema": {"const": "spacebrief/1"},
+  "project": {"type": "object", "required": ["code", "title"], "properties": {"code": {"type": "string", "pattern": "^[A-Z0-9_]+$"}, "title": {"type": "string"}, "client": {"type": "string"}}},
+  "space": {"type": "object", "required": ["label", "ids"], "properties": {"label": {"type": "string"}, "ids": {"type": "array", "items": {"type": "string"}, "minItems": 1}}},
+  "levels": {"type": "object", "required": ["ceiling_mm", "soffit_mm"], "properties": {
+    "ceiling_mm": {"type": "number", "exclusiveMinimum": 0}, "soffit_mm": {"type": "number", "exclusiveMinimum": 0}, "partition_mm": {"type": ["number", "null"]},
+    "src": {"type": "object", "additionalProperties": {"enum": ["plan", "convention", "user"]}}}},
+  "sheets": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["id", "kind", "name", "w", "h", "file"], "properties": {
+    "id": {"type": "string"}, "kind": {"enum": ["plan", "rcp", "elevation"]}, "name": {"type": "string"}, "w": {"type": "number"}, "h": {"type": "number"}, "file": {"type": "string"}, "png": {"type": "string"}}}},
+  "references": {"type": "array", "items": {"type": "object", "required": ["id", "file", "title"], "properties": {
+    "id": {"type": "string", "pattern": "^ref-[0-9a-f]{10}$"}, "file": {"type": "string"}, "sha256": {"type": "string"}, "title": {"type": "string"}, "for": {"type": "string"}, "url": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "asset": {"type": "string"}}}},
+  "tray": {"type": "array", "items": {"type": "string"}},
+  "elements": {"type": "array", "items": {"$ref": "#/$defs/element"}},
+  "rounds": {"type": "array"},
+  "issue": {"type": ["object", "null"]},
+  "pipeline": {"type": "object"},
+  "fixture": {"type": "boolean"}
+ },
+ "$defs": {
+  "shape": {"type": "object", "required": ["sheet", "type", "pts"], "properties": {
+   "sheet": {"type": "string"}, "type": {"enum": ["poly", "line", "pin"]},
+   "pts": {"type": "array", "minItems": 1, "items": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "minItems": 2, "maxItems": 2}}}},
+  "element": {"type": "object", "required": ["id", "code", "name", "cat", "shapes", "spec", "dims", "refs", "options"], "properties": {
+   "id": {"type": "string"}, "code": {"type": "string", "pattern": "^[A-Z]{2}-\\d{2,}$"}, "name": {"type": "string", "minLength": 1},
+   "cat": {"enum": ["floor", "ceiling", "wall", "light", "joinery", "furniture", "soft", "planting", "partition", "signage", "services"]},
+   "origin": {"type": "object", "required": ["type"], "properties": {"type": {"enum": ["space", "run", "opening", "object", "manual"]}}},
+   "shapes": {"type": "array", "items": {"$ref": "#/$defs/shape"}},
+   "spec": {"type": "object", "properties": {"material": {"type": "string"}, "finish": {"type": "string"}, "colourName": {"type": "string"}, "hex": {"type": "string"}, "link": {"type": "string"}}},
+   "dims": {"type": "array", "items": {"type": "object", "required": ["k", "v"], "properties": {"k": {"type": "string"}, "v": {"type": "string"}, "src": {"enum": ["plan", "convention", "architect"]}}}},
+   "notes": {"type": "string"}, "refs": {"type": "array", "items": {"type": "string"}},
+   "options": {"type": "array", "items": {"type": "object", "required": ["id", "label"], "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "hex": {"type": "string"}, "img": {"type": "string"}}}},
+   "rev": {"type": "integer", "minimum": 0},
+   "decision": {"type": ["object", "null"], "properties": {"state": {"enum": ["pending", "approved", "changes", "stale"]}, "rev": {"type": "integer"}, "choice": {"type": ["string", "null"]}, "note": {"type": "string"}, "by": {"type": "string"}, "at": {"type": "number"}}},
+   "comments": {"type": "array"}}}
+ }
+}

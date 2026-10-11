@@ -1,0 +1,483 @@
+{
+  "version": 1,
+  "id": "linear-profile-with-math",
+  "title": "Linear Profile — a trimless plaster-in run, in modules, with a real cut-off",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Linear Profile",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 6h18v3H3z",
+        "M5 9v2",
+        "M9 9v2",
+        "M13 9v2",
+        "M17 9v2",
+        "M21 9v2"
+      ]
+    }
+  },
+  "description": "A parametric LINEAR PROFILE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. A plaster-in run with no visible trim: the slot, the carrier above it and the lens set back inside.\n\nA LONG RUN IS NOT ONE EXTRUSION. It is modules with joints, and the joints are visible from the floor. Rounding the count and dividing the run back out is what keeps every module the same length — which is what a trimless detail has to be, because an odd short piece at one end is the thing that gives it away.\n\nCUT-OFF FROM NADIR IS TWO NUMBERS. How wide the slot is and how deep the lens sits. The limiting sight line runs from the far edge of the aperture to the near edge of the lens, so `atan2(slot width, recess)` is the angle at which the lens disappears behind the aperture edge, and it is the entire reason to set a lens back. `Darklight` at 60 mm gives 28.8°; a flush opal lens gives 90°, which means visible from everywhere.\n\nTHE OPTIC IS REPORTED, NOT MODELLED. Opal, darklight, microprism and asymmetric are four different photometric distributions and one identical extrusion. The distribution belongs to the lamp file; the extrusion belongs here.\n\nDIMENSIONS AT THE DEFAULTS: a 3 m run of 35 mm slot, 75 mm deep, lens 60 mm back, in three 999 mm modules with 2 mm joints — 28.8° cut-off, 3300 lm.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.2,
+              "max": 40,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "profileWidth",
+              "name": "Aperture width",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.012,
+              "max": 0.15,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "profileDepth",
+              "name": "Profile depth",
+              "type": "range",
+              "value": 0.075,
+              "min": 0.03,
+              "max": 0.25,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "recessDepth",
+              "name": "Lens set back from the aperture",
+              "type": "range",
+              "value": 0.06,
+              "min": 0,
+              "max": 0.2,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "moduleLength",
+              "name": "Module length",
+              "type": "range",
+              "value": 1,
+              "min": 0.25,
+              "max": 4,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "jointGap",
+              "name": "Joint gap",
+              "type": "range",
+              "value": 0.002,
+              "min": 0,
+              "max": 0.02,
+              "step": 0.0005,
+              "options": []
+            },
+            {
+              "id": "optic",
+              "name": "Optic",
+              "type": "select",
+              "value": "Darklight",
+              "options": [
+                "Opal",
+                "Darklight",
+                "Microprism",
+                "Asymmetric"
+              ]
+            },
+            {
+              "id": "mountHeight",
+              "name": "Ceiling soffit",
+              "type": "range",
+              "value": 2.7,
+              "min": 1.8,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "lumensPerMetre",
+              "name": "Output per metre",
+              "type": "range",
+              "value": 1100,
+              "min": 100,
+              "max": 4000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 3000,
+              "min": 1800,
+              "max": 8000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.008,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "lightGroupGain",
+              "name": "Light group gain",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 8,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "dimToKelvin",
+              "name": "Warm dim floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 4000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "showEmissiveSurface",
+              "name": "Draw the lit surface",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Objects/Photometry/…)",
+              "type": "text",
+              "value": "Objects/Photometry/LED/linear-darklight-3000k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "linear",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "extruded aluminium carrier, plaster-in flange, darklight louvre",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "seamless recessed line of light, trimless, architectural",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Metal/aluminium-anodised.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Lens=Emissive/diffuser.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "goboPath",
+              "name": "Gobo (Library/Objects/Photometry/gobo/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "sceneMembership",
+              "name": "Lighting scenes",
+              "type": "text",
+              "value": "Bright, Photo",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "LINEAR PROFILE — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a wall segment: local X runs along the segment, origin at its midpoint on the centre-line.\n\nWHAT IT IS\nseamless recessed line of light, trimless, architectural\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Run length: {length}\n- Aperture width: {profileWidth}\n- Profile depth: {profileDepth}\n- Lens set back from the aperture: {recessDepth}\n- Module length: {moduleLength}\n- Joint gap: {jointGap}\n- Optic: {optic} (one of: Opal / Darklight / Microprism / Asymmetric)\n- Ceiling soffit: {mountHeight}\n- Colour rendering index: {cri}\n- Dim level (%): {dimLevel}\n- Lamp radius (soft shadow): {lampRadius}\n- Export a lamp (off = geometry only): {emitsLight}\n- Light group gain: {lightGroupGain}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nThis object emits light. Use these values:\n- Output per metre: {lumensPerMetre}\n- Colour temperature: {kelvin}\n- Warm dim floor: {dimToKelvin}\n- Draw the lit surface: {showEmissiveSurface}\nPlace the emitter where the real lamp or LED sits, make the diffuser / bulb surface emissive to match, and hide the emitter itself from camera where a real fitting would conceal it.\n\nCHECKS (measure after building)\n- Run length = {length}\n- Aperture width = {profileWidth}\n- Profile depth = {profileDepth}\n- Lens set back from the aperture = {recessDepth}\n- Module length = {moduleLength}\n- Ceiling soffit = {mountHeight}\n- Lamp radius (soft shadow) = {lampRadius}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_prof",
+              "kind": "polygon",
+              "name": "Profile",
+              "color": "#a8a29e",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_lens",
+              "kind": "polygon",
+              "name": "Lens",
+              "color": "#fef9c3",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_prof",
+              "kind": "polyhedron",
+              "name": "Profile",
+              "color": "#a8a29e",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lens",
+              "kind": "polyhedron",
+              "name": "Lens",
+              "color": "#fef9c3",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

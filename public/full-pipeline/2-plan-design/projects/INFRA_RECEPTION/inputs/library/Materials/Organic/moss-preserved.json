@@ -1,0 +1,62 @@
+{
+  "schema": "material/1",
+  "category": "Organic",
+  "id": "organic.moss.preserved",
+  "title": "Organic — preserved moss wall",
+  "description": "Preserved reindeer moss panel (INFRA Reception moss wall, deck slides 8 and 25: darker than the first render). Fine two-tone noise for the clumps and real displacement for the cushion relief, because a moss wall reads by its shadows; flat green paint is what the review rejected.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 38,
+      "detail": 8,
+      "roughness": 0.7,
+      "distortion": 2.2,
+      "colorA": "#5b7a24",
+      "colorB": "#33461a"
+    }
+  },
+  "pbr": {
+    "baseColor": "#4e6b1e",
+    "roughness": 0.9,
+    "metallic": 0
+  },
+  "surface": {
+    "displacement": {
+      "source": "procedural",
+      "height": 0.018,
+      "midlevel": 0.5,
+      "scale": 40
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.8,
+      "scale": 1
+    },
+    "subsurface": {
+      "weight": 0.2,
+      "radius": [
+        0.01,
+        0.02,
+        0.006
+      ],
+      "scale": 0.01
+    },
+    "roughnessVariation": {
+      "amount": 0.08,
+      "scale": 30
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#4e6b1e"
+  },
+  "dxf": {
+    "pattern": "GRASS",
+    "scale": 0.3,
+    "angle": 0
+  }
+}

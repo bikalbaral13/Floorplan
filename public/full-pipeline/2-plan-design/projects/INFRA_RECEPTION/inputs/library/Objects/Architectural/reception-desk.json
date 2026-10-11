@@ -1,0 +1,447 @@
+{
+  "version": 1,
+  "id": "reception-desk-with-math",
+  "title": "Reception Desk — white sweeping fascia over a timber cubby wall, with a transaction ledge",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Reception Desk",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 10h18v9H3z",
+        "M3 10c4 0 6 9 18 9",
+        "M7 13v3",
+        "M11 13v3",
+        "M15 13v3"
+      ]
+    }
+  },
+  "description": "A parametric RECEPTION DESK on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE. The visitor faces the −v side: a timber cubby wall rises to the transaction ledge (worktop + ledge rise), and a white fascia sweeps across it from full height at one end down to Sweep low point at the other — a cosine, so it leaves the top and arrives at the floor tangentially. The staff worktop sits behind at worktop height between two white end panels.\n\nDEFAULTS are the INFRA Reception dims sheet (slide 16): 3300 long, 800 deep, 750 worktop, 300 ledge rise.\n\nWHAT THIS CANNOT DO: the reference fascia is a doubly-curved solid; this one is a vertical ribbon of flat segments whose top edge follows the curve.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 3.3,
+              "min": 1.2,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.5,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Worktop height",
+              "type": "range",
+              "value": 0.75,
+              "min": 0.6,
+              "max": 1,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "ledgeRise",
+              "name": "Ledge rise above worktop",
+              "type": "range",
+              "value": 0.3,
+              "min": 0,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "ledgeDepth",
+              "name": "Ledge depth",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.15,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "topThk",
+              "name": "Top thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.012,
+              "max": 0.1,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "fasciaThk",
+              "name": "Fascia thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.012,
+              "max": 0.15,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "sweep",
+              "name": "Fascia sweep",
+              "type": "select",
+              "value": "Left high",
+              "options": [
+                "Left high",
+                "Right high",
+                "Full"
+              ]
+            },
+            {
+              "id": "sweepLow",
+              "name": "Sweep low point (fraction)",
+              "type": "range",
+              "value": 0.08,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "sweepSegments",
+              "name": "Sweep segments",
+              "type": "range",
+              "value": 28,
+              "min": 4,
+              "max": 80,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "cubbyCols",
+              "name": "Cubby columns",
+              "type": "range",
+              "value": 11,
+              "min": 1,
+              "max": 30,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "cubbyRows",
+              "name": "Cubby rows",
+              "type": "range",
+              "value": 3,
+              "min": 1,
+              "max": 8,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "boardThk",
+              "name": "Cubby board thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.009,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "plinth",
+              "name": "Plinth height",
+              "type": "range",
+              "value": 0.06,
+              "min": 0,
+              "max": 0.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "white solid surface, oak cubbies",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "sculpted reception counter",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "materialPath",
+              "name": "Material path",
+              "type": "text",
+              "value": "Finishes/quartz.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "finishes",
+              "name": "Finishes",
+              "type": "text",
+              "value": "Cubbies=Finishes/oak-veneer.json; *=Finishes/quartz.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specId",
+              "name": "Spec id",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specCategory",
+              "name": "Spec category",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "specNote",
+              "name": "Spec note",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "deckSlides",
+              "name": "Deck slides",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "refImages",
+              "name": "Reference images",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "productUrl",
+              "name": "Product link",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_white",
+              "kind": "polygon",
+              "name": "Counter",
+              "color": "#e7e5e4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_cub",
+              "kind": "polygon",
+              "name": "Cubbies",
+              "color": "#926343",
+              "layer": "Furniture",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_white",
+              "kind": "polyhedron",
+              "name": "Counter",
+              "color": "#F5F5F3",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cub",
+              "kind": "polyhedron",
+              "name": "Cubbies",
+              "color": "#926343",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_plinth",
+              "kind": "polyhedron",
+              "name": "Plinth",
+              "color": "#1f2937",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

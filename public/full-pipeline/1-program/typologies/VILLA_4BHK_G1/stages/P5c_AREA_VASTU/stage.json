@@ -1,0 +1,10 @@
+{
+ "id": "P5c_AREA_VASTU", "version": "0.1.0", "scope": "either",
+ "title": "Floor-wise area statement and vastu report",
+ "summary": "Selected villa -> output/area_statement_levels.csv (rooms per floor, footprint, FAR area with exclusions) and output/VASTU.md (zone of each key room, score, mirrored or not).",
+ "inputs": ["selected.json", "rules.json (far_excludes, far_max, coverage_max_pct)", "brief.json (vastu)"],
+ "outputs": ["output/area_statement_levels.csv", "output/VASTU.md"],
+ "checks": ["FAR and coverage against confirmed rules (fail)", "vastu 'avoid' placements reported as warnings when brief.vastu"],
+ "requires": ["generate"],
+ "manual": "Typology-owned (VILLA_4BHK_G1)."
+}

@@ -1,0 +1,29 @@
+{
+ "TOWNHOME_RENTAL": {
+  "title": "Town home rentals: 4 ground-floor units, central open court with staircase for future floors",
+  "version": "0.2.0",
+  "status": "tested",
+  "planner": "typologies/TOWNHOME_RENTAL/planner/town_home_rental_planner.html",
+  "options": 10,
+  "projects": [
+   "AD_TH01",
+   "ZZ_X"
+  ],
+  "versions": [
+   "0.1.0",
+   "0.2.0"
+  ],
+  "extends": ""
+ },
+ "VILLA_4BHK_G1": {
+  "title": "Premium 4BHK independent villa, G+1, 30' x 40' class plots (modern Indian, vastu-aware)",
+  "version": "0.1.0",
+  "versions": [
+   "0.1.0"
+  ],
+  "status": "tested",
+  "extends": "",
+  "planner": "typologies/VILLA_4BHK_G1/planner/villa_4bhk_planner.html",
+  "projects": []
+ }
+}

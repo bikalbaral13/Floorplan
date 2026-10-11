@@ -1,0 +1,9 @@
+task_id,stage,title,depends_on,status,approved,started,finished,output,notes
+S1_INTAKE,S1_INTAKE,deck.json + images/,,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S2_BRIEF,S2_BRIEF,roombrief.json (roombrief/1),S1_INTAKE,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S3_GEOMETRY,S3_GEOMETRY,trace.px.json (agent reads plan pixels) -> plan.json (tracer-plan/1) + <CODE>.ca,S2_BRIEF,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S4_RESOLVE,S4_RESOLVE,resolve.json (deck-resolve/1): item -> object + real param ids + host + material,S3_GEOMETRY,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S5_COMPOSE,S5_COMPOSE,<CODE>.room.canvas.json (R2 Designs/Decks/<CODE>.json): every attachment = objec,S4_RESOLVE,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S6_DRAWINGS,S6_DRAWINGS,"<CODE>_drawings.dxf (R2010, 4 A1 layouts: A-101 plan 1:25, A-102 RCP 1:25, A-201",S5_COMPOSE,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S7_RENDER,S7_RENDER,"<CODE>.blend (Cycles, deck materials, lamps from fixture photometry, deck camera",S6_DRAWINGS,done,,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""
+S8_QA,S8_QA,"QA.md + qa_compare.png: deck review comments tested on baked geometry/params, co",S7_RENDER,done,FIXTURE pilot 2026-10-08,,,,"recorded from pipeline.json status ""S1-S8 done for INFRA RECEPTION (2026-10-08)"""

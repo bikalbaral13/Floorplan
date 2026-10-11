@@ -1,0 +1,543 @@
+{
+  "version": 1,
+  "id": "downlight-with-math",
+  "title": "Downlight — one Math Engine, trim ring, housing and beam footprint",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Downlight",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 3a4 4 0 100 8 4 4 0 000-8z",
+        "M6 21l6-10 6 10",
+        "M4 7h2",
+        "M18 7h2"
+      ]
+    }
+  },
+  "description": "A parametric DOWNLIGHT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE at the position you want the spot. This is the object the plan's six recessed spots need; `light-bulb-with-math` mounts a lamp, it does not cut a ceiling.\n\nTRIM STYLE MOVES TWO PLANES AND NOTHING ELSE. Flush puts the lens at the soffit, Recessed drops it half an aperture up inside, Surface hangs the whole housing below, Gimbal aims it. Each is one flag, and the lens plane, the housing plane and the beam offset are written in terms of them, so there is no fourth body to keep in step.\n\nTHE BEAM IS REPORTED AS A FOOTPRINT, NOT MODELLED AS A CONE. `_br = ceilingHeight × tan(beamAngle / 2)` is the radius the cone actually makes at the floor, drawn as a plan circle and reported as a diameter. A tilted gimbal shifts that circle by `ceilingHeight × tan(tilt)` along the host's own axis — so the circle is where the light really lands, which is the thing worth drawing.\n\nILLUMINANCE FALLS OUT OF THE SAME TWO NUMBERS: lumens over the beam's floor area. It is approximate on purpose — it is a sanity figure for spacing, not a photometric calculation.\n\nHOUSING AND LENS ARE TUBE ROWS and the trim is a RING row, so the circle is resolved by the renderer at its own segment count rather than faceted here.\n\nDIMENSIONS AT THE DEFAULTS: a 75 mm aperture in a 90 mm cutout at 3.124 m, a 36° beam landing 2.03 m across, 650 lm, about 201 lx, suggested spacing 4.69 m.\n\nWHAT THIS CANNOT DO. It does not cut the ceiling — `cutoutDia` is a reported number for whoever does. No light is cast; there is no IES distribution, and the illuminance figure assumes an even beam.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "aperture",
+              "name": "Aperture diameter",
+              "type": "range",
+              "value": 0.075,
+              "min": 0.02,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "trim",
+              "name": "Trim",
+              "type": "select",
+              "value": "Flush",
+              "options": [
+                "Flush",
+                "Recessed",
+                "Gimbal",
+                "Surface"
+              ]
+            },
+            {
+              "id": "trimWidth",
+              "name": "Trim width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "housingDia",
+              "name": "Housing diameter",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "housingHeight",
+              "name": "Housing height",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.02,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Ceiling soffit",
+              "type": "range",
+              "value": 3.124,
+              "min": 1.8,
+              "max": 6,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "aimTilt",
+              "name": "Gimbal tilt",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 40,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "beamAngle",
+              "name": "Beam angle",
+              "type": "range",
+              "value": 36,
+              "min": 8,
+              "max": 120,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 3000,
+              "min": 2200,
+              "max": 6500,
+              "step": 100,
+              "options": []
+            },
+            {
+              "id": "lumens",
+              "name": "Output",
+              "type": "range",
+              "value": 650,
+              "min": 50,
+              "max": 4000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "showBeam",
+              "name": "Beam footprint in plan",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "beamBlend",
+              "name": "Beam edge softness",
+              "type": "range",
+              "value": 0.25,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "lightGroupGain",
+              "name": "Light group gain",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 8,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "dimToKelvin",
+              "name": "Warm dim floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 4000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "showEmissiveSurface",
+              "name": "Draw the lit surface",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "white powder-coated trim, frosted lens, 3000K COB",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "discreet recessed spotlight, clean ceiling, minimal trim, contemporary",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Objects/Photometry/…)",
+              "type": "text",
+              "value": "Objects/Photometry/LED/cob-spot-3000k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "downlights",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "iesProfile",
+              "name": "IES profile (Library/Objects/Photometry/ies/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightLink",
+              "name": "Light linking (include / exclude)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Metal/powder-coat.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "Lens=Emissive/diffuser.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "goboPath",
+              "name": "Gobo (Library/Objects/Photometry/gobo/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "sceneMembership",
+              "name": "Lighting scenes",
+              "type": "text",
+              "value": "Bright, Photo",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "DOWNLIGHT — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a point: origin at the placement point on the floor.\n\nWHAT IT IS\ndiscreet recessed spotlight, clean ceiling, minimal trim, contemporary\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Aperture diameter: {aperture}\n- Trim: {trim} (one of: Flush / Recessed / Gimbal / Surface)\n- Trim width: {trimWidth}\n- Housing diameter: {housingDia}\n- Housing height: {housingHeight}\n- Ceiling soffit: {mountHeight}\n- Gimbal tilt: {aimTilt}\n- Colour rendering index: {cri}\n- Dim level (%): {dimLevel}\n- Lamp radius (soft shadow): {lampRadius}\n- Export a lamp (off = geometry only): {emitsLight}\n- Light group gain: {lightGroupGain}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nThis object emits light. Use these values:\n- Beam angle: {beamAngle}\n- Colour temperature: {kelvin}\n- Output: {lumens}\n- Beam footprint in plan: {showBeam}\n- Beam edge softness: {beamBlend}\n- Warm dim floor: {dimToKelvin}\n- Draw the lit surface: {showEmissiveSurface}\nPlace the emitter where the real lamp or LED sits, make the diffuser / bulb surface emissive to match, and hide the emitter itself from camera where a real fitting would conceal it.\n\nCHECKS (measure after building)\n- Trim width = {trimWidth}\n- Housing height = {housingHeight}\n- Ceiling soffit = {mountHeight}\n- Lamp radius (soft shadow) = {lampRadius}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_beam",
+              "kind": "circle",
+              "name": "Beam footprint",
+              "color": "#fef3c7",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_trim",
+              "kind": "circle",
+              "name": "Trim",
+              "color": "#78716c",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_ap",
+              "kind": "circle",
+              "name": "Aperture",
+              "color": "#fbbf24",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_hous",
+              "kind": "tube",
+              "name": "Housing",
+              "color": "#57534e",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_trim",
+              "kind": "ring",
+              "name": "Trim ring",
+              "color": "#d6d3d1",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lens",
+              "kind": "tube",
+              "name": "Lens",
+              "color": "#fde68a",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

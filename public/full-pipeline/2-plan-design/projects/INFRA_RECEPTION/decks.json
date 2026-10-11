@@ -1,0 +1,25 @@
+{
+ "url": "https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe",
+ "versions": [
+  {
+   "k": 1,
+   "issue": 1,
+   "filename": "INFRA_RECEPTION_brief_I1_v1.pptx",
+   "sha256": "10eeee0fba2850a5e094656668f33ac8b3ba50adb1f86e78f9f84d92888801d0",
+   "bytes": 5293969,
+   "slides": 35,
+   "at": "2026-10-09T16:57:50.729Z",
+   "by": "local-architect",
+   "note": "First brief for the modeler (fixture)",
+   "counts": {
+    "draft": 0,
+    "pending": 2,
+    "stale": 1,
+    "approved": 14,
+    "changes": 1
+   },
+   "outstanding": 10,
+   "fixture": true
+  }
+ ]
+}

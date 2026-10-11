@@ -1,0 +1,46 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "paint.matte.white",
+  "title": "Paint — matte white emulsion",
+  "description": "Default interior wall finish: bright, slightly warm matte white. Very low-contrast noise so a large wall reads as paint over plaster, not as a flat polygon; roughness high so it never shows a hot spot.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 80,
+      "detail": 2,
+      "roughness": 0.35,
+      "distortion": 0,
+      "colorA": "#f7f6f3",
+      "colorB": "#efede8"
+    }
+  },
+  "pbr": {
+    "baseColor": "#f4f3ef",
+    "roughness": 0.88,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.003,
+      "samples": 3
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 12
+    }
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#f4f3ef"
+  },
+  "dxf": {
+    "pattern": "SOLID",
+    "scale": 1,
+    "angle": 0
+  }
+}

@@ -1,0 +1,10 @@
+task_id,stage,title,depends_on,status,agent,approved,started,finished,output,notes
+S1_INTAKE,S1_INTAKE,Intake the drawing and references,,done,claude,,2026-10-11T02:23:19,2026-10-11T02:23:19,intake.json,"plan: 13 band segments, 2 spaces; 22 references; 50 library files"
+S2_GEOMETRY,S2_GEOMETRY,Read the plan geometry,S1_INTAKE,done,claude,,2026-10-11T02:23:19,2026-10-11T02:23:19,geo.all.json;scope.draft.json,"13 band segments, 2 spaces, 5 facing wall runs, 8 objects"
+S3_SCOPE,S3_SCOPE,"Confirm scope, levels and team with the user",S2_GEOMETRY,done,claude,"FIXTURE — rerun on pipeline_kit 0.2.0 + library standards, 2026-10-11",2026-10-11T02:23:19,2026-10-11T02:23:19,scope.json,"scope: 2 space(s), FC +2700, soffit +3600, seed issue True"
+S4_VIEWS,S4_VIEWS,"Derive plan, RCP and interior elevations",S3_SCOPE,done,claude,,2026-10-11T02:23:19,2026-10-11T02:23:20,geo.json;views/;views.json,"plan + RCP + 5 elevations (A north, B east, C south, D south-west, E west)"
+S5_SCHEDULE,S5_SCHEDULE,Seed the element schedule,S4_VIEWS,done,claude,,2026-10-11T02:23:20,2026-10-11T02:23:20,brief.json;refs/,"18 elements (floor 2, ceiling 2, partition 5, wall 4, soft 1, joinery 1, furniture 2, planting 1); 17 refs attached, 5 in the tray"
+S6_APPS,S6_APPS,"Generate the architect, client and modeler apps",S5_SCHEDULE,done,claude,,2026-10-11T02:23:20,2026-10-11T02:23:21,apps/site/;apps/dbseed/;apps/publish.json,"router + 3 role pages, 34 files, 3.8 MB, 20 seed documents; site 84f9246a9e97"
+S7_PUBLISH_APPS,S7_PUBLISH_APPS,Publish the apps and seed the brief,S6_APPS,failed,claude,,2026-10-11T02:23:21,2026-10-11T02:23:21,apps.json,"published https://claude.ai/artifact/SZv1Y7tS9CbfraEJDkPjAe (republish), run 20261009T161819Z"
+S8_ARCHIVE,S8_ARCHIVE,Archive the brief decks the architect generated,S7_PUBLISH_APPS,todo,claude,,2026-10-09T16:58:12,2026-10-09T16:58:13,decks/;decks.json,reset: S6_APPS re-ran 2026-10-09T17:34:39
+S9_PUBLISH,S9_PUBLISH,Publish lasting outputs and the run record,S8_ARCHIVE,todo,claude,,2026-10-09T16:58:13,2026-10-09T16:58:13,publish/;run.json,reset: S6_APPS re-ran 2026-10-09T17:34:39

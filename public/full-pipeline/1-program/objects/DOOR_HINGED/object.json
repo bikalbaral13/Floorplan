@@ -1,0 +1,13 @@
+{
+ "id": "DOOR_HINGED",
+ "version": "0.1.0",
+ "title": "Single-leaf hinged door placed along a wall",
+ "frame": "Feet. The wall is a straight segment; position 0% = first end (west end of a north wall, north end of an east wall).",
+ "parameters": {
+  "width_ft":     {"type": "number", "default": 3,   "min": 2.5, "max": 4,   "unit": "ft", "label": "Door width"},
+  "position_pct": {"type": "number", "default": 50,  "min": 0,   "max": 100, "unit": "%",  "label": "Position along the wall"},
+  "margin_ft":    {"type": "number", "default": 0.5, "min": 0,   "max": 2,   "unit": "ft", "label": "Minimum distance from the wall ends"}
+ },
+ "rule_keys": {"min_width_ft": "door_min_width_ft"},
+ "functions": ["place", "qc"]
+}

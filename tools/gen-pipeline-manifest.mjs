@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const PIPELINES = [["public/interior-mesh-pipeline", "Interior Mesh Pipeline"], ["public/floorplan-tracer-pipeline", "Floorplan Tracer Pipeline"], ["public/exterior-mesh-pipeline", "Exterior Mesh Pipeline"], ["public/walkthrough-video-pipeline", "Walkthrough Video generation Pipeline"], ["public/build-from-deck-pipeline", "Build from Plan Deck"]];
+const PIPELINES = [["public/interior-mesh-pipeline", "Interior Mesh Pipeline"], ["public/floorplan-tracer-pipeline", "Floorplan Tracer Pipeline"], ["public/exterior-mesh-pipeline", "Exterior Mesh Pipeline"], ["public/full-pipeline", "Full Pipeline"]];
 const SKIP = new Set(["cache", "output", "work", "__pycache__"]);
 const walk = (dir, rel = "") => {
   const entries = fs.readdirSync(dir, { withFileTypes: true })

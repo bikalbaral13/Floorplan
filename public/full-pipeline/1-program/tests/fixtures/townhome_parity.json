@@ -1,0 +1,3746 @@
+[
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "A",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 15,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 15,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2355,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "B",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 13,
+"h": 39.25,
+"d": "N",
+"a": 510.25
+},
+{
+"n": 2,
+"x": 17,
+"y": 10,
+"w": 13,
+"h": 39.25,
+"d": "N",
+"a": 510.25
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 15,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+},
+{
+"x": 13,
+"y": 10,
+"w": 4,
+"h": 39.25,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2198,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "C",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 0,
+"y": 29.625,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 0,
+"y": 80.875,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2355,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "D",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 30,
+"h": 19.625,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 0,
+"y": 29.625,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 0,
+"y": 80.875,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2355,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "E",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 15,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 0,
+"y": 80.875,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2355,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "F",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 0,
+"y": 29.625,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 15,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2355,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "G",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+},
+{
+"n": 2,
+"x": 17,
+"y": 10,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+},
+{
+"n": 4,
+"x": 17,
+"y": 61.25,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+},
+{
+"x": 13,
+"y": 10,
+"w": 4,
+"h": 39.25,
+"k": "access"
+},
+{
+"x": 13,
+"y": 61.25,
+"w": 4,
+"h": 39.25,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2041,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "H",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 15,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+},
+{
+"n": 4,
+"x": 17,
+"y": 61.25,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+},
+{
+"x": 13,
+"y": 61.25,
+"w": 4,
+"h": 39.25,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2198,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "I",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 0,
+"y": 29.625,
+"w": 30,
+"h": 19.625,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+},
+{
+"n": 4,
+"x": 17,
+"y": 61.25,
+"w": 13,
+"h": 39.25,
+"d": "E",
+"a": 510.25
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+},
+{
+"x": 13,
+"y": 61.25,
+"w": 4,
+"h": 39.25,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2198,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 0,
+"setback_east_ft": 6,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 12,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "J",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 0,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 2,
+"x": 15,
+"y": 10,
+"w": 15,
+"h": 39.25,
+"d": "E",
+"a": 588.75
+},
+{
+"n": 3,
+"x": 0,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+},
+{
+"n": 4,
+"x": 15,
+"y": 61.25,
+"w": 15,
+"h": 39.25,
+"d": "N",
+"a": 588.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 30,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 0,
+"y": 49.25,
+"w": 30,
+"h": 12,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 49.25,
+"w": 10.166666666666668,
+"h": 7.333333333333333,
+"entryOK": true
+},
+"total": 2355,
+"warn": [],
+"warn2": [],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "A",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 24,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 24,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4452,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "B",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 18.5,
+"h": 61.48,
+"d": "N",
+"a": 1137.3799999999999
+},
+{
+"n": 2,
+"x": 26.5,
+"y": 12,
+"w": 18.5,
+"h": 61.48,
+"d": "N",
+"a": 1137.3799999999999
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 24,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+},
+{
+"x": 21.5,
+"y": 12,
+"w": 5,
+"h": 61.48,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4144.6,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "C",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 3,
+"y": 42.739999999999995,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 42,
+"h": 22.26,
+"d": "E",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 3,
+"y": 109.74,
+"w": 42,
+"h": 22.26,
+"d": "E",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4452,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "D",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 42,
+"h": 30.74,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 3,
+"y": 42.739999999999995,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 42,
+"h": 22.26,
+"d": "E",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 3,
+"y": 109.74,
+"w": 42,
+"h": 22.26,
+"d": "E",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4452,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "E",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 24,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 42,
+"h": 22.26,
+"d": "E",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 3,
+"y": 109.74,
+"w": 42,
+"h": 22.26,
+"d": "E",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4452,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "F",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 3,
+"y": 42.739999999999995,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 24,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4452,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "G",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 18.5,
+"h": 61.48,
+"d": "E",
+"a": 1137.3799999999999
+},
+{
+"n": 2,
+"x": 26.5,
+"y": 12,
+"w": 18.5,
+"h": 61.48,
+"d": "E",
+"a": 1137.3799999999999
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 18.5,
+"h": 44.52,
+"d": "E",
+"a": 823.62
+},
+{
+"n": 4,
+"x": 26.5,
+"y": 87.47999999999999,
+"w": 18.5,
+"h": 44.52,
+"d": "E",
+"a": 823.62
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+},
+{
+"x": 21.5,
+"y": 12,
+"w": 5,
+"h": 61.48,
+"k": "access"
+},
+{
+"x": 21.5,
+"y": 87.47999999999999,
+"w": 5,
+"h": 44.52,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": true
+},
+"total": 3921.9999999999995,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "H",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 24,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 18.5,
+"h": 44.52,
+"d": "E",
+"a": 823.62
+},
+{
+"n": 4,
+"x": 26.5,
+"y": 87.47999999999999,
+"w": 18.5,
+"h": 44.52,
+"d": "E",
+"a": 823.62
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+},
+{
+"x": 21.5,
+"y": 87.47999999999999,
+"w": 5,
+"h": 44.52,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": true
+},
+"total": 4229.4,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "I",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 3,
+"y": 42.739999999999995,
+"w": 42,
+"h": 30.74,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 18.5,
+"h": 44.52,
+"d": "E",
+"a": 823.62
+},
+{
+"n": 4,
+"x": 26.5,
+"y": 87.47999999999999,
+"w": 18.5,
+"h": 44.52,
+"d": "E",
+"a": 823.62
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+},
+{
+"x": 21.5,
+"y": 87.47999999999999,
+"w": 5,
+"h": 44.52,
+"k": "access"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": true
+},
+"total": 4229.4,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 50,
+"plot_west_ft": 140,
+"plot_east_ft": 138,
+"setback_west_ft": 3,
+"setback_east_ft": 5,
+"setback_front_ft": 12,
+"setback_rear_ft": 6,
+"court_ft": 14,
+"front_share_pct": 58,
+"passage_ft": 5,
+"floor_height_ft": 10.5,
+"max_riser_in": 6.5,
+"tread_in": 11,
+"flight_width_ft": 4,
+"door1_pct": 50,
+"door_width_ft": 3.5,
+"door2_pct": 10,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "J",
+"stair_position": "C",
+"stair_first_flight": "N",
+"stair_turn": "L",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 3,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "N",
+"a": 1291.08
+},
+{
+"n": 2,
+"x": 24,
+"y": 12,
+"w": 21,
+"h": 61.48,
+"d": "E",
+"a": 1291.08
+},
+{
+"n": 3,
+"x": 3,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+},
+{
+"n": 4,
+"x": 24,
+"y": 87.47999999999999,
+"w": 21,
+"h": 44.52,
+"d": "N",
+"a": 934.9200000000001
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 50,
+"h": 12,
+"k": "access"
+},
+{
+"x": 0,
+"y": 132,
+"w": 50,
+"h": 6,
+"k": "open"
+},
+{
+"x": 0,
+"y": 12,
+"w": 3,
+"h": 120,
+"k": "open"
+},
+{
+"x": 45,
+"y": 12,
+"w": 5,
+"h": 120,
+"k": "access"
+},
+{
+"x": 3,
+"y": 73.47999999999999,
+"w": 42,
+"h": 14,
+"k": "court"
+}
+],
+"stair": {
+"x": 19.833333333333332,
+"y": 73.47999999999999,
+"w": 8.333333333333334,
+"h": 12.25,
+"entryOK": false
+},
+"total": 4452,
+"warn": [],
+"warn2": [
+"Only 1'-9\" is left beside the staircase in the court. Keep at least 3'-6\" clear for access.",
+"The first step faces a wall or the edge of the court. Change the direction, turn or position so the stair starts from open court."
+],
+"sp": {
+"risers": 20,
+"rAct": 6.3,
+"perF": 10,
+"treads": 9,
+"run": 8.25,
+"SL": 12.25,
+"SW": 8.333333333333334,
+"TD": 11,
+"FW": 4,
+"FH": 10.5
+},
+"scale": 200
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "A",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 21,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 21,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+}
+],
+"stair": null,
+"total": 2715,
+"warn": [
+"The rear north-facing units open onto the court. With no court they have no entrance."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "B",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 13,
+"h": 45.25,
+"d": "N",
+"a": 588.25
+},
+{
+"n": 2,
+"x": 23,
+"y": 10,
+"w": 13,
+"h": 45.25,
+"d": "N",
+"a": 588.25
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 21,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "access"
+},
+{
+"x": 19,
+"y": 10,
+"w": 4,
+"h": 45.25,
+"k": "access"
+}
+],
+"stair": null,
+"total": 2534,
+"warn": [
+"The rear north-facing units open onto the court. With no court they have no entrance."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "C",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 6,
+"y": 32.625,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 6,
+"y": 77.875,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+}
+],
+"stair": null,
+"total": 2715,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "D",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 30,
+"h": 22.625,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 6,
+"y": 32.625,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 6,
+"y": 77.875,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+}
+],
+"stair": null,
+"total": 2715,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "E",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 21,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 6,
+"y": 77.875,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+}
+],
+"stair": null,
+"total": 2715,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "F",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 6,
+"y": 32.625,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 21,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+}
+],
+"stair": null,
+"total": 2715,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in.",
+"The rear north-facing units open onto the court. With no court they have no entrance."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "G",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+},
+{
+"n": 2,
+"x": 23,
+"y": 10,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+},
+{
+"n": 4,
+"x": 23,
+"y": 55.25,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+},
+{
+"x": 19,
+"y": 10,
+"w": 4,
+"h": 45.25,
+"k": "access"
+},
+{
+"x": 19,
+"y": 55.25,
+"w": 4,
+"h": 45.25,
+"k": "access"
+}
+],
+"stair": null,
+"total": 2353,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "H",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 21,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+},
+{
+"n": 4,
+"x": 23,
+"y": 55.25,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+},
+{
+"x": 19,
+"y": 55.25,
+"w": 4,
+"h": 45.25,
+"k": "access"
+}
+],
+"stair": null,
+"total": 2534,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "I",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 6,
+"y": 32.625,
+"w": 30,
+"h": 22.625,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+},
+{
+"n": 4,
+"x": 23,
+"y": 55.25,
+"w": 13,
+"h": 45.25,
+"d": "E",
+"a": 588.25
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+},
+{
+"x": 19,
+"y": 55.25,
+"w": 4,
+"h": 45.25,
+"k": "access"
+}
+],
+"stair": null,
+"total": 2534,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+},
+{
+"params": {
+"plot_width_ft": 36,
+"plot_west_ft": 106,
+"plot_east_ft": 105.5,
+"setback_west_ft": 6,
+"setback_east_ft": 0,
+"setback_front_ft": 10,
+"setback_rear_ft": 5,
+"court_ft": 0,
+"front_share_pct": 50,
+"passage_ft": 4,
+"floor_height_ft": 10,
+"max_riser_in": 7,
+"tread_in": 10,
+"flight_width_ft": 3.5,
+"door1_pct": 50,
+"door_width_ft": 3,
+"door2_pct": 50,
+"door3_pct": 50,
+"door4_pct": 50,
+"option": "J",
+"stair_position": "E",
+"stair_first_flight": "W",
+"stair_turn": "R",
+"drawing_north": "up"
+},
+"result": {
+"units": [
+{
+"n": 1,
+"x": 6,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 2,
+"x": 21,
+"y": 10,
+"w": 15,
+"h": 45.25,
+"d": "E",
+"a": 678.75
+},
+{
+"n": 3,
+"x": 6,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+},
+{
+"n": 4,
+"x": 21,
+"y": 55.25,
+"w": 15,
+"h": 45.25,
+"d": "N",
+"a": 678.75
+}
+],
+"zones": [
+{
+"x": 0,
+"y": 0,
+"w": 36,
+"h": 10,
+"k": "access"
+},
+{
+"x": 0,
+"y": 100.5,
+"w": 36,
+"h": 5,
+"k": "open"
+},
+{
+"x": 0,
+"y": 10,
+"w": 6,
+"h": 90.5,
+"k": "open"
+}
+],
+"stair": null,
+"total": 2715,
+"warn": [
+"This option needs an east setback. With 0 on the east, the east-facing units have no way in.",
+"The rear north-facing units open onto the court. With no court they have no entrance."
+],
+"warn2": [
+"No court, so the staircase is not placed."
+],
+"sp": {
+"risers": 18,
+"rAct": 6.666666666666667,
+"perF": 9,
+"treads": 8,
+"run": 6.666666666666667,
+"SL": 10.166666666666668,
+"SW": 7.333333333333333,
+"TD": 10,
+"FW": 3.5,
+"FH": 10
+},
+"scale": 150
+}
+}
+]

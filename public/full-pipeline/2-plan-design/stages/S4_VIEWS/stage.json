@@ -1,0 +1,22 @@
+{
+ "id": "S4_VIEWS",
+ "version": "0.1.0",
+ "title": "Derive plan, RCP and interior elevations",
+ "kind": "script",
+ "gate": false,
+ "summary": "One plan, one reflected ceiling plan and one unfolded elevation per wall run that faces the scoped spaces — SVG for the apps, PNG for the deck.",
+ "inputs": [
+  "work: geo.all.json",
+  "scope.json"
+ ],
+ "outputs": [
+  "work: geo.json",
+  "work: views/*.svg|png",
+  "work: views.json"
+ ],
+ "checks": [
+  "every facing wall run has an elevation",
+  "openings land inside their run",
+  "all elevations share one scale"
+ ]
+}

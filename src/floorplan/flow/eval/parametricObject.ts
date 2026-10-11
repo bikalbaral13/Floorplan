@@ -26,6 +26,8 @@ import { evalNum, evalRaw, evalTruthy, toNum, type Scope } from "@builderpluss/e
 // six-node flow instead of these rules. Imported at RUNTIME here while spineObject imports only TYPES back,
 // so the pair forms no cycle.
 import { resolveSpineObject, spinePrisms } from "./spineObject";
+import { getPythonResult } from "../../python/pythonObjects";
+import type { ParametricObjectFile } from "../../types";
 
 // Boolean-ops handle for the optional per-rule `clip` (intersect a closed shape with the host footprint).
 type ClipRing = [number, number][];
@@ -1107,14 +1109,15 @@ function basicPrisms(defText: string, anchor: Point, ppm: number, overrides?: Re
  *  Two providers now answer yes: the rules DSL (`geometry`) and a six-node spine flow (`spine`). Every
  *  "has geometry" gate in the editor must ask this rather than testing `geometry` directly — one that tests
  *  the field falls through to the placeholder branch, which is how an imported Bike drew as a STAIRCASE. */
-export const objHasGeometry = (o?: { geometry?: unknown; spine?: unknown } | null): boolean =>
-  !!o && (!!o.geometry || !!o.spine);
+export const objHasGeometry = (o?: { geometry?: unknown; spine?: unknown; python?: unknown } | null): boolean =>
+  !!o && (!!o.geometry || !!o.spine || !!o.python);
 
 /** Is this object a SPINE (it computes its own placement from the host points)? A pobj is authored in local
  *  coordinates and positioned — stretched, rotated, host-aligned — by the renderer afterwards; a spine has
  *  already done all of that inside its Math Engine, so its output must be drawn as-is and it must be GIVEN the
  *  host points. Callers use this to decide both. */
-export const objIsSpine = (o?: { spine?: unknown } | null): boolean => !!o?.spine;
+export const objIsSpine = (o?: { spine?: unknown; python?: { rotates?: string } } | null): boolean =>
+  !!o?.spine || o?.python?.rotates === "self";   // a Math Engine object translated to Python places itself the same way
 
 /** The `showInCanvas` parameters of a placed instance, resolved to their LIVE values and formatted for the
  *  plan label. The instance's own `params` win over the file's defaults — the same precedence every other
@@ -1192,9 +1195,42 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
   if (hit) return hit;
   if (geomCacheSize >= GEOM_CACHE_MAX) { byDef.clear(); byDef.set(defText, byArgs = new Map()); geomCacheSize = 0; }
   const g = evalParametricGeometryUncached(defText, anchor, ppm, overrides, host, resolve, childParams);
+  if (g === PY_PENDING) return g;            // a Python run in flight: ask again when it lands, never cache "empty"
   byArgs.set(argKey, g);
   geomCacheSize++;
   return g;
+}
+
+/** Python objects through the shared dispatcher, so segment / space / export callers draw them like any other
+ *  definition. Plan rings come back in metres — anchor-relative and already placed for `rotates: "self"`
+ *  sources (Math Engine translations), object-local and turned by the `rotation` param otherwise. */
+const PY_PENDING: ParametricGeometry = { fill: [], lines: [], color: "#94a3b8", refLines: [] };
+const pyDefs = new Map<string, ParametricObjectFile | null>();
+function pythonDef(defText: string): ParametricObjectFile | null {
+  let obj = pyDefs.get(defText);
+  if (obj === undefined) {
+    obj = null;
+    if (defText.includes('"python"')) try { const o = JSON.parse(defText) as ParametricObjectFile; obj = o?.python?.source ? o : null; } catch { /* not JSON */ }
+    if (pyDefs.size > 500) pyDefs.clear();
+    pyDefs.set(defText, obj);
+  }
+  return obj;
+}
+function pythonGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): ParametricGeometry | null {
+  const obj = pythonDef(defText);
+  if (!obj) return null;
+  const res = getPythonResult(obj, overrides, host);
+  if (!res) return PY_PENDING;
+  const self = obj.python?.rotates === "self";
+  const rot = self ? 0 : ((Number(overrides?.rotation) || 0) * Math.PI) / 180, c = Math.cos(rot), s = Math.sin(rot);
+  const toPx = (q: number[]): Point => ({ x: anchor.x + (q[0] * c - q[1] * s) * ppm, y: anchor.y + (q[0] * s + q[1] * c) * ppm });
+  const fill: Point[][] = [], lines: Point[][] = [], fillColor: (string | undefined)[] = [];
+  res.plan.forEach((ring, i) => {
+    const pts = ring.map(toPx);
+    if (pts.length > 2) { fill.push([...pts, pts[0]]); fillColor.push(res.planColors?.[i] ?? undefined); }
+    else lines.push(pts);
+  });
+  return { fill, lines, color: fillColor.find(Boolean) ?? "#0f766e", refLines: [], fillColor };
 }
 
 function evalParametricGeometryUncached(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): ParametricGeometry {
@@ -1205,6 +1241,8 @@ function evalParametricGeometryUncached(defText: string, anchor: Point, ppm: num
   // rather than at the call sites is deliberate: all 20-odd consumers of an attached object — the canvas
   // layers, hit-testing, the wall carve, exports — keep working without knowing which kind of definition they
   // are looking at.
+  const py = pythonGeometry(defText, anchor, ppm, overrides, host);
+  if (py) return py;
   const spine = resolveSpineObject(defText, anchor, ppm, overrides, host);
   if (spine) return spine.geometry;
   const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams });
@@ -1532,6 +1570,14 @@ export function evalParametricOutputs(defText: string, overrides?: Record<string
   // anchor-relative metres and the scalars the Output slots carry are metres, degrees and areas.
   const empty: ParamOutputs = { ok: false, declared: [], derived: [] };
   if (renderModeOf(overrides) !== "Full") return empty;          // metrics need the full evaluation
+  const pyObj = pythonDef(defText);
+  if (pyObj) {                                                    // a Python object's metrics are build()'s stats
+    const res = getPythonResult(pyObj, overrides, host);
+    if (!res) return empty;
+    const declared = Object.entries(res.stats ?? {}).filter(([k, v]) => k !== "ms" && k !== "baked" && Number.isFinite(v))
+      .map(([k, v]) => ({ name: k, key: k, value: Number.isInteger(v) ? String(v) : String(Math.round(v * 1e4) / 1e4) }));
+    return { ok: true, declared, derived: [] };
+  }
   const spineO = resolveSpineObject(defText, { x: 0, y: 0 }, 1, overrides, host);
   if (spineO) return spineO.outputs;
   let parsed: unknown;

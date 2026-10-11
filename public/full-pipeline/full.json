@@ -1,0 +1,144 @@
+{
+ "schema": "full-pipeline/1",
+ "version": "0.1.0",
+ "kit": "0.3.1",
+ "manifest": "Projects/{CODE}/project.json",
+ "phases": [
+  {
+   "id": "program",
+   "label": "Program",
+   "dir": "1-program",
+   "pipeline": "program",
+   "who": "owner / client: idea, site sketch, brief + rules answers",
+   "new": [
+    "python",
+    "tools/new_project.py",
+    "{CODE}",
+    "--title",
+    "{TITLE}"
+   ],
+   "bridge": [],
+   "next_steps": "python tools/run_task.py {CODE}   (P1 site … P7 QC; the user answers P2 brief and P3 rules)",
+   "share_inputs": [],
+   "answers": [
+    "brief.json",
+    "rules.json",
+    "parcels/*/brief.json",
+    "parcels/*/rules.json",
+    "selected.json"
+   ],
+   "roles": [
+    "owner",
+    "client"
+   ]
+  },
+  {
+   "id": "plan",
+   "label": "Plan/Design",
+   "dir": "2-plan-design",
+   "pipeline": "space-brief",
+   "who": "architect: answers scope questions, adds design inputs, issues the brief",
+   "new": "from_program",
+   "bridge": [
+    {
+     "from": "Projects/{UP}/program/plan_trace.json",
+     "to": "@phase/upstream/{UP}/plan_trace.json",
+     "required": true
+    }
+   ],
+   "next_steps": "python tools/run_task.py {SUB}   (one brief per floor, made by tools/from_program.py; the architect answers S3 scope)",
+   "share_inputs": [
+    "inputs/plan.canvas.json",
+    "inputs/refs/refs.csv"
+   ],
+   "answers": [
+    "scope.json"
+   ],
+   "roles": [
+    "owner",
+    "architect"
+   ]
+  },
+  {
+   "id": "build",
+   "label": "Build",
+   "dir": "3-build",
+   "pipeline": "build-from-deck",
+   "who": "modeler: picks the room, adds specs / vendor data, signs off QA",
+   "new": "template",
+   "bridge": [
+    {
+     "from": "Projects/{UP}/brief/roombrief.json",
+     "to": "@project/roombrief.json",
+     "required": true
+    }
+   ],
+   "next_steps": "roombrief.json is in place, so S1–S2 (deck intake) are skipped: start at S3_GEOMETRY (see STAGES.json and AGENTS.md)",
+   "share_inputs": [],
+   "skip_when_bridged": {
+    "S1_INTAKE": "roombrief.json came from Plan/Design (no deck intake)",
+    "S2_BRIEF": "roombrief.json came from Plan/Design"
+   },
+   "answers": [
+    "project.json"
+   ],
+   "roles": [
+    "owner",
+    "modeler"
+   ]
+  },
+  {
+   "id": "present",
+   "label": "Present",
+   "dir": "4-present",
+   "pipeline": "walkthrough-video",
+   "who": "presenter: picks stills / walkthrough / report, final client acceptance",
+   "new": [
+    "python",
+    "tools/new_project.py",
+    "{CODE}",
+    "--title",
+    "{TITLE}"
+   ],
+   "bridge": [
+    {
+     "from": "Projects/{UP}/build/{UP}.blend",
+     "to": "@work/input/{UP}.blend",
+     "required": true,
+     "binary": true
+    }
+   ],
+   "next_steps": "python tools/run_task.py {SUB}   (S0 drafts scope.json; blend_path = the bridged .blend under the work dir input/)",
+   "share_inputs": [],
+   "answers": [
+    "scope.json"
+   ],
+   "roles": [
+    "owner",
+    "presenter"
+   ]
+  }
+ ],
+ "rules": [
+  "Shared = R2 Projects/{CODE}/ (outputs.keep of each phase + the manifest + each phase's packed state). Private = local projects/{CODE}/inputs/ and the work dir; they never leave the machine unless `project.py share` is run for a file.",
+  "share_inputs: generated inputs a phase cannot run without (e.g. Plan/Design's inputs/plan.canvas.json, made from the program's plan_trace) travel in the packed state; user uploads under inputs/ stay private.",
+  "A phase can be handed over only when every task in its TASKS.csv is done or skipped (or --force with a reason, which is recorded).",
+  "The next person runs `project.py resume {CODE}`: it pulls the manifest, then either restores the phase they continue (state.json) or creates it from the previous phase's published outputs (bridge).",
+  "Roles: project.json members {name: role}. Only a member whose role is in the phase's `roles` may save, hand over, resume or share in that phase; the creator is owner. Names are self-declared (--by) until the app signs requests — see README."
+ ],
+ "codes": "Each phase records the project codes it produced (program: [CODE]; plan: one per floor, e.g. CODE_GF, CODE_FF). The next phase makes one project per upstream code ({UP}), with the same code ({SUB} = {UP}).",
+ "targets": {
+  "@project/": "projects/{SUB}/ in the phase folder",
+  "@phase/": "the phase folder",
+  "@work/": "the phase project's work dir (outside public/)"
+ },
+ "canvas": "Projects/{CODE}/canvas/current.json — ONE packed multi-level canvas per project (tools/canvas_store.py); revisions in canvas/revs/, log in canvas/index.json",
+ "qa": "Projects/{CODE}/qa/<phase>/<SUB>/ — the files holding the user's answers, copied at every save/handover",
+ "roles": {
+  "owner": "every phase; adds and removes members",
+  "client": "Program; comments and accepts Present",
+  "architect": "Plan/Design",
+  "modeler": "Build",
+  "presenter": "Present"
+ }
+}

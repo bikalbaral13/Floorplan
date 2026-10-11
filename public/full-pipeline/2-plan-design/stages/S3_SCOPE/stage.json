@@ -1,0 +1,19 @@
+{
+ "id": "S3_SCOPE",
+ "version": "0.1.0",
+ "title": "Confirm scope, levels and team with the user",
+ "kind": "agent",
+ "gate": true,
+ "summary": "The user picks the space(s), confirms the ceiling / soffit / partition levels, names the client and whether the plan-derived schedule is issued as I1. The agent writes scope.json from their answers.",
+ "inputs": [
+  "scope.draft.json"
+ ],
+ "outputs": [
+  "scope.json"
+ ],
+ "checks": [
+  "spaces exist in the plan",
+  "levels are numbers in mm and ordered (ceiling ≤ soffit)",
+  "approval recorded on the task row"
+ ]
+}

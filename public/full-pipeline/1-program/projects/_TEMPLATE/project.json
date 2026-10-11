@@ -1,0 +1,25 @@
+{
+ "code": "<PROJECT_CODE>",
+ "title": "<Project title>",
+ "typology": "",
+ "typology_version": "",
+ "variant": "",
+ "parcels": false,
+ "standards": "DEFAULT",
+ "units": "ft",
+ "wall_mm": 230,
+ "handoff": {
+  "design_pipeline": "../design_pipeline",
+  "design_code": ""
+ },
+ "_help": {
+  "units": "program lengths are feet; the hand-off to design_pipeline is mm (X east, Y north, origin = plot south-west corner)",
+  "wall_mm": "wall thickness used to inset unit outlines (taken as wall centrelines) in output/plan_trace.json",
+  "handoff": "where tools/handoff_to_design.py copies plan_trace.json: <design_pipeline>/projects/<design_code>/work/",
+  "typology": "pinned typology id (empty until the P2 match decision; per parcel in parcels/<P>/parcel.json when parcels is true)",
+  "typology_version": "exact version; older versions load from typologies/<ID>/versions/",
+  "variant": "folder of a project-local variant (extends a registered typology); overrides typology",
+  "parcels": "true: P1b splits the site and each parcel pins its own typology",
+  "standards": "standards/<SET>.json \u2014 firm-wide object preferences"
+ }
+}

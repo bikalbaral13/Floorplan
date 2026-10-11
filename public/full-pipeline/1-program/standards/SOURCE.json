@@ -1,0 +1,9 @@
+{
+ "schema": "standards-copy/1",
+ "master": "library/Standards/ (BuilderPluss R2), read through the connector 2026-10-11",
+ "files": {
+  "DEFAULT.json": {"version": "1.0.0", "sha256": "ee99cf82d2ef5f5c4223caedc95205d0dda36ecfa161532148c8fac1a71149c7"},
+  "AADITHYAA.json": {"version": "1.0.0", "sha256": "3e5fa2d005a1073c06b780de6c7a3b13cb98c831256c7de910c1b13697a0ee06"}
+ },
+ "rule": "byte-identical copies of the library masters — never edit here; edit the master, publish with the user's approval, re-copy (selftests compare these hashes)"
+}

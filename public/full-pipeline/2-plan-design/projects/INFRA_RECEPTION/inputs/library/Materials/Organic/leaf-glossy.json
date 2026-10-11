@@ -1,0 +1,61 @@
+{
+  "schema": "material/1",
+  "category": "Organic",
+  "id": "organic.leaf.glossy",
+  "title": "Leaf — glossy tropical, deep green",
+  "description": "Large glossy tropical leaves (bird-of-paradise, banana, philodendron). Deep green with a lighter mottle from a fine noise; the waxy cuticle is a low roughness plus a soft coat, which is what gives these leaves their long highlights; a little subsurface lets backlit leaves glow green instead of going black.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 18,
+      "detail": 4,
+      "roughness": 0.55,
+      "distortion": 0.6,
+      "colorA": "#2a5226",
+      "colorB": "#3d6e32"
+    }
+  },
+  "pbr": {
+    "baseColor": "#335f2c",
+    "roughness": 0.35,
+    "metallic": 0
+  },
+  "surface": {
+    "coat": {
+      "weight": 0.3,
+      "roughness": 0.2,
+      "ior": 1.45
+    },
+    "subsurface": {
+      "weight": 0.15,
+      "radius": [
+        0.004,
+        0.008,
+        0.003
+      ],
+      "scale": 0.01
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.25,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.1,
+      "scale": 20
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#335f2c"
+  },
+  "dxf": {
+    "pattern": "GRASS",
+    "scale": 0.3,
+    "angle": 0
+  }
+}

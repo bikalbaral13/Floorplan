@@ -1,0 +1,403 @@
+{
+  "version": 1,
+  "id": "fluted-panel-with-math",
+  "title": "Fluted Panel — one Math Engine, four flute profiles, shadow gap and a TV cutout",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Fluted Panel",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 3v18",
+        "M8 3v18",
+        "M12 3v18",
+        "M16 3v18",
+        "M20 3v18"
+      ]
+    }
+  },
+  "description": "A parametric FLUTED PANEL on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. This is the plan's TV wall — a fluted run with a shadow gap at both ends and, optionally, a hole for the screen.\n\nTHREE OF THE FOUR PROFILES ARE THE SAME QUAD. A flute is a quad in plan swept up the wall: back edge on the backer, front edge at the flute depth. Square, Tapered and V-groove differ only in the front edge's half-width — `_frontR` is `_r`, `0.45·_r` or `0` — so they are one table with a different number in it, and V-groove collapsing to a point is a triangle the kernel already accepts.\n\nHALF-ROUND IS THE SAME FLUTE SAMPLED. Each of `sides` slices spans an arc of the semicircle and is still one quad, so a faceted round flute takes the identical path as a square one rather than needing a lathe.\n\nTHE CUTOUT IS A SPLIT IN Z, NOT A SUBTRACTION. Flutes whose width overlaps the cutout are built as two bands, below it and above it. Flutes outside keep a full-height first band and a zero-height second one — one wasted row each, and in exchange the table keeps a single shape and there is no branch.\n\nTHE SHADOW GAP IS A REAL INSET. `_ru0 = _u0 + _sg` shortens the fluted run inside the panel, so the gap is a reveal rather than a flute that happens to be missing, and `runLength` reports what is actually fluted.\n\nTHE PITCH IS REDIVIDED, NOT TRUNCATED: `_pw = _run / round(_run / pitch)`, so the flutes always fill the run exactly and the requested pitch is a target. `actualPitch` reports what you got.\n\nDIMENSIONS AT THE DEFAULTS: 2.032 × 2.972 m, 2.008 m of fluted run, 39 half-round flutes at 0.0515 m actual pitch, 0.036 m total depth.\n\nWHAT THIS CANNOT DO. Flutes are vertical — a horizontal slat wall means hosting this on a segment turned on its side, which the object does not do for you. One cutout, rectangular, centred on the panel's length. The backer is a flat slab with no frame or battens.",
+  "nodes": [
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "renderMode",
+              "name": "Render Mode",
+              "type": "select",
+              "value": "Full",
+              "options": [
+                "Nothing",
+                "Basic",
+                "Full"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Panel length",
+              "type": "range",
+              "value": 2.032,
+              "min": 0.2,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Panel height",
+              "type": "range",
+              "value": 2.972,
+              "min": 0.2,
+              "max": 4.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "baseOffset",
+              "name": "Bottom above floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flutePitch",
+              "name": "Flute pitch",
+              "type": "range",
+              "value": 0.051,
+              "min": 0.012,
+              "max": 0.3,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "profile",
+              "name": "Flute profile",
+              "type": "select",
+              "value": "Half-round",
+              "options": [
+                "Half-round",
+                "Square",
+                "Tapered",
+                "V-groove"
+              ]
+            },
+            {
+              "id": "fluteDepth",
+              "name": "Flute depth",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.004,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "fluteGap",
+              "name": "Gap between flutes",
+              "type": "range",
+              "value": 0.004,
+              "min": 0,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "backerThk",
+              "name": "Backer thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shadowGap",
+              "name": "Shadow gap at ends",
+              "type": "range",
+              "value": 0.012,
+              "min": 0,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "sides",
+              "name": "Facets per round flute",
+              "type": "range",
+              "value": 6,
+              "min": 3,
+              "max": 24,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "cutout",
+              "name": "Cutout (TV / niche)",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "cutoutWidth",
+              "name": "Cutout width",
+              "type": "range",
+              "value": 1.1,
+              "min": 0.1,
+              "max": 5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "cutoutHeight",
+              "name": "Cutout height",
+              "type": "range",
+              "value": 0.65,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "cutoutCentre",
+              "name": "Cutout centre height",
+              "type": "range",
+              "value": 1.372,
+              "min": 0.1,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "light oak veneer, matte lacquer, half-round flutes",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "fluted timber feature wall, warm oak, vertical rhythm, contemporary hotel",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "materialPath",
+              "name": "Material (Library/Materials/…)",
+              "type": "text",
+              "value": "Finishes/light-oak.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "finishes",
+              "name": "Per-row finishes (Row=path; …)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "baseColor",
+              "name": "Base colour",
+              "type": "color",
+              "value": "#B8B2A7"
+            },
+            {
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "roughness",
+              "name": "Roughness",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01
+            },
+            {
+              "id": "modelling_plan",
+              "name": "Modelling plan (for Blender / engine agents)",
+              "type": "text",
+              "value": "FLUTED PANEL — MODELLING PLAN (surface draft; to be refined)\nMetres unless stated; values in braces are this object's parameters. Z up, floor at Z 0. Hosted on a wall segment: local X runs along the segment, origin at its midpoint on the centre-line.\n\nWHAT IT IS\nfluted timber feature wall, warm oak, vertical rhythm, contemporary hotel\n\nGEOMETRY\nModel the object described above as clean, closed meshes with real thickness and small bevels on exposed edges (about 2 mm) so highlights catch. Drive every dimension from these parameters:\n- Panel length: {length}\n- Panel height: {height}\n- Bottom above floor: {baseOffset}\n- Flute pitch: {flutePitch}\n- Flute profile: {profile} (one of: Half-round / Square / Tapered / V-groove)\n- Flute depth: {fluteDepth}\n- Gap between flutes: {fluteGap}\n- Backer thickness: {backerThk}\n- Shadow gap at ends: {shadowGap}\n- Facets per round flute: {sides}\n- Cutout (TV / niche): {cutout}\n- Cutout width: {cutoutWidth}\n- Cutout height: {cutoutHeight}\n- Cutout centre height: {cutoutCentre}\n- Rotation (deg): {rotation}\n- Anchor Direction: {anchorDir} (one of: Top-Left / Top-Center / Top-Right / Left-Center / Center / Right-Center / Bottom-Left / Bottom-Center / Bottom-Right)\n- Margin from host: {margin}\n- Flip side: {flipSide}\nKeep the proportions of a well-made real product; add the secondary detail a close-up render needs (joints, reveals, fixings) but no hidden interior geometry.\n\nMATERIALS\n- Base colour: {baseColor}\n- Roughness: {roughness}\nPrincipled BSDF per visible part, using the colour and roughness above for the main surface; secondary parts in a neutral complementary finish. Use Object / box-projected texture coordinates (no UVs needed). Add a subtle noise bump (strength ~0.03) so surfaces are not perfectly flat.\n\nLIGHTS\nNone. This object does not emit light.\n\nCHECKS (measure after building)\n- Panel length = {length}\n- Panel height = {height}\n- Flute depth = {fluteDepth}\n- Cutout width = {cutoutWidth}\n- Cutout height = {cutoutHeight}\n- All meshes closed, no duplicate faces, origin as stated above.",
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Backer",
+              "color": "#a8a29e",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_flute",
+              "kind": "polygon",
+              "name": "Flutes",
+              "color": "#c9a87c",
+              "layer": "Wall panel",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Backer",
+              "color": "#8a6a45",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_flute",
+              "kind": "polyhedron",
+              "name": "Flutes",
+              "color": "#c9a87c",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

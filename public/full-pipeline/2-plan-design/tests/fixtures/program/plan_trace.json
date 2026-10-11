@@ -1,0 +1,838 @@
+{
+ "source": "program_pipeline VILLA_4BHK_G1 0.1.0 option A",
+ "units": "mm",
+ "rooms": [
+  {
+   "code": "GF-PORCH",
+   "name": "Car porch",
+   "kind": "porch",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     1029,
+     6211
+    ],
+    [
+     4152,
+     6211
+    ],
+    [
+     4152,
+     10553
+    ],
+    [
+     1029,
+     10553
+    ]
+   ]
+  },
+  {
+   "code": "GF-LIV",
+   "name": "Living",
+   "kind": "living",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     4382,
+     6211
+    ],
+    [
+     8419,
+     6211
+    ],
+    [
+     8419,
+     9334
+    ],
+    [
+     7200,
+     9334
+    ],
+    [
+     7200,
+     10553
+    ],
+    [
+     4382,
+     10553
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-STAIR",
+   "name": "Staircase",
+   "kind": "stair",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     1029,
+     3773
+    ],
+    [
+     3898,
+     3773
+    ],
+    [
+     3898,
+     5981
+    ],
+    [
+     1029,
+     5981
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-DIN",
+   "name": "Dining",
+   "kind": "dining",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     4128,
+     3773
+    ],
+    [
+     7048,
+     3773
+    ],
+    [
+     7048,
+     5981
+    ],
+    [
+     4128,
+     5981
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-TC",
+   "name": "Common toilet",
+   "kind": "toilet",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     7278,
+     3773
+    ],
+    [
+     8419,
+     3773
+    ],
+    [
+     8419,
+     5981
+    ],
+    [
+     7278,
+     5981
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-BED4",
+   "name": "Bedroom 4 (guest / parents)",
+   "kind": "bedroom",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     1029,
+     1029
+    ],
+    [
+     3695,
+     1029
+    ],
+    [
+     3695,
+     2706
+    ],
+    [
+     5371,
+     2706
+    ],
+    [
+     5371,
+     3543
+    ],
+    [
+     1029,
+     3543
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-T4",
+   "name": "Toilet 4",
+   "kind": "toilet",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     3925,
+     1029
+    ],
+    [
+     5371,
+     1029
+    ],
+    [
+     5371,
+     2476
+    ],
+    [
+     3925,
+     2476
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-KIT",
+   "name": "Kitchen",
+   "kind": "kitchen",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     5601,
+     1029
+    ],
+    [
+     8419,
+     1029
+    ],
+    [
+     8419,
+     3543
+    ],
+    [
+     5601,
+     3543
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "GF-PUJA",
+   "name": "Puja",
+   "kind": "puja",
+   "level": "GF",
+   "ffl_mm": 0,
+   "polygon": [
+    [
+     7430,
+     9564
+    ],
+    [
+     8419,
+     9564
+    ],
+    [
+     8419,
+     10553
+    ],
+    [
+     7430,
+     10553
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-STAIR",
+   "name": "Staircase",
+   "kind": "stair",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     1029,
+     3773
+    ],
+    [
+     3898,
+     3773
+    ],
+    [
+     3898,
+     5981
+    ],
+    [
+     1029,
+     5981
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-BED2",
+   "name": "Bedroom 2",
+   "kind": "bedroom",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     1029,
+     7887
+    ],
+    [
+     2706,
+     7887
+    ],
+    [
+     2706,
+     6211
+    ],
+    [
+     4965,
+     6211
+    ],
+    [
+     4965,
+     10553
+    ],
+    [
+     1029,
+     10553
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-T2",
+   "name": "Toilet 2",
+   "kind": "toilet",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     1029,
+     6211
+    ],
+    [
+     2476,
+     6211
+    ],
+    [
+     2476,
+     7657
+    ],
+    [
+     1029,
+     7657
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-BAL",
+   "name": "Balcony",
+   "kind": "balcony",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     1029,
+     10783
+    ],
+    [
+     8419,
+     10783
+    ],
+    [
+     8419,
+     11467
+    ],
+    [
+     1029,
+     11467
+    ]
+   ]
+  },
+  {
+   "code": "FF-BED3",
+   "name": "Bedroom 3",
+   "kind": "bedroom",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     5195,
+     6211
+    ],
+    [
+     6743,
+     6211
+    ],
+    [
+     6743,
+     7887
+    ],
+    [
+     8419,
+     7887
+    ],
+    [
+     8419,
+     10553
+    ],
+    [
+     5195,
+     10553
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-T3",
+   "name": "Toilet 3",
+   "kind": "toilet",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     6973,
+     6211
+    ],
+    [
+     8419,
+     6211
+    ],
+    [
+     8419,
+     7657
+    ],
+    [
+     6973,
+     7657
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-LNG",
+   "name": "Family lounge",
+   "kind": "lounge",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     4128,
+     3773
+    ],
+    [
+     8419,
+     3773
+    ],
+    [
+     8419,
+     5981
+    ],
+    [
+     4128,
+     5981
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-MBR",
+   "name": "Master bedroom",
+   "kind": "master",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     1029,
+     1029
+    ],
+    [
+     5371,
+     1029
+    ],
+    [
+     5371,
+     3543
+    ],
+    [
+     1029,
+     3543
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-MDR",
+   "name": "Master dress",
+   "kind": "dress",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     5601,
+     2401
+    ],
+    [
+     8419,
+     2401
+    ],
+    [
+     8419,
+     3543
+    ],
+    [
+     5601,
+     3543
+    ]
+   ],
+   "ceiling_mm": 3050
+  },
+  {
+   "code": "FF-MT",
+   "name": "Master toilet",
+   "kind": "toilet",
+   "level": "FF",
+   "ffl_mm": 3200,
+   "polygon": [
+    [
+     5601,
+     1029
+    ],
+    [
+     8419,
+     1029
+    ],
+    [
+     8419,
+     2171
+    ],
+    [
+     5601,
+     2171
+    ]
+   ],
+   "ceiling_mm": 3050
+  }
+ ],
+ "doors": [
+  {
+   "id": "GF-D1",
+   "rooms": [
+    "GF-DIN",
+    "GF-TC"
+   ],
+   "swing_room": "GF-TC",
+   "type": "hinged",
+   "hinge": [
+    7278,
+    5258
+   ],
+   "latch": [
+    7278,
+    4496
+   ],
+   "level": "GF"
+  },
+  {
+   "id": "GF-D2",
+   "rooms": [
+    "GF-DIN",
+    "GF-BED4"
+   ],
+   "swing_room": "GF-BED4",
+   "type": "hinged",
+   "hinge": [
+    4293,
+    3543
+   ],
+   "latch": [
+    5207,
+    3543
+   ],
+   "level": "GF"
+  },
+  {
+   "id": "GF-D3",
+   "rooms": [
+    "GF-BED4",
+    "GF-T4"
+   ],
+   "swing_room": "GF-T4",
+   "type": "hinged",
+   "hinge": [
+    4267,
+    2476
+   ],
+   "latch": [
+    5029,
+    2476
+   ],
+   "level": "GF"
+  },
+  {
+   "id": "GF-D4",
+   "rooms": [
+    "GF-DIN",
+    "GF-KIT"
+   ],
+   "swing_room": "GF-KIT",
+   "type": "hinged",
+   "hinge": [
+    5867,
+    3543
+   ],
+   "latch": [
+    6782,
+    3543
+   ],
+   "level": "GF"
+  },
+  {
+   "id": "GF-D5",
+   "rooms": [
+    "GF-LIV",
+    "GF-PORCH"
+   ],
+   "swing_room": "GF-PORCH",
+   "type": "hinged",
+   "hinge": [
+    4152,
+    8839
+   ],
+   "latch": [
+    4152,
+    7925
+   ],
+   "level": "GF"
+  },
+  {
+   "id": "FF-D6",
+   "rooms": [
+    "FF-LNG",
+    "FF-BED2"
+   ],
+   "swing_room": "FF-BED2",
+   "type": "hinged",
+   "hinge": [
+    4089,
+    6211
+   ],
+   "latch": [
+    5004,
+    6211
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "FF-D7",
+   "rooms": [
+    "FF-LNG",
+    "FF-BED3"
+   ],
+   "swing_room": "FF-BED3",
+   "type": "hinged",
+   "hinge": [
+    5512,
+    6211
+   ],
+   "latch": [
+    6426,
+    6211
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "FF-D8",
+   "rooms": [
+    "FF-BED2",
+    "FF-T2"
+   ],
+   "swing_room": "FF-T2",
+   "type": "hinged",
+   "hinge": [
+    2476,
+    7315
+   ],
+   "latch": [
+    2476,
+    6553
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "FF-D9",
+   "rooms": [
+    "FF-BED3",
+    "FF-T3"
+   ],
+   "swing_room": "FF-T3",
+   "type": "hinged",
+   "hinge": [
+    7315,
+    7657
+   ],
+   "latch": [
+    8077,
+    7657
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "FF-D10",
+   "rooms": [
+    "FF-LNG",
+    "FF-MBR"
+   ],
+   "swing_room": "FF-MBR",
+   "type": "hinged",
+   "hinge": [
+    4293,
+    3543
+   ],
+   "latch": [
+    5207,
+    3543
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "FF-D11",
+   "rooms": [
+    "FF-MBR",
+    "FF-MT"
+   ],
+   "swing_room": "FF-MT",
+   "type": "hinged",
+   "hinge": [
+    5601,
+    1981
+   ],
+   "latch": [
+    5601,
+    1219
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "FF-D12",
+   "rooms": [
+    "FF-BED3",
+    "FF-BAL"
+   ],
+   "swing_room": "FF-BAL",
+   "type": "hinged",
+   "hinge": [
+    6350,
+    10783
+   ],
+   "latch": [
+    7264,
+    10783
+   ],
+   "level": "FF"
+  },
+  {
+   "id": "GF-MAIN",
+   "rooms": [
+    "GF-LIV"
+   ],
+   "swing_room": "GF-LIV",
+   "type": "hinged",
+   "hinge": [
+    4839,
+    10553
+   ],
+   "latch": [
+    5906,
+    10553
+   ],
+   "level": "GF",
+   "object": "DOOR_HINGED@0.1.0",
+   "note": "main entrance (outside not traced)"
+  }
+ ],
+ "windows": [],
+ "fixtures": [],
+ "levels": [
+  {
+   "code": "GF",
+   "ffl_mm": 0
+  },
+  {
+   "code": "FF",
+   "ffl_mm": 3200
+  }
+ ],
+ "program": {
+  "typology": "VILLA_4BHK_G1",
+  "typology_version": "0.1.0",
+  "lineage": [
+   "VILLA_4BHK_G1@0.1.0"
+  ],
+  "option": "A",
+  "objects": {
+   "stair": "STAIR_DOGLEG@0.1.0",
+   "door": "DOOR_HINGED@0.1.0"
+  },
+  "road_side": "N",
+  "mirror": false,
+  "areas_sqft": {
+   "footprint": 800.0,
+   "gf": 800.0,
+   "ff": 800.0,
+   "porch": 165.0,
+   "void": 0,
+   "balcony": 75.0,
+   "far_area": 1435.0
+  },
+  "far": 1.196,
+  "vastu_score": 18,
+  "stair": {
+   "object": "STAIR_DOGLEG@0.1.0",
+   "risers": 18,
+   "riser_in": 7.0,
+   "tread_in": 10.0,
+   "outline_mm": [
+    [
+     914,
+     6096
+    ],
+    [
+     4013,
+     6096
+    ],
+    [
+     4013,
+     3861
+    ],
+    [
+     914,
+     3861
+    ]
+   ],
+   "levels": [
+    "GF",
+    "FF"
+   ]
+  }
+ },
+ "assumptions": [
+  "VILLA_4BHK_G1 option A: room lines are wall centrelines, inset 115 mm (wall_mm 230).",
+  "Origin: south-west plot corner. X east, Y north. Two levels (GF, FF): split by level when handing to design_pipeline (handoff_to_design.py --level).",
+  "Openings (living-dining, dining-stair, lounge-OTS) are open connections and not traced as doors.",
+  "Windows and fixtures are not planned yet."
+ ]
+}

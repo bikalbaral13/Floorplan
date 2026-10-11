@@ -45,7 +45,7 @@ import { saveLibraryFile, listParametricObjectFiles, listFlowNodeFiles, listWork
 import { parseBspConnections, serializeBspConnections } from "@builderpluss/engine";
 import type { PipeGraphInput } from "@builderpluss/engine";
 import { flowPiecesToDxf, DXF_UNIT_SCALE, type FlowDxfPiece, type DxfUnit } from "../export/flowDxf";
-import { exportMassesToBlob, MESH3D_FORMATS, MESH3D_UNIT_SCALE, type Mesh3DFormat, type ExportMass3D } from "../export/flowMesh3d";
+import { MESH3D_FORMATS, MESH3D_UNIT_SCALE, type Mesh3DFormat, type ExportMass3D } from "../export/flowMesh3dFormats";
 
 let nodeSeq = 1;
 const nextId = (tool: string) => `${tool}_${nodeSeq++}`;
@@ -3786,6 +3786,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     const base = (typeof params.fileName === "string" && params.fileName.trim() ? params.fileName.trim() : "flow-export").replace(/\.(glb|gltf|obj|stl|ply)$/i, "");
     onParamChange(nodeId, "_busy", true);
     try {
+      const { exportMassesToBlob } = await import("../export/flowMesh3d");   // three.js loads on the first export
       const { blob, meshes, triangles } = await exportMassesToBlob(masses, format, {
         units: typeof params.units === "string" && MESH3D_UNIT_SCALE[params.units] ? params.units : "m",
         axis: params.axis === "y-up" ? "y-up" : "z-up",

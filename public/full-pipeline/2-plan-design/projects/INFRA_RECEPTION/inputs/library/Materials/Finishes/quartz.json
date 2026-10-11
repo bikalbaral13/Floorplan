@@ -1,0 +1,53 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "stone.quartz",
+  "title": "Stone — engineered quartz",
+  "description": "A worktop. Voronoi flecks on a near-white body, no veining: engineered quartz is defined by being EVEN, and giving it marble's drama would make it marble.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 240,
+      "detail": 1,
+      "roughness": 0.4,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#eceae5",
+      "colorB": "#dcd8d0"
+    }
+  },
+  "pbr": {
+    "baseColor": "#e8e6e1",
+    "roughness": 0.22,
+    "metallic": 0
+  },
+  "surface": {
+    "bevel": {
+      "width": 0.0015,
+      "samples": 4
+    },
+    "coat": {
+      "weight": 0.5,
+      "roughness": 0.04,
+      "ior": 1.5
+    },
+    "roughnessVariation": {
+      "amount": 0.04,
+      "scale": 14
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 8,
+    "angle": 0,
+    "weight": 1,
+    "color": "#e8e6e1"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 0.6,
+    "angle": 0
+  }
+}
