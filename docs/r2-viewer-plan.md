@@ -4,7 +4,7 @@ A single static HTML viewer hosted in R2 that shows any design JSON in three pan
 **JSON · 2D · 3D** — one at a time or all together. No app needed to *view* a design.
 Parametric objects are added later through JavaScript object code run inside the viewer.
 
-Status: **Phase 1 built** (2026-10-12) — `tools/viewer/index.html`, published by `node tools/viewer/publish.mjs` to `library/Viewer/v1/index.html`. Phase 2 built — `node tools/viewer/bake.mjs Designs/<name>.json --upload` writes `<name>.view.json` (gzip) next to the design; baked mesh JSON from the app's evaluator rather than GLB.
+Status: **Phase 1 built** (2026-10-12) — `tools/viewer/index.html`, published by `node tools/viewer/publish.mjs` to `library/Viewer/v1/index.html`. Phase 2 built — `node tools/viewer/bake.mjs Designs/<name>.json --upload` writes `<name>.view.json` (gzip) next to the design; baked mesh JSON from the app's evaluator rather than GLB. Phase 3 built — the app's evaluator bundled as `library/Viewer/v1/objects.js` (`node tools/viewer/runtime/build.mjs`, 593 KB) runs in a module Worker; selecting an object opens editable params and re-evaluates it live (chair ~2 s, bed ~12 s), preview only. This replaced the planned `spine2js`: the Math Engine is already JS, so bundling it gives engine parity by construction. Per-object JS is only needed if the engine is ever retired.
 
 ---
 
