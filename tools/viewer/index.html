@@ -147,11 +147,59 @@ function sizeOf(oid, p) {
   return { x, y, h, z };
 }
 
+/* Grouped documents (schemaVersion 3, docs/canvas-groups-schema.md): every group's canvas is placed on the
+   site — site_px = position·s + R(rotation)·M(mirror)·p·(s/c), mirror then rotate then scale then move; a
+   child's transform is relative to its parent's canvas. Canvas levels land on site levels via levelMap.
+   Ids are prefixed with the group id (the five Villa-1 plots share every id); each entity keeps `_p`, its
+   path in the original file, so the JSON pane still points at the real thing. */
+function flattenGroups(d) {
+  const s = d.settings?.pixelsPerMeter || 100;
+  const site = (d.levels || []).map(L => ({ id: L.id, name: L.name, elevation: L.elevation || 0, height: L.height || 3, nodes: [], segments: [], spaces: [] }));
+  const byLevel = new Map(site.map(L => [L.id, L]));
+  const ground = site.find(L => (L.elevation || 0) === 0) || site[0];
+  const byId = new Map(d.groups.map(g => [g.id, g]));
+  // A transform as { m: 2×2 matrix (includes mirror + rotation), t: offset } in SITE px, from canvas px.
+  const xf = (g) => {
+    const c = g.canvas?.settings?.pixelsPerMeter || s, T = g.transform || {}, r = (T.rotation || 0) * Math.PI / 180;
+    const k = (g.parent && byId.get(g.parent)?.canvas?.settings?.pixelsPerMeter || s) / c;
+    const cos = Math.cos(r) * k, sin = Math.sin(r) * k, mx = T.mirror ? -1 : 1;
+    const own = { m: [cos * mx, -sin, sin * mx, cos], t: [(T.position?.[0] || 0) * (g.parent ? (byId.get(g.parent)?.canvas?.settings?.pixelsPerMeter || s) : s), (T.position?.[1] || 0) * (g.parent ? (byId.get(g.parent)?.canvas?.settings?.pixelsPerMeter || s) : s)],
+      rot: T.rotation || 0, mirror: !!T.mirror };
+    const par = g.parent && byId.get(g.parent);
+    if (!par) return own;
+    const P = xf(par);
+    const [a, b, c2, e] = P.m, [p, q, r2, t] = own.m;
+    return { m: [a * p + b * r2, a * q + b * t, c2 * p + e * r2, c2 * q + e * t],
+      t: [a * own.t[0] + b * own.t[1] + P.t[0], c2 * own.t[0] + e * own.t[1] + P.t[1]],
+      rot: P.rot + (P.mirror ? -own.rot : own.rot), mirror: own.mirror !== P.mirror };
+  };
+  d.groups.forEach((g, gi) => {
+    if (g.visible === false || !g.canvas) return;
+    const X = xf(g), pre = g.id + "/";
+    const pt = (n) => ({ x: X.m[0] * n.x + X.m[1] * n.y + X.t[0], y: X.m[2] * n.x + X.m[3] * n.y + X.t[1] });
+    const turn = (a) => { const p = a.params; if (!p || typeof p.rotation !== "number") return a;
+      const r = (X.mirror ? 180 - p.rotation : p.rotation) + X.rot; return { ...a, params: { ...p, rotation: ((r % 360) + 360) % 360 } }; };
+    const c = g.canvas;
+    const lv = c.levels?.length ? c.levels.map((L, i) => ({ L, p: ["groups", gi, "canvas", "levels", i] }))
+      : [{ L: { id: "", nodes: c.nodes, segments: c.segments, spaces: c.spaces }, p: ["groups", gi, "canvas"] }];
+    for (const { L, p } of lv) {
+      const target = g.levelMap ? byLevel.get(g.levelMap[L.id] ?? g.levelMap[""]) : ground;
+      if (!target) continue;
+      (L.nodes || []).forEach((n, i) => target.nodes.push({ ...n, ...pt(n), id: pre + n.id, _p: [...p, "nodes", i],
+        attachments: (n.attachments || []).map(a => turn({ ...a, id: pre + a.id })) }));
+      (L.segments || []).forEach((sg, i) => target.segments.push({ ...sg, id: pre + sg.id, fromNodeId: pre + sg.fromNodeId, toNodeId: pre + sg.toNodeId, _p: [...p, "segments", i],
+        attachments: (sg.attachments || []).map(a => ({ ...a, id: pre + a.id })) }));
+      (L.spaces || []).forEach((sp, i) => target.spaces.push({ ...sp, id: pre + sp.id, nodeIds: (sp.nodeIds || []).map(id => pre + id), _p: [...p, "spaces", i] }));
+    }
+  });
+  return site;
+}
+
 function setDoc(d, name) {
   doc = d; sel = null; bake = null;
   ppm = d.settings?.pixelsPerMeter || 100;
   const rootHas = (d.nodes?.length || d.segments?.length);
-  levels = d.levels?.length ? d.levels.map((L, i) => {
+  levels = d.groups?.length ? flattenGroups(d) : d.levels?.length ? d.levels.map((L, i) => {
     // The live level is sometimes held at the root; use it when the level copy is empty.
     if (rootHas && L.id === d.activeLevelId && !L.nodes?.length) return { ...L, nodes: d.nodes, segments: d.segments, spaces: d.spaces, _root: true };
     return L;
@@ -174,7 +222,7 @@ function buildEls() {
     const add = (e) => { e.li = li; els.push(e); byPath.set(e.path.join("."), e); };
     (L.spaces || []).forEach((s, i) => {
       const poly = (s.nodeIds || []).map(id => nm.get(id)).filter(Boolean).map(n => [n.x / ppm, n.y / ppm]);
-      if (poly.length >= 3) add({ kind: "space", id: s.id, layer: s.layer, label: s.label, raw: s, path: [...base, "spaces", i], poly, elev });
+      if (poly.length >= 3) add({ kind: "space", id: s.id, layer: s.layer, label: s.label, raw: s, path: s._p || [...base, "spaces", i], poly, elev });
     });
     (L.segments || []).forEach((s, i) => {
       const a = nm.get(s.fromNodeId), b = nm.get(s.toNodeId);
@@ -186,14 +234,14 @@ function buildEls() {
       const kind = door ? "door" : win ? "window" : isWall ? "wall" : "line";
       const t = num(wall?.params?.thickness) ?? (s.thickness || 1) / ppm;
       const other = att.find(t => !/^(wall|door|window)/.test(t.objectId || ""));
-      add({ kind, id: s.id, layer: s.layer, label: s.label || short(other?.objectId), raw: s, path: [...base, "segments", i],
+      add({ kind, id: s.id, layer: s.layer, label: s.label || short(other?.objectId), raw: s, path: s._p || [...base, "segments", i],
         a: [a.x / ppm, a.y / ppm], b: [b.x / ppm, b.y / ppm], t, color: s.color, dashed: s.dashed,
         h: num(wall?.params?.height) ?? lh, open: (door || win)?.params || {}, objectId: other?.objectId, elev, att: door || win, nodes: [a, b] });
     });
     (L.nodes || []).forEach((n, i) => (n.attachments || []).forEach((t, j) => {
       const p = t.params || {}, s = sizeOf(t.objectId, p);
       add({ kind: "object", id: t.id, layer: n.layer, label: short(t.objectId), objectId: t.objectId, raw: t,
-        path: [...base, "nodes", i, "attachments", j], x: n.x / ppm, y: n.y / ppm, rot: (num(p.rotation) || 0) * Math.PI / 180,
+        path: n._p ? [...n._p, "attachments", j] : [...base, "nodes", i, "attachments", j], x: n.x / ppm, y: n.y / ppm, rot: (num(p.rotation) || 0) * Math.PI / 180,
         sx: s.x, sy: s.y, h: s.h, z: s.z, cat: CAT(short(t.objectId)), elev, att: t, node: n });
     }));
   });

@@ -77,20 +77,47 @@ let faces = 0, tris = 0;
 
 for (const [li, L] of levels.entries()) {
   const full = (h) => ({ ...h, attachments: (h.attachments || []).map((a) => ({ ...a, params: { ...(a.params || {}), renderMode: "Full" } })) });
-  const lv = {
-    ...plan, levels: undefined, activeLevelId: undefined,
-    nodes: (L.nodes || []).map(full), segments: (L.segments || []).map(full),
-    spaces: (L.spaces || []).map(full),
-  };
-  const want = [...lv.nodes, ...lv.segments, ...lv.spaces].flatMap((h) => h.attachments).filter((a) => !skip(a)).length;
+  // A large level is baked in chunks — the evaluator writes its whole result as one string, and an
+  // apartment floor overflows V8's string limit. Each chunk carries its segments (or spaces) plus the
+  // nodes they reference; a node's own attachments ride only in the first chunk that includes it.
+  const CH = 300;
+  const nodeById = new Map((L.nodes || []).map((n) => [n.id, n]));
+  const owned = new Set();
+  const nodesFor = (ids) => [...new Set(ids)].map((id) => nodeById.get(id)).filter(Boolean)
+    .map((n) => { const mine = !owned.has(n.id); owned.add(n.id); return mine ? full(n) : { ...n, attachments: [] }; });
+  const chunks = [];
+  const segs = L.segments || [], sps = L.spaces || [];
+  for (let i = 0; i < segs.length; i += CH) { const c = segs.slice(i, i + CH); chunks.push({ segments: c.map(full), nodes: nodesFor(c.flatMap((x) => [x.fromNodeId, x.toNodeId])), spaces: [] }); }
+  for (let i = 0; i < sps.length; i += CH) { const c = sps.slice(i, i + CH); chunks.push({ spaces: c.map(full), nodes: nodesFor(c.flatMap((x) => x.nodeIds || [])), segments: [] }); }
+  const want = chunks.flatMap((c) => [...c.nodes, ...c.segments, ...c.spaces]).flatMap((h) => h.attachments).filter((a) => !skip(a)).length;
   if (!want) { console.log(`level ${li} ${L.name}: nothing to bake`); continue; }
-  const inF = path.join(work, `L${li}.json`), outF = path.join(work, `L${li}.baked.json`);
-  fs.writeFileSync(inF, JSON.stringify(lv));
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, [path.join(REPO, "tools/bakeplan/run.mjs"), inF, "--out", outF], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 30 });
-  if (r.status !== 0) { console.error(r.stderr?.slice(-3000)); console.error(`! level ${li} bake failed`); process.exit(1); }
-  const baked = JSON.parse(fs.readFileSync(outF, "utf8"));
   let n = 0;
+  // Halve a chunk that still overflows. A node's attachments stay with the first half that references it.
+  const split = (c) => {
+    const key = c.segments.length ? "segments" : "spaces";
+    const list = c[key], mid = Math.ceil(list.length / 2);
+    const byId = new Map(c.nodes.map((n) => [n.id, n])), seen = new Set();
+    return [list.slice(0, mid), list.slice(mid)].map((part) => {
+      const ids = [...new Set(part.flatMap((x) => (key === "segments" ? [x.fromNodeId, x.toNodeId] : x.nodeIds || [])))];
+      const nodes = ids.map((id) => byId.get(id)).filter(Boolean).map((n) => { const mine = !seen.has(n.id); seen.add(n.id); return mine ? n : { ...n, attachments: [] }; });
+      return { segments: [], spaces: [], [key]: part, nodes };
+    });
+  };
+  const queue = [...chunks];
+  for (let ci = 0; queue.length; ci++) {
+  const c = queue.shift();
+  const inF = path.join(work, `L${li}_${ci}.json`), outF = path.join(work, `L${li}_${ci}.baked.json`);
+  fs.writeFileSync(inF, JSON.stringify({ ...plan, levels: undefined, activeLevelId: undefined, ...c }));
+  const r = spawnSync(process.execPath, ["--max-old-space-size=8192", path.join(REPO, "tools/bakeplan/run.mjs"), inF, "--out", outF], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 30 });
+  fs.rmSync(inF);
+  if (r.status !== 0) {
+    const size = c.segments.length + c.spaces.length;
+    if (/Invalid string length|heap out of memory/i.test(r.stderr || "") && size > 1) { queue.unshift(...split(c)); continue; }
+    console.error(r.stderr?.slice(-3000)); console.error(`! level ${li} chunk ${ci} bake failed`); process.exit(1);
+  }
+  const baked = JSON.parse(fs.readFileSync(outF, "utf8"));
+  fs.rmSync(outF);
   for (const h of [...(baked.nodes || []), ...(baked.segments || []), ...(baked.spaces || [])]) {
     for (const a of h.attachments || []) {
       if (skip(a) || HELPER_OBJECT.test(a.objectId || "") || !a.baked?.meshes?.length) continue;
@@ -115,6 +142,7 @@ for (const [li, L] of levels.entries()) {
       n++;
     }
   }
+  }
   console.log(`level ${li} ${L.name}: ${n}/${want} objects baked  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
@@ -130,7 +158,10 @@ if (argv.includes("--upload")) {
   const cfg = { endpoint: env.R2_ENDPOINT, accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY, bucket: env.R2_BUCKET };
   // Served gzip-encoded: the browser inflates it transparently, and mm-int JSON shrinks ~5×.
   const gz = zlib.gzipSync(text, { level: 9 });
-  await signedRequest(cfg, "PUT", key, gz, { "content-type": "application/json", "content-encoding": "gzip", "cache-control": "no-cache" });
+  for (let attempt = 1; ; attempt++) {
+    try { await signedRequest(cfg, "PUT", key, gz, { "content-type": "application/json", "content-encoding": "gzip", "cache-control": "no-cache" }); break; }
+    catch (e) { if (attempt >= 4) throw e; console.log(`  upload retry ${attempt}: ${e.message}`); await new Promise((r) => setTimeout(r, 3000 * attempt)); }
+  }
   console.log(`gzip ${(gz.length / 1048576).toFixed(1)} MB`);
   console.log(`uploaded ${PUBLIC}/${key}`);
   await refreshDesignsIndex(cfg);
