@@ -1,0 +1,33 @@
+// Contract tests against a running Worker:  npx wrangler dev  (local R2)  then  node test.mjs [baseUrl]
+const BASE = process.argv[2] || "http://localhost:8787";
+const P = `Designs/_worker_test_${Date.now()}.json`;
+const design = (n) => JSON.stringify({ schemaVersion: 2, settings: { pixelsPerMeter: 100 }, levels: [{ id: "L0", nodes: [], segments: [], spaces: [], n }] });
+let fails = 0;
+const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? "  " + extra : ""}`); if (!ok) fails++; };
+const call = (method, path, body, headers = {}) => fetch(`${BASE}${path}`, { method, body, headers: { "content-type": "application/json", ...headers } });
+const q = (p) => `?path=${encodeURIComponent(p)}`;
+
+let r = await call("GET", "/api/me"); const me = await r.json();
+check("me: open mode can write", r.status === 200 && me.canWrite && me.mode === "open");
+r = await call("PUT", "/api/file" + q(P), design(1)); check("create without If-None-Match → 428", r.status === 428);
+r = await call("PUT", "/api/file" + q(P), design(1), { "if-none-match": "*" }); check("create → 201", r.status === 201);
+r = await call("GET", "/api/file" + q(P)); const etag1 = r.headers.get("etag"); const got = await r.json();
+check("read back + etag", r.status === 200 && got.levels[0].n === 1 && !!etag1, etag1);
+r = await call("PUT", "/api/file" + q(P), design(2)); check("overwrite without If-Match → 428", r.status === 428);
+r = await call("PUT", "/api/file" + q(P), design(2), { "if-match": '"deadbeef"' }); check("stale etag → 409", r.status === 409);
+r = await call("PUT", "/api/file" + q(P), design(2), { "if-match": etag1 }); const s2 = await r.json(); check("overwrite with etag → 200", r.status === 200 && s2.etag !== etag1);
+r = await call("PUT", "/api/file" + q(P), design(3), { "if-match": etag1 }); check("second save with the OLD etag → 409", r.status === 409);
+r = await call("GET", "/api/history" + q(P)); const h = await r.json(); check("history keeps the replaced version", h.versions?.length === 1, JSON.stringify(h.versions?.[0]?.key));
+r = await call("GET", "/api/file" + q(P)); check("current content is version 2", (await r.json()).levels[0].n === 2);
+r = await call("PUT", "/api/file" + q("Objects/Architectural/x.json"), design(1), { "if-none-match": "*" }); check("Objects/ not writable → 403", r.status === 403);
+r = await call("PUT", "/api/file" + q("Designs/../Objects/x.json"), design(1), { "if-none-match": "*" }); check("path traversal → 400", r.status === 400);
+r = await call("PUT", "/api/file" + q("_versions/x.json"), design(1), { "if-none-match": "*" }); check("_versions/ not writable → 400", r.status === 400);
+r = await call("PUT", "/api/file" + q("Designs/bad.json"), "{not json", { "if-none-match": "*" }); check("invalid JSON → 400", r.status === 400);
+r = await call("PUT", "/api/file" + q("Designs/bad.json"), JSON.stringify({ hello: 1 }), { "if-none-match": "*" }); check("not a design → 400", r.status === 400);
+r = await call("PUT", "/api/file" + q("Forms/scope/run1.json"), JSON.stringify({ answers: { a: 1 } }), { "if-none-match": "*" }); check("form answers anywhere-shaped → 201", r.status === 201);
+r = await call("DELETE", "/api/file" + q(P)); check("DELETE → 405", r.status === 405);
+r = await fetch(`${BASE}/api/me`, { headers: { origin: "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev" } });
+check("CORS for the viewer origin", r.headers.get("access-control-allow-origin") === "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev");
+r = await fetch(`${BASE}/api/me`, { headers: { origin: "https://evil.example" } }); check("no CORS for other origins", !r.headers.get("access-control-allow-origin"));
+console.log(fails ? `\n${fails} FAILED` : "\nall passed");
+process.exit(fails ? 1 : 0);
