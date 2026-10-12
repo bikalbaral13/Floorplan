@@ -295,24 +295,39 @@ function showInfo() {
 }
 
 /* ---------------- live objects (Phase 3) ---------------- */
-// objects.js is the app's own evaluator bundled for the browser (tools/viewer/runtime). It runs in a module
-// Worker so a heavy object (a lofted bed: ~12 s) never freezes the page.
-const RUNTIME = new URL("objects.js", location.href).href;
+// The engine comes from R2: library/Engine/<version>/engine.js (tools/engine/publish.mjs) — the design's
+// settings.engineVersion if it pins one, else Engine/latest.json. The worker checks the sha256 from the
+// manifest before running it, and runs it off the main thread so a heavy object (a lofted bed: ~12 s)
+// never freezes the page.
+const ENGINE_BASE = new URL("Engine/", LIB).href;
 let worker = null, reqId = 0; const pending = new Map();
 function getWorker() {
   if (worker) return worker;
-  const code = `import { evaluate } from ${JSON.stringify(RUNTIME)};
+  const code = `const engines = {};
+async function engine(base, pin) {
+  let v = pin;
+  if (!v) v = (await (await fetch(base + "latest.json", { cache: "no-cache" })).json()).version;
+  if (!engines[v]) engines[v] = (async () => {
+    const m = await (await fetch(base + v + "/manifest.json")).json();
+    const buf = await (await fetch(base + v + "/engine.js")).arrayBuffer();
+    const hex = [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map(b => b.toString(16).padStart(2, "0")).join("");
+    if (hex !== m.sha256) throw new Error("engine " + v + ": sha256 mismatch, refusing to run it");
+    return import(URL.createObjectURL(new Blob([buf], { type: "text/javascript" })));
+  })();
+  return engines[v];
+}
 const defs = {};
 onmessage = async (ev) => {
-  const { id, plan, lib, paths } = ev.data;
+  const { id, plan, lib, paths, base, pin } = ev.data;
   try {
+    const E = await engine(base, pin);
     for (const p of paths) if (!defs[p]) {
       const r = await fetch(lib + "/" + p.split("/").map(encodeURIComponent).join("/"), { cache: "no-cache" });
       if (!r.ok) throw new Error(p + " -> " + r.status);
       defs[p] = await r.json();
     }
-    const t = performance.now(); const out = evaluate(plan, defs);
-    postMessage({ id, out, ms: performance.now() - t });
+    const t = performance.now(); const out = E.evaluate(plan, defs);
+    postMessage({ id, out, ms: performance.now() - t, version: E.ENGINE_VERSION });
   } catch (e) { postMessage({ id, error: String(e && e.message || e) }); }
 };`;
   worker = new Worker(URL.createObjectURL(new Blob([code], { type: "text/javascript" })), { type: "module" });
@@ -336,7 +351,7 @@ async function reevaluate(e) {
   const paths = [...new Set([...plan.nodes, ...plan.segments].flatMap(h => (h.attachments || []).map(a => a.objectPath)).filter(Boolean))];
   const ticket = (e._ticket || 0) + 1; e._ticket = ticket;
   setStatus(e, "evaluating…");
-  const res = await new Promise(r => { const id = ++reqId; pending.set(id, r); getWorker().postMessage({ id, plan, lib: libBase(), paths }); });
+  const res = await new Promise(r => { const id = ++reqId; pending.set(id, r); getWorker().postMessage({ id, plan, lib: libBase(), paths, base: ENGINE_BASE, pin: doc.settings?.engineVersion || null }); });
   if (e._ticket !== ticket) return;            // a newer edit is already on its way
   if (res.error) return setStatus(e, "failed: " + res.error);
   const a = [...res.out.nodes, ...res.out.segments].flatMap(h => h.attachments || []).find(x => x.id === e.att.id);
@@ -352,7 +367,7 @@ async function reevaluate(e) {
   bake.geoms.push(parts);
   e.bake = { g: bake.geoms.length - 1, anchor: a.baked.anchor, fill: a.baked.plan2d?.fill?.length ? a.baked.plan2d.fill : undefined };
   build3D(); draw2D();
-  setStatus(e, `updated in ${(res.ms / 1000).toFixed(1)} s (preview, not saved)`);
+  setStatus(e, `updated in ${(res.ms / 1000).toFixed(1)} s · engine ${res.version} (preview, not saved)`);
 }
 
 /* ---------------- JSON tree (lazy) ---------------- */

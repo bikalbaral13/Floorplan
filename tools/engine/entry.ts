@@ -1,13 +1,21 @@
-/** Browser build of the app's object evaluator, for the R2 viewer's Web Worker.
+/** The engine as one ES module — published to R2 as library/Engine/<version>/engine.js (tools/engine/publish.mjs).
+ *
+ * Exports:
+ *   evaluate(plan, defs)  object evaluator — six-node spine objects → meshes / plan2d / metrics (below)
+ *   geometry              the whole @builderpluss/engine geometry library (walls, layout, skeleton, …)
+ *   ENGINE_VERSION        filled in at build time
  *
  * Exactly the path tools/bakeplan/main.ts takes (fromStandardPlan → withBakedAttachments → toStandardPlan),
  * so a live re-evaluation in the viewer matches the Phase 2 bake by construction — no second copy of the
  * engine. Input is a tiny standard plan: the one host (node + its self-loop segment, or a segment with its
  * two nodes) carrying the one attachment, plus the object definitions it references.
  */
-import { withBakedAttachments } from "../../../src/floorplan/export/bakeAttachments";
-import { fromStandardPlan, toStandardPlan, type StandardPlan } from "../../../src/floorplan/planFormat";
-import type { FloorPlanModel } from "../../../src/floorplan/types";
+import { withBakedAttachments } from "../../src/floorplan/export/bakeAttachments";
+import { fromStandardPlan, toStandardPlan, type StandardPlan } from "../../src/floorplan/planFormat";
+export * as geometry from "@builderpluss/engine";
+declare const __ENGINE_VERSION__: string;
+export const ENGINE_VERSION = __ENGINE_VERSION__;
+import type { FloorPlanModel } from "../../src/floorplan/types";
 
 export function evaluate(plan: StandardPlan, defs: Record<string, unknown>) {
   const objectLibrary: Record<string, unknown> = {};

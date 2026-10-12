@@ -1,4 +1,4 @@
-// Publish the viewer to R2: library/Viewer/v1/index.html + objects.js (public via r2.dev).
+// Publish the viewer to R2: library/Viewer/v1/index.html (public via r2.dev).
 //   node tools/viewer/publish.mjs
 import fs from "node:fs";
 import path from "node:path";
@@ -13,9 +13,7 @@ const cfg = { endpoint: env.R2_ENDPOINT, accessKeyId: env.R2_ACCESS_KEY_ID, secr
 
 const key = "library/Viewer/v1/index.html";
 await putObject(cfg, key, fs.readFileSync(path.join(here, "index.html")), "text/html; charset=utf-8");
-// The live-object runtime (Phase 3): rebuild with `node tools/viewer/runtime/build.mjs` after engine changes.
-if (fs.existsSync(path.join(here, "objects.js")))
-  await putObject(cfg, "library/Viewer/v1/objects.js", fs.readFileSync(path.join(here, "objects.js")), "text/javascript; charset=utf-8");
+// The engine is not part of the viewer: it is published separately to library/Engine/ (tools/engine/publish.mjs).
 const designs = await refreshDesignsIndex(cfg);
 console.log(`designs.json: ${designs.length} designs, ${designs.filter((d) => d.baked).length} baked`);
 console.log(`${env.R2_PUBLIC_URL.replace(/\/+$/, "")}/${key}`);
