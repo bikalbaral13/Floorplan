@@ -4,7 +4,7 @@ A single static HTML viewer hosted in R2 that shows any design JSON in three pan
 **JSON · 2D · 3D** — one at a time or all together. No app needed to *view* a design.
 Parametric objects are added later through JavaScript object code run inside the viewer.
 
-Status: **Phase 1 built** (2026-10-12) — `tools/viewer/index.html`, published by `node tools/viewer/publish.mjs` to `library/Viewer/v1/index.html`. Phases 2–4 not started.
+Status: **Phase 1 built** (2026-10-12) — `tools/viewer/index.html`, published by `node tools/viewer/publish.mjs` to `library/Viewer/v1/index.html`. Phase 2 built — `node tools/viewer/bake.mjs Designs/<name>.json --upload` writes `<name>.view.json` (gzip) next to the design; baked mesh JSON from the app's evaluator rather than GLB.
 
 ---
 

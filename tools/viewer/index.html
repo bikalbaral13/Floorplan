@@ -78,7 +78,29 @@ async function loadUrl(src) {
     const r = await fetch(resolveSrc(src), { cache: "no-cache" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     setDoc(await r.json(), src.split("/").pop());
+    loadBake(src.replace(/\.json$/i, ".view.json"));
   } catch (e) { msg(`Could not load ${src}: ${e.message}`); }
+}
+// Baked object shapes (tools/viewer/bake.mjs). Absent → objects stay boxes.
+let bake = null;
+async function loadBake(src) {
+  try {
+    const r = await fetch(resolveSrc(src), { cache: "no-cache" });
+    if (!r.ok) return;
+    bake = await r.json(); attachBake(); build3D(); draw2D();
+    $("#name").textContent += ` · ${Object.keys(bake.items).length} baked`;
+  } catch {}
+}
+function attachBake() {
+  for (const e of els) {
+    e.bake = null;
+    if (!bake) continue;
+    if (e.kind === "object") e.bake = bake.items[`${e.li}/${e.id}`] || null;
+    else if (e.kind === "door" || e.kind === "window") {
+      const a = (e.raw.attachments || []).find(t => !/^wall/.test(t.objectId || "") && bake.items[`${e.li}/${t.id}`]);
+      e.bake = a ? bake.items[`${e.li}/${a.id}`] : null;
+    }
+  }
 }
 function msg(t) { $("#msg").style.display = t ? "flex" : "none"; $("#msg").textContent = t || ""; }
 
@@ -122,7 +144,7 @@ function sizeOf(oid, p) {
 }
 
 function setDoc(d, name) {
-  doc = d; sel = null;
+  doc = d; sel = null; bake = null;
   ppm = d.settings?.pixelsPerMeter || 100;
   const rootHas = (d.nodes?.length || d.segments?.length);
   levels = d.levels?.length ? d.levels.map((L, i) => {
@@ -311,7 +333,13 @@ function paint2D() {
     g.fill(); g.lineWidth = px; g.strokeStyle = e === sel ? acc : ink; g.stroke();
     if (e.kind === "door") { g.beginPath(); g.moveTo(e.a[0] - nx, e.a[1] - ny); g.arc(e.a[0] - nx, e.a[1] - ny, L, Math.atan2(dy, dx), Math.atan2(dy, dx) - Math.PI / 2, true); g.strokeStyle = e === sel ? acc : "#94a3b8"; g.stroke(); }
   }
-  for (const e of mine) if (e.kind === "object") {
+  const useFill = (e) => e.bake?.fill && !/light|mep/.test(e.cat) && !/exterior|camera/.test(e.objectId);
+  for (const e of mine) if (e.kind === "object" && useFill(e)) {
+    g.save(); g.translate(e.bake.anchor[0], e.bake.anchor[1]);
+    for (const ring of e.bake.fill) { poly(ring); g.fillStyle = e === sel ? acc + "66" : "#" + COL[e.cat].toString(16).padStart(6, "0") + "40"; g.fill(); g.lineWidth = px; g.strokeStyle = e === sel ? acc : "#57534e"; g.stroke(); }
+    g.restore();
+  }
+  for (const e of mine) if (e.kind === "object" && !useFill(e)) {
     g.save(); g.translate(e.x, e.y); g.rotate(e.rot);
     g.fillStyle = e === sel ? acc + "66" : "#" + COL[e.cat].toString(16).padStart(6, "0") + "55";
     g.fillRect(-e.sx / 2, -e.sy / 2, e.sx, e.sy); g.lineWidth = px; g.strokeStyle = e === sel ? acc : "#57534e";
@@ -368,7 +396,7 @@ const orbit = new OrbitControls(cam, renderer.domElement); orbit.enableDamping =
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(30, 60, 20); scene.add(sun);
 let world = new THREE.Group(); scene.add(world);
-let solid = null, glass = null, slabs = [], solidEls = [];
+let solid = null, glass = null, slabs = [], solidEls = [], bakedMesh = null, bakedRanges = [];
 const unit = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 
 function build3D() {
@@ -377,7 +405,7 @@ function build3D() {
   world = new THREE.Group(); scene.add(world); slabs = [];
   const all = $("#allLv").checked;
   const show = els.filter(e => visible(e) && (all || e.li === curLevel));
-  const boxes = [], panes = [];
+  const boxes = [], panes = [], baked = [];
   // A box: centre (x, y) in plan metres, z bottom, size sx/sy/h, plan rotation.
   const box = (e, x, y, z, sx, sy, h, rot, color) => boxes.push({ e, x, y, z, sx, sy, h, rot, color });
   for (const e of show) {
@@ -391,10 +419,12 @@ function build3D() {
         if (e.kind === "window") {
           const sill = num(e.open.sillHeight) ?? 0.9;
           if (sill > 0) box(e, cx, cy, e.elev, L, e.t, sill, rot, COL.wall);
-          panes.push({ e, x: cx, y: cy, z: e.elev + sill, sx: L, sy: 0.02, h: lintel - sill, rot });
+          if (!e.bake) panes.push({ e, x: cx, y: cy, z: e.elev + sill, sx: L, sy: 0.02, h: lintel - sill, rot });
         }
+        if (e.bake) baked.push(e);
       }
-    } else if (e.kind === "object") box(e, e.x, e.y, e.elev + e.z, e.sx, e.sy, e.h, e.rot, COL[e.cat]);
+    } else if (e.kind === "object" && e.bake) baked.push(e);
+    else if (e.kind === "object") box(e, e.x, e.y, e.elev + e.z, e.sx, e.sy, e.h, e.rot, COL[e.cat]);
     else if (e.kind === "space" && !/struct|grid|mep/i.test(e.layer || "")) {
       const shape = new THREE.Shape(e.poly.map(p => new THREE.Vector2(p[0], p[1])));
       const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshLambertMaterial({ color: 0xe7e2d8, side: THREE.DoubleSide }));
@@ -413,11 +443,40 @@ function build3D() {
   };
   solid = inst(boxes, new THREE.MeshLambertMaterial()); solidEls = boxes;
   glass = inst(panes, new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.35, depthWrite: false })); glass.userData.list = panes;
+  bakedMesh = null; bakedRanges = [];
+  if (baked.length) {
+    let n = 0; for (const e of baked) for (const p of bake.geoms[e.bake.g]) n += p.tri.length;
+    const pos = new Float32Array(n), col = new Float32Array(n), c = new THREE.Color(); let o = 0;
+    for (const e of baked) {
+      const start = o / 3, [ax, ay] = e.bake.anchor;
+      for (const p of bake.geoms[e.bake.g]) {
+        c.set(p.color); const t = p.tri;
+        // plan frame (x east, y south, z up) → three (x, up, z)
+        for (let i = 0; i < t.length; i += 3, o += 3) {
+          pos[o] = ax + t[i] / 1000; pos[o + 1] = e.elev + t[i + 2] / 1000; pos[o + 2] = ay + t[i + 1] / 1000;
+          col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b;
+        }
+      }
+      bakedRanges.push({ e, start, end: o / 3 });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    geo.computeVertexNormals();
+    bakedMesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    bakedMesh.userData.orig = col.slice();
+    world.add(bakedMesh);
+  }
   paint3DSelection();
   if (!build3D.fitted) fit3D();
 }
 function fit3D() {
-  const b = new THREE.Box3().setFromObject(world); if (b.isEmpty()) return;
+  // The building, not its context: walls/boxes and floors (a 60 m exterior-context ground would dominate).
+  const b = new THREE.Box3();
+  if (solid?.count) { solid.computeBoundingBox(); b.union(solid.boundingBox); }
+  for (const m of slabs) b.expandByObject(m);
+  if (b.isEmpty()) b.setFromObject(world);
+  if (b.isEmpty()) return;
   build3D.fitted = true;
   const c = b.getCenter(new THREE.Vector3()), r = b.getSize(new THREE.Vector3()).length() / 2 || 5;
   orbit.target.copy(c); cam.position.set(c.x + r * 1.3, c.y + r * 1.5, c.z + r * 1.9); cam.far = r * 20; cam.updateProjectionMatrix();
@@ -428,6 +487,12 @@ function paint3DSelection() {
   solidEls.forEach((b, i) => solid.setColorAt(i, c.setHex(b.e === sel ? COL.sel : b.color)));
   if (solid.instanceColor) solid.instanceColor.needsUpdate = true;
   for (const m of slabs) m.material.color.setHex(m.userData.el === sel ? COL.sel : 0xe7e2d8);
+  if (bakedMesh) {
+    const col = bakedMesh.geometry.attributes.color, orig = bakedMesh.userData.orig, a = col.array, s = new THREE.Color(COL.sel);
+    a.set(orig);
+    for (const r of bakedRanges) if (r.e === sel) for (let v = r.start; v < r.end; v++) { a[v * 3] = s.r; a[v * 3 + 1] = s.g; a[v * 3 + 2] = s.b; }
+    col.needsUpdate = true;
+  }
 }
 {
   const ray = new THREE.Raycaster(), v = new THREE.Vector2(); let down = null;
@@ -436,9 +501,9 @@ function paint3DSelection() {
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
     const r = renderer.domElement.getBoundingClientRect();
     v.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(v, cam);
-    const h = ray.intersectObjects([solid, glass, ...slabs].filter(Boolean), false)[0];
+    const h = ray.intersectObjects([solid, glass, bakedMesh, ...slabs].filter(Boolean), false)[0];
     if (!h) return select(null, "3d");
-    const e2 = h.object === solid ? solidEls[h.instanceId]?.e : h.object === glass ? glass.userData.list[h.instanceId]?.e : h.object.userData.el;
+    const e2 = h.object === bakedMesh ? bakedRanges.find(r => h.face.a >= r.start && h.face.a < r.end)?.e : h.object === solid ? solidEls[h.instanceId]?.e : h.object === glass ? glass.userData.list[h.instanceId]?.e : h.object.userData.el;
     select(e2, "3d");
   });
   renderer.domElement.addEventListener("dblclick", fit3D);
