@@ -690,19 +690,19 @@ if (src) loadUrl(src); else if (SESSION) msg("Waiting for the agent…"); else s
 if (SESSION && API) followSession();
 
 /* ---------------- agent sessions ----------------
-   ?session=<id>&api=<worker> — an agent drives this page through library/Sessions/<id>/state.json (MCP
-   viewer_show / viewer_snapshot / form_ask on the Worker). The page polls the state, applies changes, posts
-   snapshots when asked, and reports the user's selections and form answers as events. */
+   ?session=<id>&api=<app>/__relay — an agent drives this page through the connector's viewer tools
+   (viewer.open / show / snapshot / form, server/viewerSessions.mjs). The page polls <api>/viewer/<id>,
+   applies changes, uploads snapshots when asked, and reports the user's selections and form answers. */
 function sessionEvent(ev) {
   if (!SESSION || !API) return;
-  fetch(`${API}/api/session/${SESSION}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(ev) }).catch(() => {});
+  fetch(`${API}/viewer/${SESSION}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(ev) }).catch(() => {});
 }
 async function followSession() {
   let rev = 0, snapReq = 0, formShown = null, busy = false;
   const tick = async () => {
     if (busy) return; busy = true;
     try {
-      const r = await fetch(`${API}/api/session/${SESSION}`, { cache: "no-store" });
+      const r = await fetch(`${API}/viewer/${SESSION}`, { cache: "no-store" });
       if (!r.ok) return;
       const st = await r.json();
       if (st.rev > rev) {
@@ -723,7 +723,7 @@ async function followSession() {
       if (st.snapshot?.req && st.snapshot.req !== snapReq) {
         snapReq = st.snapshot.req;
         const blob = await snapshot(st.snapshot.pane);
-        await fetch(`${API}/api/session/${SESSION}/snapshot?req=${snapReq}`, { method: "PUT", headers: { "content-type": "image/png" }, body: blob });
+        await fetch(`${API}/viewer/${SESSION}/snapshot?req=${snapReq}`, { method: "PUT", headers: { "content-type": "image/png" }, body: blob });
       }
     } catch {} finally { busy = false; }
   };

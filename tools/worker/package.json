@@ -1,7 +1,0 @@
-{
-  "name": "library-worker",
-  "private": true,
-  "type": "module",
-  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy", "test": "node test.mjs" },
-  "devDependencies": { "wrangler": "4.40.0" }
-}

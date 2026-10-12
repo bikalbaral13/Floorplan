@@ -21,7 +21,7 @@ import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
 import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
-import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, openEditor, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
+import { relayConfig, setRelayBaseFrom, CONNECTOR_RELAY_TOOLS, linkConnector, openEditor, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
 
 /** MCP_FLAT_TOOLS=1 lists the old one-tool-per-command surface instead of the grouped one (rollback switch). */
 const FLAT = /^(1|true|yes)$/i.test(String(process.env.MCP_FLAT_TOOLS ?? ""));
@@ -166,19 +166,22 @@ function allTools() {
   return toolList;
 }
 
-const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/, Images/, Workflows/) plus the full editor canvas toolset.
+const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library — data, skills, the engine and an HTML viewer. The VIEWER is the canvas; no editor app is needed.
 
-TOOLS ARE GROUPED: session, step, library, skills, design, draw, objects, workflow, underlay, moodboard (+ await_result). Each takes an \`op\` — e.g. skills { op: "list" }, design { op: "load", path: "Designs/X.json" }, workflow { op: "run", path: "Operations/double_inset", inputs }. op: "describe_ops" gives a group's full arguments. Names below like list_skills / load_design are those ops (skills.list, design.load) — the old names still work too.
+START HERE
+1. read_file { path: "AGENT.md" } — how the library is organised and the rules that matter.
+2. viewer { op: "open", src? } → give the user the link it returns (open it beside the chat if you can). Keep the session id.
 
-FILE-FIRST: the live tab is slow to drive, so the canvas is a FILE, not a drawing surface. Build or change the plan as JSON, then show it ONCE. If you can run code locally with R2 keys, do the whole job locally (pipelines, R2 reads and writes via tools/r2.mjs), upload the design and images to the Library yourself, and finish with design.load { path } — no plan or image bytes through these tools. Underlays reference an Images/ URL, never a data URL.
+TOOLS ARE GROUPED: viewer, library, skills, design, objects, workflow, … (+ await_result). Each takes an \`op\` — e.g. skills { op: "list" }, design { op: "load", path: "Designs/X.json" }. op: "describe_ops" gives a group's full arguments; old flat names (read_file, load_design, …) still work.
 
 HOW TO HANDLE A REQUEST
-1. Anything beyond a single small edit: call list_skills, pick the skill whose description fits the request, read_skill it, and follow it step by step. Read files it references with read_file. If no skill fits, work directly with the canvas tools.
-2. Call editor_status. If no editor tab is connected, ask the user once whether they want to watch live. If yes, call open_editor and give them the link it returns (or open it beside the chat if you can open a browser) — the tab connects itself, no code; then call editor_status until tabConnected is true. (Fallback: they click Connect Claude in the editor and tell you the code for connect_editor.) If they don't, work headless: use_design picks (or creates) Designs/<name>.json and the canvas tools edit that file.
-3. Draw as a FILE. A plan already in the Library: load_design { path } (no \`design\`) shows it in the linked tab in one step, like Import JSON. A new plan from here: build the complete plan JSON (standard format — read an existing one with read_file for the shape) and call load_design { path, design } ONCE. To change a design, batch every change of a step into ONE edit_design call (up to 500 ops: wall, opening, object, space, attach, delete, layer, move, set; a linked tab showing that design picks it up live). Look up one object's params with list_objects { object }. Check with render_design (no tab needed) or snapshot_canvas. The old piece-by-piece canvas tools are unlisted; don't use them.
-4. Multi-step skills: begin_step → work → checkpoint for each step; the user answers in the editor. If a call returns { pending: true, ticket }, call await_result with the ticket until it finishes.
-5. Steps a skill runs on the user's own PC (Blender renders, Python/DXF, .skp export) cannot run here: finish everything else, save the design, and tell the user the exact local command to run.
-Flows, underlays, selection and checkpoints need a linked, open tab.`;
+1. Anything beyond a single small edit: skills { op: "list" }, read the skill that fits, follow it step by step. Read files it references with read_file.
+2. Work FILE-FIRST: build or change the plan as JSON and save it ONCE — design.load { path, design } (new or whole plan) or one design.edit batch (up to 500 ops). If you can run code locally with R2 keys, do the job locally (tools/r2.mjs) and pass paths, never big JSON or image bytes, through these tools.
+3. Show it: viewer { op: "show", session, src: path }. Check it: viewer { op: "snapshot", session } (or design.render with no viewer open).
+4. Questions for the user — questionnaires, scope forms, choices — go in viewer { op: "form" }; poll viewer { op: "events" } for the answers and for what the user clicked. Never answer a form yourself.
+5. A call that returns { pending: true, ticket } → await_result with the ticket until it finishes.
+6. Steps a skill runs on the user's PC (Blender, Python/DXF, .skp) cannot run here: finish the rest, save, and give the exact local command.
+The live editor tab (session.open, flows, underlays, checkpoints) is still available for work that needs it, but is not the default.`;
 
 /** A skill is a folder under Skills/; each .md in it is one playbook with a `description:` in its front matter. */
 const describe = (t) => {
@@ -372,6 +375,7 @@ export async function handleLibraryMcp(req, res, cfg = libraryMcpConfig()) {
   res.setHeader("Access-Control-Allow-Headers", "content-type, authorization, mcp-session-id, mcp-protocol-version");
   res.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
   if (req.method === "OPTIONS") { res.statusCode = 204; res.end(); return; }
+  setRelayBaseFrom(req);   // viewer.open links point back at this deployment
   if (!cfg) return send(res, 503, { error: "library storage is not configured (set MCP_R2_ENDPOINT / MCP_R2_ACCESS_KEY_ID / MCP_R2_SECRET_ACCESS_KEY / MCP_R2_BUCKET, or the R2_* equivalents)" });
   if (!cfg.tokens.length) return send(res, 503, { error: "no access tokens configured (set MCP_TOKENS=name:token,…)" });
   if (req.method === "GET") return send(res, 405, { error: "this MCP endpoint answers POST only (no SSE stream)" }, { Allow: "POST" });

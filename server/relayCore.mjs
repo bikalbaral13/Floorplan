@@ -23,6 +23,7 @@ import { putObject, getObjectText, listObjects, deleteObject } from "../tools/r2
 import { TOOLS, timeoutFor, newRunState, stepGate } from "../packages/floorplan-bridge/tools.mjs";
 import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
 import { RELAY_HEADLESS_TOOLS, HEADLESS_TOOL_NAMES, runHeadless, validDesignPath, saveDesignJson } from "./relayHeadless.mjs";
+import { VIEWER_TOOLS, VIEWER_TOOL_NAMES, runViewerTool, handleViewerRoute } from "./viewerSessions.mjs";
 
 const WAIT_MS = Number(process.env.RELAY_WAIT_MS || 50_000);      // one /mcp request waits this long, then tickets
 const POLL_MS = 400;                                              // how often /mcp checks for the result
@@ -41,7 +42,16 @@ const AWAIT_TOOL = {
 };
 /** MCP_FLAT_TOOLS=1: list one tool per command (the pre-grouping surface) instead of the grouped tools. */
 const FLAT_TOOLS = /^(1|true|yes)$/i.test(String(process.env.MCP_FLAT_TOOLS ?? ""));
-const RELAY_TOOLS = [...TOOLS, AWAIT_TOOL, ...RELAY_HEADLESS_TOOLS];
+const RELAY_TOOLS = [...VIEWER_TOOLS, ...TOOLS, AWAIT_TOOL, ...RELAY_HEADLESS_TOOLS];
+/** This deployment's relay base for viewer links (set per request by handleRelay and the library connector;
+ *  a serverless instance serves one request at a time). */
+let relayBase = "https://floorplan-indol.vercel.app/__relay";
+export function setRelayBaseFrom(req) {
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  if (!host) return;
+  const proto = String(req.headers["x-forwarded-proto"] || (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) ? "http" : "https")).split(",")[0];
+  relayBase = `${proto}://${host}/__relay`;
+}
 
 /* ── config ─────────────────────────────────────────────────────────────────────────────────────────── */
 const unquote = (v) => String(v ?? "").trim().replace(/^["']|["']$/g, "");
@@ -53,6 +63,9 @@ export function relayConfig(env = process.env) {
 const ALLOWED_ORIGINS = ["https://floorplan-indol.vercel.app", ...String(process.env.RELAY_ORIGINS || "").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean)];
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 const PREVIEW_ORIGIN = /^https:\/\/floorplan-[a-z0-9-]+\.vercel\.app$/;
+/** Origins of the R2-hosted viewer (the public bucket domain), allowed on /__relay/viewer/* only. */
+const VIEWER_ORIGINS = [process.env.R2_PUBLIC_URL, process.env.VITE_R2_PUBLIC_URL, "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev"]
+  .map((u) => { try { return new URL(String(u ?? "").trim().replace(/^["']|["']$/g, "")).origin; } catch { return null; } }).filter(Boolean);
 const originAllowed = (o) => !o || LOCAL_ORIGIN.test(o) || PREVIEW_ORIGIN.test(o) || ALLOWED_ORIGINS.includes(o);
 
 /* ── small helpers ──────────────────────────────────────────────────────────────────────────────────── */
@@ -70,6 +83,16 @@ const readBody = (req, limit = INLINE_LIMIT + 200_000) => new Promise((resolve, 
   let size = 0; const chunks = [];
   req.on("data", (c) => { size += c.length; if (size > limit) { reject(new Error("body too large")); req.destroy(); } else chunks.push(c); });
   req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+  req.on("error", reject);
+});
+/** Raw body as a Buffer (Vercel may hand over a pre-read Buffer or string; the dev server streams). */
+const readBuffer = (req, limit) => new Promise((resolve, reject) => {
+  if (Buffer.isBuffer(req.body)) return resolve(req.body);
+  if (typeof req.body === "string") return resolve(Buffer.from(req.body));
+  if (req.body && typeof req.body === "object") return resolve(Buffer.from(JSON.stringify(req.body)));
+  let size = 0; const chunks = [];
+  req.on("data", (c) => { size += c.length; if (size > limit) { reject(new Error("body too large")); req.destroy(); } else chunks.push(c); });
+  req.on("end", () => resolve(Buffer.concat(chunks)));
   req.on("error", reject);
 });
 async function getJson(cfg, key) {
@@ -294,6 +317,9 @@ async function callTool(cfg, sid, name, args) {
     return finish(cfg, sid, meta, r);
   }
 
+  // Viewer tools need no tab and no step: they only write the viewer session the page follows.
+  if (VIEWER_TOOL_NAMES.has(name)) return runViewerTool(cfg, name, args, relayBase);
+
   const g = stepGate(s.run ?? (s.run = newRunState()));
   if (name === "begin_step") {
     try { const out = g.beginStep(args); await putJson(cfg, `${P(sid)}/session.json`, s); return text(out); }
@@ -390,7 +416,7 @@ async function mcp(cfg, req, res) {
     if (method === "initialize") {
       const v = PROTOCOL_VERSIONS.includes(params?.protocolVersion) ? params.protocolVersion : "2025-03-26";
       return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-relay", version: "0.2.0" },
-        instructions: "Drives the user's own tab of the BuilderPluss floor plan editor. If a tool returns { pending: true, ticket }, call await_result with that ticket until it finishes. With NO tab connected, canvas tools fall back to editing a Library design headlessly (the one the tab last had open, or the one set with use_design); snapshot_canvas then returns a server-rendered preview. Tools that need the live canvas or the user (checkpoint, flows, underlays, selection) still need the tab." });
+        instructions: "START with library.read { path: \"AGENT.md\" } (how the R2 library works) and viewer { op: \"open\" } — the HTML viewer (JSON · 2D · 3D) is the canvas; build designs as files, viewer.show them, viewer.snapshot to check, viewer.form to ask the user. The legacy path below still works: drives the user's own tab of the BuilderPluss floor plan editor. If a tool returns { pending: true, ticket }, call await_result with that ticket until it finishes. With NO tab connected, canvas tools fall back to editing a Library design headlessly (the one the tab last had open, or the one set with use_design); snapshot_canvas then returns a server-rendered preview. Tools that need the live canvas or the user (checkpoint, flows, underlays, selection) still need the tab." });
     }
     if (method === "ping") return reply({});
     if (method === "tools/list") return reply({ tools: FLAT_TOOLS ? [...RELAY_TOOLS, ...await workflowToolsFor(cfg, a.sid)] : groupedTools(RELAY_TOOLS) });
@@ -490,14 +516,21 @@ export async function callConnectorTool(cfg, user, name, args) {
 /** @param route "/mcp" or "/pair" | "/claim" | "/next" | "/result" | "/blob" | "/session" | "/status" */
 export async function handleRelay(req, res, route, url, cfg = relayConfig()) {
   const origin = req.headers.origin;
-  const cors = origin && originAllowed(origin)
-    ? { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Allow-Headers": "content-type, authorization, mcp-session-id, mcp-protocol-version", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" }
+  setRelayBaseFrom(req);
+  // The R2 viewer (library/Viewer/v1, served from the public bucket) may call the viewer routes only.
+  const viewerRoute = route.startsWith("/viewer/");
+  const cors = origin && (originAllowed(origin) || (viewerRoute && VIEWER_ORIGINS.includes(origin)))
+    ? { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Allow-Headers": "content-type, authorization, mcp-session-id, mcp-protocol-version", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS" }
     : {};
   for (const [k, v] of Object.entries(cors)) res.setHeader(k, v);
   if (req.method === "OPTIONS") { res.statusCode = 204; res.end(); return; }
   if (!cfg) return send(res, 503, { ok: false, error: "relay storage is not configured (set RELAY_R2_ENDPOINT / RELAY_R2_ACCESS_KEY_ID / RELAY_R2_SECRET_ACCESS_KEY / RELAY_R2_BUCKET)" });
   try {
     if (route === "/mcp") return await mcp(cfg, req, res);
+    if (viewerRoute) {
+      if (origin && !originAllowed(origin) && !VIEWER_ORIGINS.includes(origin)) return send(res, 403, { ok: false, error: `origin ${origin} is not allowed` });
+      if (await handleViewerRoute(cfg, req, res, route, send, readBuffer)) return;
+    }
     // Tab routes: only the editor's own origins (a request with no Origin is a script, which still needs the tab token).
     if (origin && !originAllowed(origin)) return send(res, 403, { ok: false, error: `origin ${origin} is not allowed` });
     if (route === "/pair" && req.method === "POST") return await pair(cfg, req, res, url);

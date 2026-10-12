@@ -14,6 +14,10 @@
 
 /** group → { summary, ops: { op → flat command name } }. Order is the order tools are listed in. */
 export const GROUPS = {
+  viewer: {
+    summary: "START HERE. The HTML viewer (JSON · 2D · 3D, hosted in R2) is the canvas — no editor app, no pairing. op:open → give the user the link; build designs as files; op:show them; op:snapshot to check; op:form to ask the user (never self-answer), op:events for their answers and clicks.",
+    ops: { open: "viewer_open", show: "viewer_show", snapshot: "viewer_snapshot", events: "viewer_events", form: "viewer_form" },
+  },
   session: {
     summary: "The live editor link and what is on the canvas right now.",
     ops: { open: "open_editor", connect: "connect_editor", status: "editor_status", state: "get_state", selection: "get_selection", snapshot: "snapshot_canvas" },
