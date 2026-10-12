@@ -43,6 +43,7 @@ canvas{display:block;width:100%;height:100%}
   <b>Plan Viewer</b><span id="name">no design</span><span class="sp"></span>
   <select id="level" title="Level shown in 2D"></select>
   <label class="btn" title="3D shows all levels"><input type="checkbox" id="allLv" checked> all levels in 3D</label>
+  <label class="btn" title="Show false ceilings in 3D"><input type="checkbox" id="ceil"> ceilings</label>
   <button id="bLayers">Layers</button>
   <button data-v="json">JSON</button><button data-v="d2">2D</button><button data-v="d3">3D</button><button data-v="all">All</button>
   <label class="btn">Open…<input type="file" id="file" accept=".json" hidden></label>
@@ -93,12 +94,15 @@ async function loadBake(src) {
 }
 function attachBake() {
   for (const e of els) {
-    e.bake = null;
+    e.bake = null; e.spaceBakes = null;
     if (!bake) continue;
     if (e.kind === "object") e.bake = bake.items[`${e.li}/${e.id}`] || null;
     else if (e.kind === "door" || e.kind === "window") {
       const a = (e.raw.attachments || []).find(t => !/^wall/.test(t.objectId || "") && bake.items[`${e.li}/${t.id}`]);
       e.bake = a ? bake.items[`${e.li}/${a.id}`] : null;
+    } else if (e.kind === "space") {
+      e.spaceBakes = (e.raw.attachments || []).filter(t => bake.items[`${e.li}/${t.id}`])
+        .map(t => ({ item: bake.items[`${e.li}/${t.id}`], ceiling: /ceiling/.test(t.objectId || "") }));
     }
   }
 }
@@ -467,6 +471,7 @@ const host = $("#c3");
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(devicePixelRatio); host.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(css("--panel"));
 const cam = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
 const orbit = new OrbitControls(cam, renderer.domElement); orbit.enableDamping = true;
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.6));
@@ -479,7 +484,7 @@ function build3D() {
   scene.background = new THREE.Color(css("--panel"));
   scene.remove(world); world.traverse(o => { if (o.geometry && o.geometry !== unit) o.geometry.dispose(); });
   world = new THREE.Group(); scene.add(world); slabs = [];
-  const all = $("#allLv").checked;
+  const all = $("#allLv").checked, showCeil = $("#ceil").checked;
   const show = els.filter(e => visible(e) && (all || e.li === curLevel));
   const boxes = [], panes = [], baked = [];
   // A box: centre (x, y) in plan metres, z bottom, size sx/sy/h, plan rotation.
@@ -497,11 +502,12 @@ function build3D() {
           if (sill > 0) box(e, cx, cy, e.elev, L, e.t, sill, rot, COL.wall);
           if (!e.bake) panes.push({ e, x: cx, y: cy, z: e.elev + sill, sx: L, sy: 0.02, h: lintel - sill, rot });
         }
-        if (e.bake) baked.push(e);
+        if (e.bake) baked.push({ e, it: e.bake });
       }
-    } else if (e.kind === "object" && e.bake) baked.push(e);
+    } else if (e.kind === "object" && e.bake) baked.push({ e, it: e.bake });
     else if (e.kind === "object") box(e, e.x, e.y, e.elev + e.z, e.sx, e.sy, e.h, e.rot, COL[e.cat]);
     else if (e.kind === "space" && !/struct|grid|mep/i.test(e.layer || "")) {
+      for (const sb of e.spaceBakes || []) if (showCeil || !sb.ceiling) baked.push({ e, it: sb.item });
       const shape = new THREE.Shape(e.poly.map(p => new THREE.Vector2(p[0], p[1])));
       const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshLambertMaterial({ color: 0xe7e2d8, side: THREE.DoubleSide }));
       m.rotation.x = Math.PI / 2; m.position.y = e.elev + 0.002; m.userData.el = e; world.add(m); slabs.push(m);
@@ -521,11 +527,11 @@ function build3D() {
   glass = inst(panes, new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.35, depthWrite: false })); glass.userData.list = panes;
   bakedMesh = null; bakedRanges = [];
   if (baked.length) {
-    let n = 0; for (const e of baked) for (const p of bake.geoms[e.bake.g]) n += p.tri.length;
+    let n = 0; for (const b of baked) for (const p of bake.geoms[b.it.g]) n += p.tri.length;
     const pos = new Float32Array(n), col = new Float32Array(n), c = new THREE.Color(); let o = 0;
-    for (const e of baked) {
-      const start = o / 3, [ax, ay] = e.bake.anchor;
-      for (const p of bake.geoms[e.bake.g]) {
+    for (const { e, it } of baked) {
+      const start = o / 3, [ax, ay] = it.anchor;
+      for (const p of bake.geoms[it.g]) {
         c.set(p.color); const t = p.tri;
         // plan frame (x east, y south, z up) → three (x, up, z)
         for (let i = 0; i < t.length; i += 3, o += 3) {
@@ -602,6 +608,7 @@ function setView(v) {
 document.querySelectorAll("header [data-v]").forEach(b => b.onclick = () => setView(b.dataset.v));
 $("#level").onchange = () => { curLevel = +$("#level").value; fit2D(); draw2D(); if (!$("#allLv").checked) build3D(); };
 $("#allLv").onchange = () => build3D();
+$("#ceil").onchange = () => build3D();
 const readFile = (f) => f && f.text().then(t => setDoc(JSON.parse(t), f.name)).catch(e => msg("Not a valid JSON file: " + e.message));
 $("#file").onchange = (e) => readFile(e.target.files[0]);
 addEventListener("dragover", (e) => { e.preventDefault(); $("#drop").style.display = "block"; });
@@ -611,7 +618,25 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<":
 
 setView(new URLSearchParams(location.search).get("view") || store.get("pv.view") || "all");
 const src = new URLSearchParams(location.search).get("src");
-if (src) loadUrl(src);
+if (src) loadUrl(src); else showIndex();
+
+// No ?src= → list the library's designs (designs.json, refreshed by publish.mjs / bake.mjs).
+async function showIndex() {
+  try {
+    const r = await fetch(new URL("designs.json", location.href), { cache: "no-cache" });
+    if (!r.ok) return;
+    const { designs } = await r.json();
+    const box = $("#msg");
+    box.style.pointerEvents = "auto"; box.style.alignItems = "flex-start"; box.style.overflow = "auto"; box.style.top = "41px";
+    box.innerHTML = `<div style="text-align:left;max-width:640px;width:100%"><h3 style="margin:8px 0">Designs</h3>
+      <input id="q" placeholder="filter…" style="width:100%;padding:6px 8px;margin-bottom:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+      <div id="dl"></div><p style="font-size:12px">● = real object shapes baked · ○ = boxes only</p></div>`;
+    const draw = (q) => $("#dl").innerHTML = designs.filter(d => d.name.toLowerCase().includes(q)).map(d =>
+      `<div style="padding:3px 0"><a style="color:var(--ink)" href="?src=${encodeURIComponent(d.path)}">${d.baked ? "●" : "○"} ${esc(d.name)}</a>
+       <span style="color:var(--mute);font-size:12px">${(d.size / 1048576).toFixed(1)} MB</span></div>`).join("");
+    draw(""); $("#q").oninput = (e) => draw(e.target.value.toLowerCase());
+  } catch {}
+}
 </script>
 </body>
 </html>

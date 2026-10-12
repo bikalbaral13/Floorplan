@@ -11,8 +11,8 @@
  *     geoms: [ [ { color, tri: [x,y,z, …] (mm ints, 3 verts per triangle) }, … ], … ],
  *     items: { "<levelIndex>/<attachmentId>": { g: <geom index>, anchor: [x, y], fill?: [[[x,y],…]] } } }
  * Identical geometry (same object, same params, same orientation) is stored once — a plan's 84 downlights
- * are one geom. Walls are skipped (the viewer draws its own), and so are room/space objects (tile fields
- * and ceilings are heavy and hide the plan); both can be added later.
+ * are one geom. Walls are skipped (the viewer draws its own). Room objects (floor, tile field, false
+ * ceiling) are baked too; the viewer hides ceilings unless asked.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -22,6 +22,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 import { signedRequest } from "../r2.mjs";
+import { refreshDesignsIndex } from "./designs-index.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../..");
@@ -54,6 +55,24 @@ const skip = (a) => /^wall/.test(a.objectId || "");
 const HELPER_OBJECT = /^(camera|light)-with-math$/;
 const HELPER_MESH = /view cone|beam \/ aim|footprint/i;
 const geoms = [], geomIndex = new Map(), items = {};
+
+// Surface colour from the wired material (row.material) or the placement's params.materialPath, as the
+// renderer reads them — a tile field otherwise shows its object's default swatch, not the chosen finish.
+// Joints/grout/gaps keep their own colour.
+const matColour = new Map();
+async function colourOf(matPath) {
+  const key = matPath.replace(/^\/*(library\/)?(Materials\/)?/, "Materials/");
+  if (!matColour.has(key)) {
+    let c = null;
+    try {
+      const r = await fetch(`${PUBLIC}/library/${key.split("/").map(encodeURIComponent).join("/")}`, { headers: { "user-agent": "viewer-bake" } });
+      if (r.ok) { const m = await r.json(); c = m.pbr?.baseColor || m.plan2d?.color || null; }
+    } catch {}
+    matColour.set(key, c);
+  }
+  return matColour.get(key);
+}
+const KEEP_OWN = /joint|grout|gap|seam/i;
 let faces = 0, tris = 0;
 
 for (const [li, L] of levels.entries()) {
@@ -61,9 +80,9 @@ for (const [li, L] of levels.entries()) {
   const lv = {
     ...plan, levels: undefined, activeLevelId: undefined,
     nodes: (L.nodes || []).map(full), segments: (L.segments || []).map(full),
-    spaces: (L.spaces || []).map((s) => ({ ...s, attachments: [] })),
+    spaces: (L.spaces || []).map(full),
   };
-  const want = [...lv.nodes, ...lv.segments].flatMap((h) => h.attachments).filter((a) => !skip(a)).length;
+  const want = [...lv.nodes, ...lv.segments, ...lv.spaces].flatMap((h) => h.attachments).filter((a) => !skip(a)).length;
   if (!want) { console.log(`level ${li} ${L.name}: nothing to bake`); continue; }
   const inF = path.join(work, `L${li}.json`), outF = path.join(work, `L${li}.baked.json`);
   fs.writeFileSync(inF, JSON.stringify(lv));
@@ -72,7 +91,7 @@ for (const [li, L] of levels.entries()) {
   if (r.status !== 0) { console.error(r.stderr?.slice(-3000)); console.error(`! level ${li} bake failed`); process.exit(1); }
   const baked = JSON.parse(fs.readFileSync(outF, "utf8"));
   let n = 0;
-  for (const h of [...(baked.nodes || []), ...(baked.segments || [])]) {
+  for (const h of [...(baked.nodes || []), ...(baked.segments || []), ...(baked.spaces || [])]) {
     for (const a of h.attachments || []) {
       if (skip(a) || HELPER_OBJECT.test(a.objectId || "") || !a.baked?.meshes?.length) continue;
       const parts = [];
@@ -83,7 +102,9 @@ for (const [li, L] of levels.entries()) {
           faces++;
           for (let k = 1; k + 1 < f.length; k++) for (const p of [f[0], f[k], f[k + 1]]) tri.push(Math.round(p[0] * 1000), Math.round(p[1] * 1000), Math.round(p[2] * 1000));
         }
-        if (tri.length) parts.push({ color: m.color || "#a3a3a3", tri });
+        const mat = m.material || (!KEEP_OWN.test(m.name || "") && a.params?.materialPath);
+        const colour = (mat && (await colourOf(mat))) || m.color || "#a3a3a3";
+        if (tri.length) parts.push({ color: colour, tri });
       }
       if (!parts.length) continue;
       const key = crypto.createHash("sha1").update(JSON.stringify(parts)).digest("hex");
@@ -112,4 +133,5 @@ if (argv.includes("--upload")) {
   await signedRequest(cfg, "PUT", key, gz, { "content-type": "application/json", "content-encoding": "gzip", "cache-control": "no-cache" });
   console.log(`gzip ${(gz.length / 1048576).toFixed(1)} MB`);
   console.log(`uploaded ${PUBLIC}/${key}`);
+  await refreshDesignsIndex(cfg);
 }

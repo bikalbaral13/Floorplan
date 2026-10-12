@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { putObject } from "../r2.mjs";
+import { refreshDesignsIndex } from "./designs-index.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const env = Object.fromEntries(fs.readFileSync(path.join(here, "../../.env"), "utf8").split(/\r?\n/)
@@ -15,4 +16,6 @@ await putObject(cfg, key, fs.readFileSync(path.join(here, "index.html")), "text/
 // The live-object runtime (Phase 3): rebuild with `node tools/viewer/runtime/build.mjs` after engine changes.
 if (fs.existsSync(path.join(here, "objects.js")))
   await putObject(cfg, "library/Viewer/v1/objects.js", fs.readFileSync(path.join(here, "objects.js")), "text/javascript; charset=utf-8");
+const designs = await refreshDesignsIndex(cfg);
+console.log(`designs.json: ${designs.length} designs, ${designs.filter((d) => d.baked).length} baked`);
 console.log(`${env.R2_PUBLIC_URL.replace(/\/+$/, "")}/${key}`);
