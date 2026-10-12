@@ -136,28 +136,23 @@ E1 first (small, it mostly renames what exists) → W1–W2 (save-back for the v
 
 ---
 
-## Part C — MCP on the Worker, viewer-first (built 2026-10-12, not yet deployed)
+## Part C — viewer-first tools in the existing BuilderPluss connector (built 2026-10-12)
 
-The agent no longer needs the editor app: the Worker serves an MCP endpoint (`POST /mcp`, Streamable HTTP,
-stateless) and the viewer is the canvas. `tools/worker/src/mcp.js`, `sessions.js`.
+**Decision (user):** no Cloudflare Worker — the Vercel app (floorplan-indol.vercel.app) and its BuilderPluss
+connector already hold the keys, tokens and save path. The Worker built for Parts A/C was removed (it is in
+git history at 02745ae).
 
-| Tool | Does |
-|---|---|
-| `viewer_open {src?, view?}` | new session → viewer link (`?session=<id>&api=<worker>`) |
-| `viewer_show {session, src?, view?, level?, select?, camera?}` | change what the open viewer shows |
-| `viewer_snapshot {session, pane?}` | PNG of the viewer (the page captures itself and uploads) |
-| `viewer_events {session, since?}` | user selections + form answers |
-| `form_ask {session, title, fields}` | a form in the viewer; answers arrive as events — never self-answered |
-| `library_list`, `library_read`, `skills_list` | read the library (read returns the etag) |
-| `design_save {path, json, etag?, session?}` | save via the same rules as `PUT /api/file` |
+- `server/viewerSessions.mjs` — tool group **`viewer`** (listed first): `open`, `show`, `snapshot`, `events`,
+  `form`. Sessions in the relay bucket under `viewer/<id>/` (state / events / snapshot). Runs inside
+  `callTool` in `server/relayCore.mjs`, so both the relay (`/mcp`) and the library connector (`/api/mcp`)
+  have it; no tab and no step gate needed.
+- Page routes `/__relay/viewer/<id>` (GET state · POST /events · PUT /snapshot); the R2 viewer origin is
+  allowed on these routes only.
+- Viewer (`Viewer/v1`): `?session=<id>&api=<app>/__relay`.
+- Connector instructions now start with `read_file AGENT.md` → `viewer.open`.
+- `library/AGENT.md` (source `docs/library/AGENT.md`): the map of the library for any agent.
+- Local test: `node tools/viewer/dev/relay-harness.mjs` (port 2520; `MCP_TOKENS=name:token` for /api/mcp)
+  + `node tools/viewer/dev/mcp-call.mjs viewer '{"op":"open"}'`.
 
-Sessions live in `library/Sessions/<id>/` (`state.json` by the agent, `events.json` + `snapshot.png` by the
-viewer, which polls once a second). Tested locally (`wrangler dev` + `tools/worker/dev/viewer-proxy.mjs` on
-:2510): `node tools/worker/test.mjs` (19) and `node tools/worker/test-mcp.mjs` (14) pass; show → snapshot
-≈ 2.5 s; form and selection events round-trip.
-
-Connect Claude Code after deploy:
-`claude mcp add --transport http builderpluss-library https://builderpluss-library.<sub>.workers.dev/mcp`
-
-Not yet: heavy jobs (bake, Blender render) behind job tickets; repointing the R2 skills from "open the
-editor" to `viewer_open`; roles instead of open write.
+Part A (save-back) maps onto the connector's existing write path (`design.load` / `library.write` with
+MCP_TOKENS); no separate service is needed.
