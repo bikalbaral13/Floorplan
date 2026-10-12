@@ -1,0 +1,131 @@
+/* Right Properties panel — one calm, card-based look (after the INFRA reception "architect" HTML).
+ * Scoped to `.props-pro` (the panel's content column) so nothing else in the editor changes. The panel's JSX
+ * grew per element kind with its own tinted boxes; these rules flatten them into white cards, unify inputs,
+ * and keep headings small and quiet. Dark theme is a page inversion (html.bp-dark), so light values suffice. */
+
+.props-pro {
+  --pp-border: #e2e8f0;
+  --pp-muted: #64748b;
+  --pp-ink: #0f172a;
+  --pp-field: #ffffff;
+  font-size: 12px;
+}
+
+/* Tinted / coloured section boxes → plain white cards with a hairline border. */
+.props-pro [class*="bg-emerald-50"],
+.props-pro [class*="bg-green-50"],
+.props-pro [class*="bg-sky-50"],
+.props-pro [class*="bg-violet-50"],
+.props-pro [class*="bg-amber-50"],
+.props-pro [class*="bg-blue-50"],
+.props-pro [class*="bg-slate-50"] {
+  background-color: #ffffff !important;
+}
+.props-pro [class*="border-emerald-"],
+.props-pro [class*="border-green-"],
+.props-pro [class*="border-sky-2"],
+.props-pro [class*="border-violet-2"],
+.props-pro [class*="border-amber-2"],
+.props-pro [class*="border-blue-2"] {
+  border-color: var(--pp-border) !important;
+}
+.props-pro .rounded,
+.props-pro .rounded-md,
+.props-pro .rounded-lg {
+  border-radius: 10px;
+}
+
+/* Section headings: small uppercase grey, like "SPECIFICATION" / "DIMENSIONS & LEVELS". */
+.props-pro [class*="uppercase"][class*="tracking-wide"] {
+  color: var(--pp-muted) !important;
+  letter-spacing: 0.06em;
+}
+
+/* Fields: one height, one border, one radius. Checkboxes, radios, colour and range inputs keep their own. */
+.props-pro input:not([type]),
+.props-pro input[type="text"],
+.props-pro input[type="number"],
+.props-pro input[type="search"],
+.props-pro select,
+.props-pro textarea {
+  background: var(--pp-field);
+  border: 1px solid var(--pp-border);
+  border-radius: 8px;
+  color: var(--pp-ink);
+  font-size: 12px;
+  box-shadow: none;
+}
+.props-pro input:not([type]),
+.props-pro input[type="text"],
+.props-pro input[type="number"],
+.props-pro select {
+  min-height: 30px;
+  padding: 0 8px;
+}
+.props-pro textarea { padding: 6px 8px; }
+.props-pro input:focus,
+.props-pro select:focus,
+.props-pro textarea:focus {
+  outline: none;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.25);
+}
+.props-pro input[readonly],
+.props-pro input:disabled {
+  background: #f8fafc;
+  color: var(--pp-muted);
+}
+
+/* Tabs (Properties / Metrics): a quiet segmented control. */
+.props-pro [role="tablist"] {
+  background: #f1f5f9 !important;
+  border: 0 !important;
+  border-radius: 10px;
+  padding: 3px;
+}
+.props-pro [role="tab"] {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.props-pro [role="tab"][data-state="active"],
+.props-pro [role="tab"][aria-selected="true"] {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  color: var(--pp-ink);
+}
+
+/* Metric rows (label · value): tabular figures, quiet labels. */
+.props-pro .tabular-nums { font-variant-numeric: tabular-nums; color: var(--pp-ink); }
+
+/* Parameter rows (label · field): stacked like a form — small uppercase label above a full-width field.
+ * Checkbox and colour rows stay inline (label left, control right). */
+.props-pro label.justify-between:has(> input:not([type="checkbox"]):not([type="color"]):not([type="radio"])),
+.props-pro label.justify-between:has(> select) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.props-pro label.justify-between:has(> input:not([type="checkbox"]):not([type="color"]):not([type="radio"])) > input,
+.props-pro label.justify-between:has(> select) > select {
+  width: 100%;
+}
+.props-pro label.justify-between > span:first-child {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pp-muted);
+}
+
+/* Each attached object (Room, Tessellation, …): a white card with a hairline border and a clear title. */
+.props-pro .space-y-1\.5.rounded.border.p-1\.5 {
+  border-color: var(--pp-border) !important;
+  padding: 10px 12px;
+}
+.props-pro .space-y-1\.5.rounded.border.p-1\.5 > div:first-child > span:first-child {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pp-ink);
+}

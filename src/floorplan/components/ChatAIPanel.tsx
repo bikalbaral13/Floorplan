@@ -332,7 +332,7 @@ export const ChatAIPanel = ({
                     rows={1}
                     placeholder={!configured ? "Set the Gemini key in Preferences first"
                       : runner === "flow" ? "Describe the flow to build… (Enter to send)"
-                      : engine === "claude" ? "Ask Claude Code… it uses the ticked Library items (Enter to send)"
+                      : engine === "claude" ? "Ask Claude… it uses the ticked Library items (Enter to send)"
                       : "Generate or edit the plan… (attach an image/PDF, Enter to send)"}
                     value={draft}
                     disabled={!configured || busy}

@@ -45,6 +45,9 @@ export interface CloudInspectDialogProps {
   /** "dialog" (default) = the modal; "panel" = the same browser docked in the left navigation bar. A panel
    *  is "open" while it is shown, so it still re-reads the bucket each time it is unfolded. */
   variant?: "dialog" | "panel";
+  /** Panel only: a search driven from outside (the navigator's top search box). When given, the panel
+   *  shows no search box of its own. */
+  query?: string;
 }
 
 /** Read AND manage what is actually in the Cloudflare R2 bucket.
@@ -64,7 +67,7 @@ export interface CloudInspectDialogProps {
  *  clicked from. Both confirmations are INLINE rather than nested modals — a dialog stacked on a
  *  dialog fights Radix's focus trap, and naming the file where you clicked is clearer anyway.
  */
-export function CloudInspectDialog({ open, onOpenChange, variant = "dialog" }: CloudInspectDialogProps) {
+export function CloudInspectDialog({ open, onOpenChange, variant = "dialog", query: externalQuery }: CloudInspectDialogProps) {
   const [data, setData] = useState<CloudTree | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -140,7 +143,7 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog" }: C
   /** The tree with non-matching files pruned, and folders that end up empty dropped with them.
    *  A folder whose own name matches is kept whole — filtering for "Designs" should show it. */
   const filtered = useMemo(() => {
-    const query = filter.trim().toLowerCase();
+    const query = (externalQuery ?? filter).trim().toLowerCase();
     if (!data) return null;
     if (!query) return data.tree;
     const prune = (node: CloudTreeNode): CloudTreeNode | null => {
@@ -150,7 +153,7 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog" }: C
       return children.length ? { ...node, children } : null;
     };
     return prune(data.tree) ?? { ...data.tree, children: [] };
-  }, [data, filter]);
+  }, [data, filter, externalQuery]);
 
   /** Fold a file row open (or shut). The contents are fetched on first open only — the listing
    *  carries sizes and dates, never bodies, so nothing is read until someone asks for it. */
@@ -451,7 +454,7 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog" }: C
     // The navigator: a search box over the tree. Browsing only — managing the bucket is the dialog's job.
     return (
       <div className="flex h-full min-h-0 flex-col gap-2 text-sm">
-        <div className="relative">
+        {externalQuery === undefined && <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <Input
             value={filter}
@@ -463,7 +466,7 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog" }: C
             className="h-8 pl-8 text-xs"
             disabled={!data}
           />
-        </div>
+        </div>}
         {treePane}
       </div>
     );

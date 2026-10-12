@@ -116,6 +116,8 @@ const SignIn: React.FC = () => {
 
             const data = await response.json();
             localStorage.setItem("token", data.token);
+            localStorage.setItem("userEmail", email);   // shown in the editor's account bar
+            if (data.name || data.user?.name) localStorage.setItem("userName", data.name ?? data.user.name);
             setIsLoggedIn(true);
 
             // Handle "remember me"

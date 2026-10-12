@@ -27,6 +27,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PanelLeft, PanelRight, PanelRightClose } from "lucide-react";
+import { SpaceReferences } from "./components/SpaceReferences";
+import "./propsPanel.css";
 import { ToolButton } from "@/components/toolbutton";
 import {
   AppWindow,
@@ -204,7 +207,8 @@ import { Export3DDialog, DEFAULT_EXPORT_3D, type Export3DSettings } from "./comp
 import { ExportJsonDialog } from "./components/dialogs/ExportJsonDialog";
 import { R2KeysSettings } from "./components/R2KeysSettings";
 import { FilePickerDialog, type FilePickerOption } from "./components/dialogs/FilePickerDialog";
-import { NavigatorBar } from "./components/NavigatorBar";
+import { NavigatorBar, readNavigatorOpen, saveNavigatorOpen } from "./components/NavigatorBar";
+import { NavFoldSection, DrawingsSection, ElementRow, buildElements, elementMatches, NavIcons, type NavElement } from "./components/NavPlanSections";
 import { buildSelectionContext, selectionForAgent, setSelectionByPaths, useLibrarySelection } from "./librarySelection";
 import { sendToInbox, useInboxStatus, waitForPrompt } from "./chatInbox";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -240,7 +244,6 @@ import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialo
 import { ImportObjectsDialog } from "./components/dialogs/ImportObjectsDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
-import { PhaseToggle, usePhase } from "./components/PhaseToggle";
 import { RenderModeToggle, useRenderMode } from "./components/RenderModeToggle";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { getUiPrefs, setUiPref, useUiPrefs } from "./uiPrefs";
@@ -3692,7 +3695,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  Flow evaluation, metrics and library previews keep reading the object's params untouched. */
   const uiRenderMode = useRenderMode();
   /** Header ▸ Plan | Build | Present — drives which workflow buttons lead the Drawing toolbar. */
-  const phase = usePhase();
   /** Geometry mode draws every segment (walls, doors, windows, opening pieces) as a plain centreline. */
   const geomOnly = uiRenderMode === "geometry";
   const viewRenderMode = uiRenderMode === "detailed" ? "Full" : uiRenderMode === "primitives" ? "Basic" : "Nothing";
@@ -6009,6 +6011,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Phone width (< 768 px): the side panels become slide-over drawers so the canvas keeps the screen. On a
    *  phone the Properties drawer starts closed and its open state is NOT the saved desktop preference. */
   const isMobile = useIsMobile();
+  /** The left navigator — open per browser on desktop; a phone starts it folded. Toggled by the panel button
+   *  at the top-left (next to the logo); folded, it disappears and the canvas takes the full width. */
+  const [navOpen, setNavOpen] = useState(() => readNavigatorOpen(false));
+  useEffect(() => { if (isMobile) setNavOpen(false); }, [isMobile]);
+  const toggleNav = () => setNavOpen((o) => { if (!isMobile) saveNavigatorOpen(!o); return !o; });
+  /** Layers section: search across layer names and the elements on them; which layer rows are folded open. */
+  const [navQuery, setNavQuery] = useState("");
+  const [navOpenLayers, setNavOpenLayers] = useState<Set<string>>(() => new Set());
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
   const propertiesPanelExpanded = isMobile ? mobilePropsOpen : uiPrefs.showProperties;
   const toggleProperties = () => (isMobile ? setMobilePropsOpen((o) => !o) : setUiPref("showProperties", !uiPrefs.showProperties));
@@ -6451,8 +6461,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  edits through the same programmatic pipeline the MCP bridge uses, streaming each tool call into the
    *  transcript. FLOW mode: tool-loop that builds the node-graph Flow (flowAgent.ts). */
   const handleAiSend = useCallback(async (prompt: string, file?: File) => {
-    // Claude Code engine: queue the prompt for chat.wait — Claude Code does the work on this live canvas.
-    if (getUiPrefs().chatEngine === "claude") {
+    // The chat always goes to Claude (queued for chat.wait — Claude does the work on this live canvas). The
+    // Gemini path below is no longer reachable from the UI; the engine switch is gone from the chat bar.
+    const claudeOnly = true;
+    if (claudeOnly) {
       setAiMessages((m) => [...m, { role: "user", text: file ? `${prompt}
 📎 ${file.name} (attachments are not passed to Claude Code yet)` : prompt }]);
       setAiCollapsed(false);
@@ -29054,168 +29066,47 @@ User request: ${aiPrompt.trim()}`;
   const sidePanelClass =
     "relative h-full min-h-0 shrink-0 rounded-xl border bg-white shadow-sm transition-all duration-200";
 
-  const layersPopover = (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" title="View, levels and layers" aria-label="Layer visibility">
-          <Layers className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 max-h-[70vh] overflow-y-auto" side="bottom" sideOffset={8}>
-        {/* View (2D / 3D / Both / Views / Layout), Phase and Render — moved here from the old View Mode button
-            and Preferences, so this one popover holds everything about what the canvas shows. */}
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">View</p>
-        <div className="mb-3 flex flex-row overflow-hidden rounded-md border border-slate-200">
-          <button
-            type="button"
-            onClick={() => setViewMode("2d")}
-            className={`flex-1 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "2d"}
-            title="2D view"
-          >
-            2D
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("3d")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "3d"}
-            title="3D view"
-          >
-            3D
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("both")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "both" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "both"}
-            title="Split view — 2D left, 3D right"
-          >
-            Both
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("views")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "views" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "views"}
-            title="Orthographic views — plan centre, Back top / Front bottom / Left / Right"
-          >
-            Views
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("layout")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "layout" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "layout"}
-            title="Layout sheet — plan as a viewport in a paper template (border, north arrow, title block)"
-          >
-            Layout
-          </button>
-        </div>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phase</span>
-          <PhaseToggle />
-        </div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Render</span>
-          <RenderModeToggle />
-        </div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">2D Style</span>
-          <div className="inline-flex overflow-hidden rounded-full border border-slate-200 text-xs">
-            {([["Drafting", false], ["Presentation", true]] as const).map(([label, on]) => (
-              <button
-                key={label}
-                type="button"
-                title={on ? "Client plan: solid walls, material floors, room name + size, no dimension chains" : "Drafting: hatched walls, dimension chains, nodes, metrics"}
-                onClick={() => setLayerVisibility((prev) => ({ ...prev, presentation: on }))}
-                className={`px-3 py-1 ${(layerVisibility.presentation !== false) === on ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* Levels (storeys) — moved here from the canvas bottom-right. One sheet per storey (see ./levels.ts);
-            2D edits the active sheet, 3D stacks them all. Hidden in Layout (paper-space) mode. */}
-        {viewMode !== "layout" && (<>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Levels</p>
-          <div className="mb-3 flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white p-1" role="tablist" aria-label="Levels">
-            {levelMeta.length === 0 ? (
-              <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white" role="tab" aria-selected="true">Single level</span>
-            ) : (<>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={show3dAllLevels}
-                title="3D: show every level stacked (2D keeps editing the selected level)"
-                onClick={() => setShow3dAllLevels(true)}
-                className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${show3dAllLevels ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >All</button>
-              {show3dAllLevels && (
-                <label className="flex shrink-0 cursor-pointer items-center gap-1 px-1 text-[11px] text-slate-600" title="Shell: exterior walls, doors, windows and slabs only — fast for a whole building. Off: every object on every level.">
-                  <input type="checkbox" checked={show3dShell} onChange={(e) => setShow3dShell(e.target.checked)} />
-                  Shell
-                </label>
-              )}
-              {sortLevels(levelMeta).map((l) => {
-                const on = l.id === activeLevelId && !show3dAllLevels;
-                return (
-                  <button
-                    key={l.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    title={`${l.name} — +${l.elevation.toFixed(2)} m, ${l.height.toFixed(2)} m high${on ? " (double-click to edit)" : ""}`}
-                    onClick={() => { setShow3dAllLevels(false); switchLevel(l.id); }}
-                    onDoubleClick={() => on && setLevelSettingsOpen(true)}
-                    className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${on ? "bg-slate-900 text-white" : l.id === activeLevelId ? "bg-slate-200 text-slate-800" : "text-slate-600 hover:bg-slate-100"}`}
-                  >
-                    {l.name}
-                    <span className={`ml-1 font-normal ${on ? "text-slate-300" : "text-slate-400"}`}>+{l.elevation.toFixed(1)}</span>
-                  </button>
-                );
-              })}
-            </>)}
-            {levelMeta.length > 0 && activeLevelId && (
-              <Popover open={levelSettingsOpen} onOpenChange={setLevelSettingsOpen}>
-                <PopoverTrigger asChild>
-                  <button type="button" className="shrink-0 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" title="Level settings" aria-label="Level settings">⚙</button>
-                </PopoverTrigger>
-                <PopoverContent side="left" align="start" className="w-64 space-y-2 p-3 text-xs">
-                  {(() => {
-                    const l = levelMeta.find((x) => x.id === activeLevelId);
-                    if (!l) return null;
-                    return (
-                      <>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Level</p>
-                        <label className="block">Name
-                          <input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.name} onChange={(e) => updateLevel(l.id, { name: e.target.value })} />
-                        </label>
-                        <div className="flex gap-2">
-                          <label className="block flex-1">Elevation (m)
-                            <input type="number" step="0.05" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.elevation}
-                              onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateLevel(l.id, { elevation: v }); }} />
-                          </label>
-                          <label className="block flex-1">Height (m)
-                            <input type="number" step="0.05" min="0.5" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.height}
-                              onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updateLevel(l.id, { height: v }); }} />
-                          </label>
-                        </div>
-                        <button type="button" className="w-full rounded border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50" onClick={() => deleteLevel(l.id)}>Delete this level</button>
-                      </>
-                    );
-                  })()}
-                </PopoverContent>
-              </Popover>
-            )}
-            <button type="button" onClick={() => addLevel()} className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50" title="Add a level on top" aria-label="Add level">+ Level</button>
-          </div>
-        </>)}
+  /** Drawing layers (groups, disciplines, per-layer eye / lock / colour / active, new layer, move selection).
+   *  Shown in the left navigator's Layers section; the top-right popover keeps View, Render, 2D style, Levels. */
+  /* ── Left navigator: Drawings · Layers · Elements (docs/drawings-layers-elements-plan.md) ── */
+  /** Select one element the way a canvas click does — its host: a wall/space by id, a node by stable key.
+   *  2D, 3D and the Properties panel all read this same state, so they follow. */
+  const selectElement = (e: NavElement) => {
+    if (viewMode === "layout" || viewMode === "views") setViewMode("2d");
+    if (e.host.type === "node") { selection.clearSelection(); setSelectedNodeKey(e.host.stableKey); }
+    else { setSelectedNodeKey(null); selection.selectOne(e.host.id); }
+    // Bring it into view (same zoom) when it is off-screen — picking from a list should show where it is.
+    const h = e.host;
+    let pt: { x: number; y: number } | null = null;
+    if (h.type === "node") { const n = wallNodes.find((k) => k.stableKey === h.stableKey); if (n) pt = { x: n.x, y: n.y }; }
+    else if (h.type === "wall") { const w = history.state.walls.find((k) => k.id === h.id); if (w) pt = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 }; }
+    else { const r = history.state.rooms.find((k) => k.id === h.id); if (r?.points.length) pt = { x: r.points.reduce((a, p) => a + p.x, 0) / r.points.length, y: r.points.reduce((a, p) => a + p.y, 0) / r.points.length }; }
+    if (pt && size.width > 0) {
+      const sx = position.x + pt.x * scale, sy = position.y + pt.y * scale;
+      const pad = 40;
+      if (sx < pad || sy < pad || sx > size.width - pad || sy > size.height - pad) {
+        setPosition({ x: size.width / 2 - pt.x * scale, y: size.height / 2 - pt.y * scale });
+      }
+    }
+  };
+  const isElementSelected = (e: NavElement) => e.host.type === "node"
+    ? selectedNodeKey === e.host.stableKey
+    : !selectedNodeKey && selection.selectedIds.includes(e.host.id);
+  const navElements = buildElements({
+    walls: history.state.walls, rooms: visibleRooms, nodes: wallNodes,
+    nodeMeta: (history.state.nodeMeta ?? {}) as Record<string, NodeMeta | undefined>, layers: history.state.layers ?? [],
+  });
+  const navElementsByLayer = (() => {
+    const m = new Map<string, NavElement[]>();
+    for (const e of navElements) { const l = m.get(e.layerId); if (l) l.push(e); else m.set(e.layerId, [e]); }
+    return m;
+  })();
+  const selectedNavElement = navElements.find(isElementSelected) ?? null;
+  const layersPanelBody = (
+    <div className="text-sm">
         {/* Drawing Layers — AutoCAD-style. Each row: visible, locked, color, name, active radio, delete.
             The Site-related layers (Buildable / Footprint / Basement / Inset Area) are pulled out
             into a foldable "Site" group so they don't dominate the list. */}
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Drawing Layers</p>
 
         {/* Groups (grouped documents): the group tree, foldable. Each group has an eye (hide the group and
             everything in it, every level), a lock, and — when open — its child groups followed by the layers
@@ -29395,8 +29286,24 @@ User request: ${aiPrompt.trim()}`;
                 const h = history;
                 h.set({ ...h.state, layers: (h.state.layers ?? []).map((l) => l.id === layer.id ? { ...l, ...patch } : l) });
               };
+              // Layers & Elements: each layer row folds out the elements drawn on it. A search hides rows
+              // with no match; the layer of the selected element opens by itself.
+              const els = navElementsByLayer.get(layer.id) ?? [];
+              const shown = navQuery ? els.filter((e) => elementMatches(e, navQuery)) : els;
+              if (navQuery && !shown.length && !(layer.name ?? "").toLowerCase().includes(navQuery.toLowerCase())) return null;
+              const expanded = navOpenLayers.has(layer.id) || (!!navQuery && shown.length > 0) || selectedNavElement?.layerId === layer.id;
               return (
-                <div key={layer.id} className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] ${isActive ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                <div key={layer.id}>
+                <div className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] ${isActive ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                  <button
+                    type="button"
+                    title={els.length ? (expanded ? "Hide its elements" : "Show its elements") : "No elements on this layer"}
+                    disabled={!els.length}
+                    onClick={() => setNavOpenLayers((prev) => { const n = new Set(prev); if (n.has(layer.id)) n.delete(layer.id); else n.add(layer.id); return n; })}
+                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                  >
+                    {expanded && els.length ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  </button>
                   <button
                     type="button"
                     title={layer.visible ? "Hide layer" : "Show layer"}
@@ -29459,6 +29366,14 @@ User request: ${aiPrompt.trim()}`;
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  {els.length > 0 && <span className="rounded-full bg-slate-100 px-1.5 text-[10px] tabular-nums text-slate-500" title="Elements on this layer">{els.length}</span>}
+                </div>
+                {expanded && shown.length > 0 && (
+                  <div className="ml-3 border-l border-slate-200 py-0.5 pl-1">
+                    {shown.slice(0, 300).map((e) => <ElementRow key={e.key} e={e} on={isElementSelected(e)} onSelect={selectElement} />)}
+                    {shown.length > 300 && <p className="px-1.5 py-1 text-[10px] text-slate-400">+{shown.length - 300} more — narrow with the filter</p>}
+                  </div>
+                )}
                 </div>
               );
             };
@@ -29692,6 +29607,230 @@ User request: ${aiPrompt.trim()}`;
             </Button>
           </div>
         </div>
+    </div>
+  );
+
+  const navigatorPlanSections = (
+    <>
+      <NavFoldSection title="Drawings" icon={NavIcons.drawings} storageKey="bp.editor.navDrawingsOpen" defaultOpen
+        count={(levelMeta.length || 1) + 3}>
+        <DrawingsSection levels={levelMeta} activeLevelId={activeLevelId} viewMode={viewMode} elementCount={navElements.length}
+          onOpenPlan={(id) => { if (id && id !== activeLevelId) { setShow3dAllLevels(false); switchLevel(id); } setViewMode("2d"); }}
+          onOpenView={(m) => setViewMode(m)} />
+      </NavFoldSection>
+      {/* Layers — one hierarchy: discipline › layer › the elements drawn on it (each layer row folds out). */}
+      <NavFoldSection title="Layers" icon={NavIcons.layers} storageKey="bp.editor.navLayersElementsOpen" defaultOpen grow
+        count={`${(history.state.layers ?? []).length} · ${navElements.length}`}>
+        {layersPanelBody}
+      </NavFoldSection>
+    </>
+  );
+
+  /** Right panel, top: a specification-style card for the element picked (from the list, 2D or 3D) — the
+   *  existing parameter forms follow below it — or, with nothing picked, a summary of the plan. */
+  const levelName = levelMeta.find((l) => l.id === activeLevelId)?.name ?? "Plan";
+  const KIND_NAME = { object: "Object", opening: "Opening", wall: "Wall", space: "Space" } as const;
+  const nothingSelected = !selectedNodeKey && selection.selectedIds.length === 0 && !selectedObject && !imageSelected && !selectedGenElement;
+  const elementCard = selectedNavElement ? (
+    <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-1.5 pr-9 text-[11px]">
+        <span className="h-2.5 w-2.5 rounded-sm" style={{ background: selectedNavElement.color }} aria-hidden />
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">{KIND_NAME[selectedNavElement.kind]}</span>
+        {selectedNavElement.layerName && selectedNavElement.layerName.toLowerCase() !== KIND_NAME[selectedNavElement.kind].toLowerCase()
+          && <span className="truncate text-slate-500" title="Layer">{selectedNavElement.layerName}</span>}
+        <button type="button" onClick={() => { selection.clearSelection(); setSelectedNodeKey(null); }}
+          className="ml-auto rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Clear selection" aria-label="Clear selection">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <h3 className="mt-1.5 truncate text-base font-semibold text-slate-900">{selectedNavElement.name}</h3>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+        <div className="rounded-md border border-slate-200 px-2 py-1"><p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Type</p><p className="truncate text-slate-800">{selectedNavElement.sub.split(" · ")[0]}</p></div>
+        <div className="rounded-md border border-slate-200 px-2 py-1"><p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Level</p><p className="truncate text-slate-800">{levelName}</p></div>
+      </div>
+      <p className="mt-3 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Drawn on</p>
+      <div className="mt-1 divide-y divide-slate-100 rounded-md border border-slate-200 text-[11px]">
+        {([["2d", `Plan · ${levelName}`], ["3d", "3D model"]] as const).map(([m, label]) => (
+          <div key={m} className="flex items-center justify-between px-2 py-1">
+            <span className="text-slate-700">{label}</span>
+            <button type="button" onClick={() => setViewMode(m)} className={`rounded px-1.5 py-0.5 font-semibold ${viewMode === m ? "text-slate-400" : "text-sky-700 hover:bg-sky-50"}`}>{viewMode === m ? "Showing" : "View"}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : nothingSelected && navElements.length > 0 ? (() => {
+    const by = navElements.reduce<Record<string, number>>((a, e) => { a[e.kind] = (a[e.kind] ?? 0) + 1; return a; }, {});
+    return (
+      <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 pr-10 shadow-sm">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{levelName}</p>
+        <h3 className="text-base font-semibold text-slate-900">{navElements.length} elements on {(levelMeta.length || 1)} level{levelMeta.length > 1 ? "s" : ""}</h3>
+        <div className="mt-2 space-y-0.5 text-[11px]">
+          {(["object", "opening", "wall", "space"] as const).filter((k) => by[k]).map((k) => (
+            <div key={k} className="flex justify-between"><span className="text-slate-600">{KIND_NAME[k]}s</span><span className="tabular-nums text-slate-800">{by[k]}</span></div>
+          ))}
+          <div className="flex justify-between"><span className="text-slate-600">Layers</span><span className="tabular-nums text-slate-800">{(history.state.layers ?? []).length}</span></div>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">Select an element in the list, on the plan or in 3D to see its specification.</p>
+      </div>
+    );
+  })() : null;
+
+  const layersPopover = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" title="View and levels" aria-label="Layer visibility">
+          <Layers className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 max-h-[70vh] overflow-y-auto" side="bottom" sideOffset={8}>
+        {/* View (2D / 3D / Both / Views / Layout), Phase and Render — moved here from the old View Mode button
+            and Preferences, so this one popover holds everything about what the canvas shows. */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">View</p>
+        <div className="mb-3 flex flex-row overflow-hidden rounded-md border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setViewMode("2d")}
+            className={`flex-1 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "2d"}
+            title="2D view"
+          >
+            2D
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("3d")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "3d"}
+            title="3D view"
+          >
+            3D
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("both")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "both" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "both"}
+            title="Split view — 2D left, 3D right"
+          >
+            Both
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("views")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "views" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "views"}
+            title="Orthographic views — plan centre, Back top / Front bottom / Left / Right"
+          >
+            Views
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("layout")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "layout" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "layout"}
+            title="Layout sheet — plan as a viewport in a paper template (border, north arrow, title block)"
+          >
+            Layout
+          </button>
+        </div>
+        {/* Phase is no longer a setting: phases only classify pipelines (badges in the navigator). */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Render</span>
+          <RenderModeToggle />
+        </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">2D Style</span>
+          <div className="inline-flex overflow-hidden rounded-full border border-slate-200 text-xs">
+            {([["Drafting", false], ["Presentation", true]] as const).map(([label, on]) => (
+              <button
+                key={label}
+                type="button"
+                title={on ? "Client plan: solid walls, material floors, room name + size, no dimension chains" : "Drafting: hatched walls, dimension chains, nodes, metrics"}
+                onClick={() => setLayerVisibility((prev) => ({ ...prev, presentation: on }))}
+                className={`px-3 py-1 ${(layerVisibility.presentation !== false) === on ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Levels (storeys) — moved here from the canvas bottom-right. One sheet per storey (see ./levels.ts);
+            2D edits the active sheet, 3D stacks them all. Hidden in Layout (paper-space) mode. */}
+        {viewMode !== "layout" && (<>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Levels</p>
+          <div className="mb-3 flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white p-1" role="tablist" aria-label="Levels">
+            {levelMeta.length === 0 ? (
+              <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white" role="tab" aria-selected="true">Single level</span>
+            ) : (<>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={show3dAllLevels}
+                title="3D: show every level stacked (2D keeps editing the selected level)"
+                onClick={() => setShow3dAllLevels(true)}
+                className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${show3dAllLevels ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+              >All</button>
+              {show3dAllLevels && (
+                <label className="flex shrink-0 cursor-pointer items-center gap-1 px-1 text-[11px] text-slate-600" title="Shell: exterior walls, doors, windows and slabs only — fast for a whole building. Off: every object on every level.">
+                  <input type="checkbox" checked={show3dShell} onChange={(e) => setShow3dShell(e.target.checked)} />
+                  Shell
+                </label>
+              )}
+              {sortLevels(levelMeta).map((l) => {
+                const on = l.id === activeLevelId && !show3dAllLevels;
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    title={`${l.name} — +${l.elevation.toFixed(2)} m, ${l.height.toFixed(2)} m high${on ? " (double-click to edit)" : ""}`}
+                    onClick={() => { setShow3dAllLevels(false); switchLevel(l.id); }}
+                    onDoubleClick={() => on && setLevelSettingsOpen(true)}
+                    className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${on ? "bg-slate-900 text-white" : l.id === activeLevelId ? "bg-slate-200 text-slate-800" : "text-slate-600 hover:bg-slate-100"}`}
+                  >
+                    {l.name}
+                    <span className={`ml-1 font-normal ${on ? "text-slate-300" : "text-slate-400"}`}>+{l.elevation.toFixed(1)}</span>
+                  </button>
+                );
+              })}
+            </>)}
+            {levelMeta.length > 0 && activeLevelId && (
+              <Popover open={levelSettingsOpen} onOpenChange={setLevelSettingsOpen}>
+                <PopoverTrigger asChild>
+                  <button type="button" className="shrink-0 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" title="Level settings" aria-label="Level settings">⚙</button>
+                </PopoverTrigger>
+                <PopoverContent side="left" align="start" className="w-64 space-y-2 p-3 text-xs">
+                  {(() => {
+                    const l = levelMeta.find((x) => x.id === activeLevelId);
+                    if (!l) return null;
+                    return (
+                      <>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Level</p>
+                        <label className="block">Name
+                          <input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.name} onChange={(e) => updateLevel(l.id, { name: e.target.value })} />
+                        </label>
+                        <div className="flex gap-2">
+                          <label className="block flex-1">Elevation (m)
+                            <input type="number" step="0.05" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.elevation}
+                              onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateLevel(l.id, { elevation: v }); }} />
+                          </label>
+                          <label className="block flex-1">Height (m)
+                            <input type="number" step="0.05" min="0.5" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.height}
+                              onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updateLevel(l.id, { height: v }); }} />
+                          </label>
+                        </div>
+                        <button type="button" className="w-full rounded border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50" onClick={() => deleteLevel(l.id)}>Delete this level</button>
+                      </>
+                    );
+                  })()}
+                </PopoverContent>
+              </Popover>
+            )}
+            <button type="button" onClick={() => addLevel()} className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50" title="Add a level on top" aria-label="Add level">+ Level</button>
+          </div>
+        </>)}
+        {/* Drawing Layers moved to the left navigator (Layers section) — layersPanelBody. */}
       </PopoverContent>
     </Popover>
   );
@@ -29728,25 +29867,10 @@ User request: ${aiPrompt.trim()}`;
   );
   const settingsPopover = null;
 
-  const defaultSettingsPopover = (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 w-9 shrink-0 p-0"
-          title="Preferences"
-          aria-label="Preferences"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="bottom"
-        align="end"
-        className="max-h-[min(85vh,640px)] w-[22rem] overflow-y-auto p-4 shadow-xl"
-        sideOffset={10}
-      >
+  /** Preferences — one panel, opened from the account bar at the bottom-left of the Library navigator
+   *  (AccountBar), or from the top-bar gear when the navigator is hidden. */
+  const preferencesBody = (
+    <>
         <div className="mb-3 border-b border-slate-100 pb-2">
           <h4 className="text-sm font-semibold text-slate-900">Preferences</h4>
           <p className="mt-0.5 text-xs text-slate-500">Snapping, global parameters, and wall-drawing defaults.</p>
@@ -30351,6 +30475,28 @@ User request: ${aiPrompt.trim()}`;
               Draw mode / View / Filling / Placement / wall styling are set elsewhere (toolbar / Flow).
               Ortho moved to the Floorplan Tracer schema's Settings block (Properties tab). */}
         </div>
+    </>
+  );
+  const defaultSettingsPopover = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 shrink-0 p-0"
+          title="Preferences"
+          aria-label="Preferences"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        align="end"
+        className="max-h-[min(85vh,640px)] w-[22rem] overflow-y-auto p-4 shadow-xl"
+        sideOffset={10}
+      >
+        {preferencesBody}
       </PopoverContent>
     </Popover>
   );
@@ -31147,6 +31293,14 @@ User request: ${aiPrompt.trim()}`;
     <div className={`${isMobile ? "h-[100dvh] overflow-hidden" : "h-screen"} w-full bg-slate-50 text-slate-900`}>
       <div className="flex min-h-16 items-center justify-between gap-2 overflow-x-auto border-b bg-white px-3 py-2 shadow-sm">
         <div className="flex shrink-0 items-center gap-2">
+          {uiPrefs.showNavigator && (
+            <button type="button" onClick={toggleNav}
+              title={navOpen ? "Hide the navigator" : "Show the navigator"} aria-label={navOpen ? "Hide navigator" : "Show navigator"}
+              aria-pressed={navOpen}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+              <PanelLeft className="h-[18px] w-[18px]" />
+            </button>
+          )}
           <img src="/builderpluss-logo.svg" alt="BUILDERPLUSS" className="h-7 w-auto" />
           <p className="hidden text-sm font-semibold tracking-wide text-slate-700 md:block">
             BUILDER<span className="font-extrabold text-slate-900">PLUSS</span>
@@ -31160,7 +31314,17 @@ User request: ${aiPrompt.trim()}`;
           <ThemeToggle />
           {settingsPopover}
           {layersPopover}
-          {defaultSettingsPopover}
+          {/* Preferences open from the account bar at the navigator's bottom-left; the gear shows here only
+              while the navigator is folded or switched off, so they are always reachable. */}
+          {(!uiPrefs.showNavigator || !navOpen) && defaultSettingsPopover}
+          {!isMobile && !isRightPanelCollapsed && (
+            <button type="button" onClick={toggleProperties}
+              title={propertiesPanelExpanded ? "Hide the Properties panel" : "Show the Properties panel"}
+              aria-label={propertiesPanelExpanded ? "Hide Properties panel" : "Show Properties panel"} aria-pressed={propertiesPanelExpanded}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+              <PanelRight className="h-[18px] w-[18px]" />
+            </button>
+          )}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
         {placementReturn && (
@@ -31179,7 +31343,7 @@ User request: ${aiPrompt.trim()}`;
 
       <div className="relative flex h-[calc(100%-64px)] gap-2 p-2">
         {/* Left navigation bar — the R2 Library as a foldable, resizable tree (replaces Files ▸ Inspect). */}
-        {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} />}
+        {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} preferences={preferencesBody} open={navOpen} onToggle={toggleNav} planSections={navigatorPlanSections} query={navQuery} onQuery={setNavQuery} />}
         {/* Floating, draggable Drawing toolbar (SketchUp-style). Fixed-positioned over the canvas; drag
             it anywhere by the top grip handle. Hidden from Preferences ▸ Show on screen. */}
         <div
@@ -31197,7 +31361,6 @@ User request: ${aiPrompt.trim()}`;
           <ScrollArea className="min-h-0 w-full flex-1">
             <div className="flex flex-col items-center gap-2 px-1 pb-2">
               <LeftToolbar
-                phase={phase}
                 planImportSlot={imageUnderlayPopover}
                 onOpenMoodboardPicker={() => setMoodboardOpen(true)}
                 hasUnderlay={!!history.state.imageUnderlay}
@@ -31663,9 +31826,8 @@ User request: ${aiPrompt.trim()}`;
           onToggleCollapsed={() => setAiCollapsed((c) => !c)}
           onSend={handleAiSend}
           // Claude Code needs no key here — it runs on the user's machine and answers through chat.wait / reply.
-          configured={uiPrefs.chatEngine === "claude" || (!!aiApiKey.trim() && !!aiModel.trim())}
-          engine={uiPrefs.chatEngine}
-          onEngineChange={(e) => setUiPref("chatEngine", e)}
+          configured
+          engine="claude"
           claudeListening={inboxStatus.listening}
           agents={[
             { id: "orchestrator", label: "⚡ Global Agent", title: "Global Agent — one self-contained agent with the full toolbox: canvas design, the Flow engine, saved workflows + designs, and the parametric object library. It delegates to nothing." },
@@ -40162,7 +40324,9 @@ User request: ${aiPrompt.trim()}`;
               gutter against the right panel. "<" collapses the Properties block (Properties
               | Metrics tab + body); ">" reopens it. */}
           {/* Tools-column chevron removed — the right-edge Tools column was dissolved. */}
-          {!isRightPanelCollapsed && (
+          {/* Desktop: the panel toggles live in the header (left = navigator, right = Properties). The phone
+              keeps this chevron because its header has no room. */}
+          {isMobile && !isRightPanelCollapsed && (
             <button
               type="button"
               className={`absolute right-2 z-10 inline-flex h-7 w-7 ${isMobile ? "top-2" : "top-1/2 -translate-y-1/2"} `+" items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"}
@@ -40392,14 +40556,23 @@ User request: ${aiPrompt.trim()}`;
         >
           {!isRightPanelCollapsed && propertiesPanelExpanded ? (
             <div className="flex h-full min-h-0 flex-col">
-              {/* Phone drawer: it covers the canvas-edge chevron, so it carries its own close. */}
-              {isMobile && (
-                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
-                  <button type="button" onClick={toggleProperties} aria-label="Close Properties" title="Close"
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800">✕</button>
-                </div>
-              )}
+              {/* Panel bar: title, the layout switch (tabbed / Properties and Metrics side by side), close.
+                  One fixed place for the panel's own controls instead of buttons floating over the content. */}
+              <div className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-3 py-1.5">
+                <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
+                {!isMobile && (
+                  <button type="button" onClick={() => setPropsSplitView((v) => !v)} aria-pressed={propsSplitView}
+                    title={propsSplitView ? "Tabbed: Properties / Metrics" : "Side by side: Properties and Metrics"}
+                    aria-label={propsSplitView ? "Tabbed view" : "Side-by-side view"}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${propsSplitView ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}>
+                    <Columns2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button type="button" onClick={toggleProperties} aria-label="Hide Properties" title="Hide the Properties panel"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+                  {isMobile ? "✕" : <PanelRightClose className="h-3.5 w-3.5" />}
+                </button>
+              </div>
               {/* `[&>div>div]` is Radix's viewport child, which it styles `display:table; min-width:100%`.
                   A table inside a scroll container has unlimited inline space, so it grows to MAX-CONTENT:
                   one long parameter label (a 16-param object like the BOQ generator has several) widens the
@@ -40407,7 +40580,7 @@ User request: ${aiPrompt.trim()}`;
                   at the column and lets the labels wrap instead. */}
               {propertiesPanelExpanded && (
               <ScrollArea className="props-scroll flex-1 min-h-0">
-              <div className="relative space-y-4 p-4 pb-6">
+              <div className="props-pro relative space-y-4 p-4 pb-6">
                 {/* Active workflow tool — its controls live HERE, like an attached object's parameters: no
                     floating window and no Flow panel (it evaluates and commits in the background). */}
                 <RunWorkflowToolDialog
@@ -40477,26 +40650,11 @@ User request: ${aiPrompt.trim()}`;
                 {/* The CANVAS scope (nothing selected) now carries the same tab strip, so it gets the toggle
                     too — its condition is the negation of every other branch's, matching the context header
                     chain below. */}
-                {(selectedNodeKey || selectedGraph || selectedWall || selectedRoom || (imageSelected && history.state.imageUnderlay)
-                  || (!selectedObject && !selectedGenElement && !imageSelected)) && (
-                  <div className="absolute right-3 top-3 z-10">
-                    <button
-                      type="button"
-                      onClick={() => setPropsSplitView((v) => !v)}
-                      title={propsSplitView ? "Switch to tabbed Properties / Metrics" : "Show Properties & Metrics side by side"}
-                      aria-pressed={propsSplitView}
-                      aria-label={propsSplitView ? "Tabbed view" : "Split view"}
-                      className={`flex h-7 w-7 items-center justify-center rounded-md border transition ${propsSplitView ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}
-                    >
-                      <Columns2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-
+                {elementCard}
                 {/* ── Context header ── */}
                 {imageSelected && selectedImage ? (
                   <>
-                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900">
+                    <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}>
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Image{selectedImage.id ? <span className="ml-1 font-mono text-slate-400">{selectedImage.id}</span> : null}
                     </p>
 
@@ -40733,16 +40891,16 @@ User request: ${aiPrompt.trim()}`;
                     </div>
                   </>
                 ) : selectedGenElement?.type === "seed" && generatedLayout ? (
-                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Room</p>
+                  <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Room</p>
                 ) : selectedGenElement?.type === "connection" && generatedLayout ? (
-                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Connection</p>
+                  <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Connection</p>
                 ) : selectedGenElement?.type === "repulsion" && generatedLayout ? (
-                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Repulsion</p>
+                  <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Repulsion</p>
                 ) : selectedNodeKey ? (
-                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Point</p>
+                  <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Point</p>
                 ) : selectedGraph ? (
                   <>
-                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Graph</p>
+                    <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Graph</p>
 
                     {!propsSplitView && (
                     <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
@@ -40815,7 +40973,7 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedWall ? (
                   <>
-                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Segment{selectedWall.label ? ` — ${selectedWall.label}` : ""}</p>
+                    <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Segment{selectedWall.label ? ` — ${selectedWall.label}` : ""}</p>
 
                     {!propsSplitView && (
                     <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
@@ -41051,7 +41209,7 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedRoom ? (
                   <>
-                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Space</p>
+                  <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Space</p>
                   {/* Workflow tools LINKED to this space — change a value and the tool re-runs, replacing its result. */}
                   {(history.state.toolAttachments?.[selectedRoom.id] ?? []).map((att) => (
                     <AttachedToolBlock
@@ -41065,7 +41223,7 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedObject ? null : (
                   <>
-                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Canvas</p>
+                    <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Canvas</p>
 
                     {/* The drawing as a whole, in the same Properties | Metrics pair every selected scope
                         uses. Nothing is selected, so the subject is the CANVAS: Properties are the objects
@@ -41630,7 +41788,7 @@ User request: ${aiPrompt.trim()}`;
                   );
                   return (
                     <>
-                      <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Dimension</p>
+                      <p className={`flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900${selectedNavElement ? " hidden" : ""}`}><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Dimension</p>
 
                       {/* Properties | Metrics tab strip (matches the Segment panel). */}
                       {!propsSplitView && (
@@ -41889,6 +42047,18 @@ User request: ${aiPrompt.trim()}`;
                         onEditInFlow={(attId) => { const att = (selectedRoom.attachments ?? []).find((a) => a.id === attId); if (att) void explodeAttachmentToFlow(att); }}
                         onUpdateAttachment={() => {}}
                         onUpdateParam={(attId, key, value) => updateSpaceAttachmentParam(selectedRoom.id, attId, key, value)}
+                        // The Room object carries the space's reference image: shown as a References block
+                        // inside its card (Upload · Library · Generate) instead of two raw text fields.
+                        hideParamKeys={["referenceImage", "referenceNote"]}
+                        renderAttachmentExtra={(att) => /^room(-with-math)?$/i.test(att.objectId ?? "") || /\/room\.json$/i.test(att.objectPath ?? "") ? (
+                          <SpaceReferences
+                            image={String(att.params?.referenceImage ?? "")}
+                            note={String(att.params?.referenceNote ?? "")}
+                            libraryBase={libraryPath() || DEFAULT_LIBRARY_PATH}
+                            hasRoomObject
+                            onChange={(patch) => { for (const [k, v] of Object.entries(patch)) if (v !== undefined) updateSpaceAttachmentParam(selectedRoom.id, att.id, k, v); }}
+                          />
+                        ) : null}
                         onUpdateChildParam={(attId, path, key, value) => updateSpaceAttachmentChildParam(selectedRoom.id, attId, path, key, value)}
                         selectedComponent={selectedComponent}
                         onSelectComponent={(attId, path) => setSelectedComponent(path ? { attId, path } : null)}

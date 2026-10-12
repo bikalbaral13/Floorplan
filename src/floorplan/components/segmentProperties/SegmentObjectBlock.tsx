@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Upload, Trash2, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "../../types";
@@ -15,6 +15,10 @@ export const visibleParams = (
 ): ParametricObjectParam[] => params.filter((d) => !d.showWhen || evalTruthy(d.showWhen, values as Scope));
 
 export interface SegmentObjectBlockProps {
+  /** Extra UI inside one attached object's card, after its parameters (e.g. a Room's References). */
+  renderAttachmentExtra?: (att: SegmentAttachment, obj: ParametricObjectFile | undefined) => ReactNode;
+  /** Parameter keys not to list as fields (the extra UI edits them instead). */
+  hideParamKeys?: string[];
   expanded: boolean;
   setExpanded: (v: boolean | ((prev: boolean) => boolean)) => void;
   /** Imported parametric object files, keyed by object id. */
@@ -264,10 +268,11 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
                     </Button>
                   </div>
                 </div>
-                {obj && visibleParams(obj.parameters, att.params).map((def) => (
+                {obj && visibleParams(obj.parameters, att.params).filter((def) => !p.hideParamKeys?.includes(def.key)).map((def) => (
                   <ParamField key={def.key} def={def} value={att.params[def.key]} onChange={(val) => p.onUpdateParam(att.id, def.key, val)} />
                 ))}
                 {/* Nested components (ref rules) — select + edit per instance, SketchUp-style. */}
+                {p.renderAttachmentExtra?.(att, obj)}
                 {obj && p.onUpdateChildParam && p.onSelectComponent && (
                   <AttachmentComponents
                     att={att}

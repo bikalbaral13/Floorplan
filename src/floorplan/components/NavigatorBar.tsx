@@ -1,16 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Cloud } from "lucide-react";
-import { ProjectStatusPanel } from "./ProjectStatusPanel";
+import { useRef, useState, type ReactNode } from "react";
+import { Cloud, PanelLeftClose, Search } from "lucide-react";
+import { NavFoldSection } from "./NavPlanSections";
 
-const FULL_PIPELINE_STAGES = [
-  { dir: "1-program", label: "1 · Program", badge: "Program" },
-  { dir: "2-plan-design", label: "2 · Plan/Design", badge: "Plan/Design" },
-  { dir: "3-build", label: "3 · Build", badge: "Build" },
-  { dir: "4-present", label: "4 · Present", badge: "Present" },
-];
 import { CloudInspectDialog } from "./dialogs/CloudInspectDialog";
-import { LibrarySelectionBox } from "./LibrarySelectionBox";
-import { PipelineTreeSection } from "./PipelineTreeSection";
+import { AccountBar } from "./AccountBar";
 
 const WIDTH_KEY = "bp.editor.navWidth";
 const OPEN_KEY = "bp.editor.navOpen";
@@ -27,19 +20,25 @@ const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } ca
 
 /** The left navigation bar: the R2 bucket as a scrollable folder tree (the Cloud Inspect browser, docked).
  *  The chevron folds it to a thin strip; the right edge drags to resize. Width and fold are per browser. */
-export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
-  // On a phone (`overlay`) it is a slide-over drawer: starts folded, and opening it there is not saved
-  // over the desktop choice.
-  const [open, setOpen] = useState(() => !overlay && readBool(OPEN_KEY, true));
+/** Whether the navigator is open — per browser on desktop; a phone drawer always starts folded. */
+export const readNavigatorOpen = (overlay: boolean) => !overlay && readBool(OPEN_KEY, true);
+export const saveNavigatorOpen = (open: boolean) => write(OPEN_KEY, open ? "1" : "0");
+
+/** `open` / `onToggle` are owned by the editor so its top-left panel button can toggle the navigator.
+ *  `preferences`: the Preferences panel content, opened from the account bar at the bottom (Claude-style). */
+export const NavigatorBar = ({ overlay = false, preferences, open, onToggle, planSections, query = "", onQuery }: {
+  overlay?: boolean; preferences?: ReactNode; open: boolean; onToggle: () => void;
+  /** One search at the top of the navigator: filters the Library tree and the Layers tree together. */
+  query?: string; onQuery?: (q: string) => void;
+  /** Drawings · Layers · Elements — built by the editor (they need its state), shown under the Library tree. */
+  planSections?: ReactNode;
+}) => {
   const [width, setWidth] = useState(() => Math.min(MAX_W, Math.max(MIN_W, readNum(WIDTH_KEY, 300))));
   const drag = useRef<{ x: number; w: number } | null>(null);
   /** The width being dragged to — read on pointer-up, where `width` is still the previous render's. */
   const live = useRef(width);
 
-  // The phone check resolves after the first render, so fold the drawer when it switches on.
-  useEffect(() => { if (overlay) setOpen(false); }, [overlay]);
-
-  const toggle = () => setOpen((o) => { if (!overlay) write(OPEN_KEY, o ? "0" : "1"); return !o; });
+  const toggle = onToggle;
 
   const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -57,25 +56,9 @@ export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
     write(WIDTH_KEY, String(live.current));
   };
 
-  if (!open) {
-    // Phone: no rail eating the canvas — just a round chevron floating at the canvas's top-left corner,
-    // mirroring the Properties chevron at the top-right.
-    if (overlay) return (
-      <button type="button" onClick={toggle} title="Show the Library (R2) navigator" aria-label="Show navigator"
-        className="fixed left-4 top-[82px] z-40 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-md hover:bg-slate-50">
-        <ChevronRight className="h-4 w-4" />
-      </button>
-    );
-    return (
-      <div className="flex w-8 shrink-0 flex-col items-center rounded-xl border border-slate-200 bg-white py-2 shadow-sm">
-        <button type="button" onClick={toggle} title="Show the Library (R2) navigator" aria-label="Show navigator"
-          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
-          <ChevronRight className="h-4 w-4" />
-        </button>
-        <Cloud className="mt-2 h-4 w-4 text-sky-600" aria-hidden />
-      </div>
-    );
-  }
+  // Folded = gone entirely: the canvas takes the full width. The panel-toggle button at the top-left of the
+  // editor (next to the logo) brings it back.
+  if (!open) return null;
 
   return (
     <div
@@ -84,29 +67,35 @@ export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
         : "relative flex shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm"}
       style={overlay ? undefined : { width }}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-2 py-1.5">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          <Cloud className="h-3.5 w-3.5 text-sky-600" /> Library (R2)
-        </span>
-        <button type="button" onClick={toggle} title="Fold the navigator" aria-label="Hide navigator"
-          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+      {/* Top: one search over everything below (Library files, layers and their elements). */}
+      <div className="flex items-center gap-1.5 border-b border-slate-100 p-2">
+        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 focus-within:border-slate-300 focus-within:bg-white">
+          <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <input value={query} onChange={(e) => onQuery?.(e.target.value)} placeholder="Search library, layers, elements…"
+            aria-label="Search the navigator" spellCheck={false} autoComplete="off"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-none" />
+        </label>
+        {/* Desktop: the header's panel button (top-left) shows / hides this navigator. The phone drawer
+            covers that button, so it carries its own close. */}
+        {overlay && (
+          <button type="button" onClick={toggle} title="Close the navigator" aria-label="Close navigator"
+            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-        <div className="flex min-h-0 flex-1 flex-col">
-          <CloudInspectDialog variant="panel" open onOpenChange={() => {}} />
-        </div>
-        <ProjectStatusPanel />
-        {/* Read-only: the pipeline folders shipped with the app (public/interior-mesh-pipeline, public/floorplan-tracer-pipeline, public/exterior-mesh-pipeline, public/full-pipeline). */}
-        <PipelineTreeSection />
-        <PipelineTreeSection base="/floorplan-tracer-pipeline" title="Floorplan Tracer Pipeline" storageKey="bp.editor.tracerPipelineOpen" />
-        <PipelineTreeSection base="/exterior-mesh-pipeline" title="Exterior Mesh Pipeline" storageKey="bp.editor.extPipelineOpen" />
-        {/* One project through the four phases. The standalone Program, Space Brief, Build from Plan Deck and
-            Walkthrough pipelines live on as its phase folders (originals archived 2026-10-11). */}
-        <PipelineTreeSection base="/full-pipeline" title="Full Pipeline" storageKey="bp.editor.fullPipelineOpen" stages={FULL_PIPELINE_STAGES} />
-        <LibrarySelectionBox />
+      {/* The whole middle scrolls; the Library tree keeps a usable height and each section caps its own. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+        <NavFoldSection title="Library" icon={<Cloud className="h-3.5 w-3.5 text-sky-600" />} storageKey="bp.editor.navLibraryOpen" defaultOpen grow first>
+          <div className="h-[22rem] min-h-0">
+            <CloudInspectDialog variant="panel" open onOpenChange={() => {}} query={query} />
+          </div>
+        </NavFoldSection>
+        {planSections}
+        {/* Pipelines live in the Library (library/Pipelines/); the agent works on projects directly, and the
+            ticked Library items show in the chat bar — so no Pipeline, Project or Selection sections here. */}
       </div>
+      {preferences != null && <AccountBar preferences={preferences} />}
       {/* Resize grip — the whole right edge (desktop only; the phone drawer has a fixed width). */}
       {!overlay && <div
         role="separator"
