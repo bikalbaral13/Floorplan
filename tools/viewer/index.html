@@ -73,7 +73,9 @@ function resolveSrc(s) {
   if (/^https?:/i.test(s)) return s;
   return new URL(s.replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/"), LIB).href;
 }
+let loadedSrc = null;
 async function loadUrl(src) {
+  loadedSrc = src;
   msg(`Loading ${src} …`);
   try {
     const r = await fetch(resolveSrc(src), { cache: "no-cache" });
@@ -264,6 +266,7 @@ $("#bLayers").onclick = () => { const s = $("#layers").style; s.display = s.disp
 /* ---------------- selection ---------------- */
 function select(e, from) {
   sel = e || null;
+  if (from !== "session" && sel) sessionEvent({ type: "select", id: sel.id, kind: sel.kind, label: sel.label, objectId: sel.objectId, level: levels[sel.li]?.id, path: sel.path?.join(".") });
   if (from !== "tree") revealTree(sel?.path);
   paint3DSelection();
   draw2D(); showInfo();
@@ -681,7 +684,103 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<":
 
 setView(new URLSearchParams(location.search).get("view") || store.get("pv.view") || "all");
 const src = new URLSearchParams(location.search).get("src");
-if (src) loadUrl(src); else showIndex();
+const SESSION = new URLSearchParams(location.search).get("session");
+const API = (new URLSearchParams(location.search).get("api") || "").replace(/\/+$/, "");
+if (src) loadUrl(src); else if (SESSION) msg("Waiting for the agent…"); else showIndex();
+if (SESSION && API) followSession();
+
+/* ---------------- agent sessions ----------------
+   ?session=<id>&api=<worker> — an agent drives this page through library/Sessions/<id>/state.json (MCP
+   viewer_show / viewer_snapshot / form_ask on the Worker). The page polls the state, applies changes, posts
+   snapshots when asked, and reports the user's selections and form answers as events. */
+function sessionEvent(ev) {
+  if (!SESSION || !API) return;
+  fetch(`${API}/api/session/${SESSION}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(ev) }).catch(() => {});
+}
+async function followSession() {
+  let rev = 0, snapReq = 0, formShown = null, busy = false;
+  const tick = async () => {
+    if (busy) return; busy = true;
+    try {
+      const r = await fetch(`${API}/api/session/${SESSION}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const st = await r.json();
+      if (st.rev > rev) {
+        rev = st.rev;
+        if (st.src && st.src !== loadedSrc) await loadUrl(st.src);
+        if (st.view) setView(st.view);
+        if (st.level != null && levels.length) {
+          const i = levels.findIndex(L => L.id === st.level || L.name === st.level);
+          if (i >= 0 && i !== curLevel) { curLevel = i; $("#level").value = i; fit2D(); draw2D(); build3D(); }
+        }
+        if (st.select?.length) {
+          const e = els.find(x => st.select.some(id => x.id === id || x.id.endsWith("/" + id)));
+          if (e) select(e, "session");
+        }
+        if (st.camera) setCamera(st.camera);
+        if (st.form && st.form.id !== formShown) { formShown = st.form.id; showForm(st.form); }
+      }
+      if (st.snapshot?.req && st.snapshot.req !== snapReq) {
+        snapReq = st.snapshot.req;
+        const blob = await snapshot(st.snapshot.pane);
+        await fetch(`${API}/api/session/${SESSION}/snapshot?req=${snapReq}`, { method: "PUT", headers: { "content-type": "image/png" }, body: blob });
+      }
+    } catch {} finally { busy = false; }
+  };
+  tick(); setInterval(tick, 1000);
+}
+function setCamera(kind) {
+  if (kind === "fit") return fit3D();
+  const b = new THREE.Box3();
+  if (solid?.count) { solid.computeBoundingBox(); b.union(solid.boundingBox); }
+  if (b.isEmpty()) return fit3D();
+  const c = b.getCenter(new THREE.Vector3()), r = b.getSize(new THREE.Vector3()).length() / 2 || 5;
+  orbit.target.copy(c);
+  if (kind === "top") cam.position.set(c.x, c.y + r * 2.4, c.z + 0.001);
+  else cam.position.set(c.x + r * 1.3, c.y + r * 1.5, c.z + r * 1.9);
+  cam.updateProjectionMatrix();
+}
+// The visible drawing panes, side by side, as one PNG. The 3D canvas is read right after a render, so it
+// does not need preserveDrawingBuffer.
+async function snapshot(pane = "visible") {
+  const parts = [];
+  const show2 = pane === "d2" || (pane === "visible" && !$("#pD2").classList.contains("hide"));
+  const show3 = pane === "d3" || (pane === "visible" && !$("#pD3").classList.contains("hide"));
+  if (show2) { paint2D(); parts.push(c2); }
+  if (show3) { orbit.update(); renderer.render(scene, cam); parts.push(renderer.domElement); }
+  if (!parts.length) { paint2D(); parts.push(c2); }
+  const H = Math.min(900, Math.max(...parts.map(p => p.height)) || 600);
+  const widths = parts.map(p => Math.round(p.width * H / (p.height || 1)));
+  const out = document.createElement("canvas"); out.width = widths.reduce((a, b) => a + b, 0) || 1; out.height = H;
+  const g2 = out.getContext("2d"); g2.fillStyle = css("--panel") || "#fff"; g2.fillRect(0, 0, out.width, out.height);
+  let x = 0; parts.forEach((p, i) => { g2.drawImage(p, x, 0, widths[i], H); x += widths[i]; });
+  return new Promise(res => out.toBlob(res, "image/png"));
+}
+function showForm(f) {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:20";
+  const field = (x) => {
+    const id = "ff_" + x.key, v = x.default ?? "";
+    const input = x.type === "checkbox" ? `<input type="checkbox" id="${esc(id)}" ${v ? "checked" : ""}>`
+      : x.type === "select" ? `<select id="${esc(id)}">${(x.options || []).map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`
+      : `<input id="${esc(id)}" type="${x.type === "number" ? "number" : "text"}" step="any" value="${esc(v)}" style="width:100%">`;
+    return `<label style="display:block;margin:8px 0"><div style="color:var(--mute);font-size:12px">${esc(x.label)}</div>${input}</label>`;
+  };
+  wrap.innerHTML = `<form style="background:var(--panel);color:var(--ink);border-radius:10px;padding:16px 18px;width:min(440px,92vw);max-height:85vh;overflow:auto">
+    <h3 style="margin:0 0 6px">${esc(f.title || "Questions")}</h3>${(f.fields || []).map(field).join("")}
+    <div style="text-align:right;margin-top:10px"><button type="submit" class="on">Send answers</button></div></form>`;
+  wrap.querySelector("form").onsubmit = (ev) => {
+    ev.preventDefault();
+    const answers = {};
+    for (const x of f.fields || []) {
+      const el = wrap.querySelector("#" + CSS.escape("ff_" + x.key));
+      answers[x.key] = x.type === "checkbox" ? el.checked : x.type === "number" ? Number(el.value) : el.value;
+    }
+    sessionEvent({ type: "form", formId: f.id, answers });
+    wrap.remove();
+  };
+  document.body.appendChild(wrap);
+}
 
 // No ?src= → list the library's designs (designs.json, refreshed by publish.mjs / bake.mjs).
 async function showIndex() {

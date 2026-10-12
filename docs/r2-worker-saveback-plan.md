@@ -133,3 +133,31 @@ library/Engine/
 
 ## Suggested order
 E1 first (small, it mostly renames what exists) → W1–W2 (save-back for the viewer) → W3 (forms) → rest.
+
+---
+
+## Part C — MCP on the Worker, viewer-first (built 2026-10-12, not yet deployed)
+
+The agent no longer needs the editor app: the Worker serves an MCP endpoint (`POST /mcp`, Streamable HTTP,
+stateless) and the viewer is the canvas. `tools/worker/src/mcp.js`, `sessions.js`.
+
+| Tool | Does |
+|---|---|
+| `viewer_open {src?, view?}` | new session → viewer link (`?session=<id>&api=<worker>`) |
+| `viewer_show {session, src?, view?, level?, select?, camera?}` | change what the open viewer shows |
+| `viewer_snapshot {session, pane?}` | PNG of the viewer (the page captures itself and uploads) |
+| `viewer_events {session, since?}` | user selections + form answers |
+| `form_ask {session, title, fields}` | a form in the viewer; answers arrive as events — never self-answered |
+| `library_list`, `library_read`, `skills_list` | read the library (read returns the etag) |
+| `design_save {path, json, etag?, session?}` | save via the same rules as `PUT /api/file` |
+
+Sessions live in `library/Sessions/<id>/` (`state.json` by the agent, `events.json` + `snapshot.png` by the
+viewer, which polls once a second). Tested locally (`wrangler dev` + `tools/worker/dev/viewer-proxy.mjs` on
+:2510): `node tools/worker/test.mjs` (19) and `node tools/worker/test-mcp.mjs` (14) pass; show → snapshot
+≈ 2.5 s; form and selection events round-trip.
+
+Connect Claude Code after deploy:
+`claude mcp add --transport http builderpluss-library https://builderpluss-library.<sub>.workers.dev/mcp`
+
+Not yet: heavy jobs (bake, Blender render) behind job tickets; repointing the R2 skills from "open the
+editor" to `viewer_open`; roles instead of open write.

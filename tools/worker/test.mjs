@@ -24,7 +24,7 @@ r = await call("PUT", "/api/file" + q("Designs/../Objects/x.json"), design(1), {
 r = await call("PUT", "/api/file" + q("_versions/x.json"), design(1), { "if-none-match": "*" }); check("_versions/ not writable → 400", r.status === 400);
 r = await call("PUT", "/api/file" + q("Designs/bad.json"), "{not json", { "if-none-match": "*" }); check("invalid JSON → 400", r.status === 400);
 r = await call("PUT", "/api/file" + q("Designs/bad.json"), JSON.stringify({ hello: 1 }), { "if-none-match": "*" }); check("not a design → 400", r.status === 400);
-r = await call("PUT", "/api/file" + q("Forms/scope/run1.json"), JSON.stringify({ answers: { a: 1 } }), { "if-none-match": "*" }); check("form answers anywhere-shaped → 201", r.status === 201);
+r = await call("PUT", "/api/file" + q(`Forms/scope/run_${Date.now()}.json`), JSON.stringify({ answers: { a: 1 } }), { "if-none-match": "*" }); check("form answers anywhere-shaped → 201", r.status === 201);
 r = await call("DELETE", "/api/file" + q(P)); check("DELETE → 405", r.status === 405);
 r = await fetch(`${BASE}/api/me`, { headers: { origin: "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev" } });
 check("CORS for the viewer origin", r.headers.get("access-control-allow-origin") === "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev");

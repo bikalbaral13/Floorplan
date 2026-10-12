@@ -1,2 +1,4 @@
 node_modules/
 .wrangler/
+snapshot.png
+snap_*.png
