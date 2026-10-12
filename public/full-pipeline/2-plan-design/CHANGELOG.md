@@ -1,5 +1,14 @@
 # space-brief — changelog
 
+## 0.6.0 — 2026-10-12
+- **Mountable app.** templates/app/core.js reads an optional `window.__BRIEF_MOUNT__` {root, host, build, base, backend,
+  user, onTabs, onSelect}: a host app (the BuilderPluss editor, Import ▸ Pipeline) mounts the role page into a
+  ShadowRoot, supplies its own backend (the editor saves to R2) and gets the tab list and element selection through
+  callbacks. `window.BRIEF` adds `tab(id)`, `canvasIds(element)` and `selectCanvas(ids)`. Without a mount every page
+  behaves as before (standalone, local preview, published).
+- **Elements know their canvas ids.** A wall run's origin now lists its segments (`origin.walls`), so every
+  plan-derived element maps to canvas segment / space / attachment ids.
+
 ## 0.5.0 — 2026-10-11
 - **Program → brief hand-off**: tools/from_program.py turns the program pipeline's plan_trace.json into a brief per
   floor (pipeline_kit.interop: walls on centrelines, doors, open connections, open-air rooms), with the program

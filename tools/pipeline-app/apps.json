@@ -1,0 +1,23 @@
+{
+ "schema": "pipeline-apps/1",
+ "note": "Pipelines whose app the editor loads as top-bar tabs (Import > Pipeline). templates = the app's template folder (published with tools/pipeline-app/publish.mjs --templates); per-project data at library/Projects/<CODE>/<id>/app/ (publish.mjs <site> <CODE>). mount: the app supports window.__BRIEF_MOUNT__ (space-brief >= 0.6.0).",
+ "apps": [
+  {
+   "id": "space-brief",
+   "title": "Space Brief",
+   "phase": "design",
+   "version": "0.6.0",
+   "templates": "library/Pipelines/apps/space-brief/0.6.0/",
+   "page": "page.html",
+   "parts": {
+    "css": "base.css",
+    "core": "core.js",
+    "deck": "deck.js",
+    "role": "architect.js"
+   },
+   "data": "library/Projects/{CODE}/space-brief/app/",
+   "description": "Schedule, Agent, Review, Punch list, Issue & team, Brief deck for one space",
+   "mount": true
+  }
+ ]
+}

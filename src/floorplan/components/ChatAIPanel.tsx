@@ -222,12 +222,10 @@ export const ChatAIPanel = ({
           </>
         )}
         {/* What the agent will read — the navigator's ticked Library items — and the conversation fold. */}
-        <div className="flex items-center gap-1.5 px-2 pt-2">
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+        {(selection.length > 0 || onEngineChange || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
+          {selection.length > 0 && <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            {selection.length === 0 ? (
-              <span className="truncate text-[10px] text-slate-400">No Library items selected — tick them in the navigator</span>
-            ) : selGroups.map((g) => (
+            {selGroups.map((g) => (
               <span key={g.kind} className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700" title={g.list.map((i) => i.key).join(", ")}>
                 {KIND_LABEL[g.kind]} · {g.list.length}
               </span>
@@ -251,7 +249,7 @@ export const ChatAIPanel = ({
               {collapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
           )}
-        </div>
+        </div>}
             {/* Input. */}
             <div className="p-2">
               {/* Attached image/PDF chip — the AI reads it to reproduce the floor plan. */}
@@ -332,7 +330,7 @@ export const ChatAIPanel = ({
                     rows={1}
                     placeholder={!configured ? "Set the Gemini key in Preferences first"
                       : runner === "flow" ? "Describe the flow to build… (Enter to send)"
-                      : engine === "claude" ? "Ask Claude… it uses the ticked Library items (Enter to send)"
+                      : engine === "claude" ? "Ask Claude… (Enter to send)"
                       : "Generate or edit the plan… (attach an image/PDF, Enter to send)"}
                     value={draft}
                     disabled={!configured || busy}

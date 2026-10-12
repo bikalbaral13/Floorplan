@@ -146,7 +146,7 @@ const R = {
     agQuick(v){ const [mid, i, k] = v.split('|'); const m = S.agent[mid]; const q = m?.questions?.[+i]; if (!q) return; const ans = q.options[+k];
       const id = rid(); X.putDoc('agent/' + id, {id, role: 'architect', text: ans, replyTo: mid, question: q.q, mode: UI.agMode || 'apply', status: 'new', by: ENV.uid, at: Date.now()}); },
     async agLoad(){ const fs = await X.pickFile('.json,application/json', false); if (!fs.length) return; let run; try { run = JSON.parse(await fs[0].text()); } catch(e){ X.toast('That file is not JSON.'); return; } await loadRun(run); },
-    async agSample(){ try { const r = await fetch(window.__BRIEF_FILES__?.['fixture/agent-run.json'] || 'fixture/agent-run.json'); await loadRun(await r.json()); } catch(e){ X.toast('The sample run is missing from this copy.'); } },
+    async agSample(){ try { const r = await fetch(X.src('fixture/agent-run.json')); await loadRun(await r.json()); } catch(e){ X.toast('The sample run is missing from this copy.'); } },
     runUndo(id){ X.undoRun(id); },
     runShow(id){ UI.runOpen = UI.runOpen === id ? null : id; X.refresh(); },
     async agExport(){ await R.acts.exportJson(); },
@@ -274,12 +274,12 @@ R.modal = function(){
   return '';
 };
 const _thumbs = new Map();
-function thumb(i){ if (i.kind === 'image') return window.__BRIEF_FILES__?.[i.file] || i.file; if (!_thumbs.has(i.path)) _thumbs.set(i.path, X.drawSwatch(i, 240, 180).toDataURL('image/jpeg', .8)); return _thumbs.get(i.path); }
+function thumb(i){ if (i.kind === 'image') return X.src(i.file); if (!_thumbs.has(i.path)) _thumbs.set(i.path, X.drawSwatch(i, 240, 180).toDataURL('image/jpeg', .8)); return _thumbs.get(i.path); }
 const libAll = () => UI._libcache || [];
 function libItems(){ const q = (UI.lib.q || '').toLowerCase().split(/\s+/).filter(Boolean);
   return libAll().filter(i => i.kind === UI.lib.kind && (!UI.lib.group || i.group === UI.lib.group) && q.every(w => (i.title + ' ' + i.path + ' ' + (i.desc || '') + ' ' + (i.material || '')).toLowerCase().includes(w))); }
 X.library().then(c => { UI._libcache = c.items || []; });
-document.addEventListener('input', ev => { if (ev.target.id !== 'lib-q') return; UI.lib.q = ev.target.value; const pos = ev.target.selectionStart; X.renderModal(); const n = $('#lib-q'); if (n){ n.focus(); try { n.setSelectionRange(pos, pos); } catch(e){} } });
+(X.MOUNT?.root || document).addEventListener('input', ev => { if (ev.target.id !== 'lib-q') return; UI.lib.q = ev.target.value; const pos = ev.target.selectionStart; X.renderModal(); const n = $('#lib-q'); if (n){ n.focus(); try { n.setSelectionRange(pos, pos); } catch(e){} } });
 /* ----- Agent tab ----- */
 function renderAgent(main){
   const msgs = Object.values(S.agent).sort((a, b) => a.at - b.at); const runs = Object.values(S.runs).sort((a, b) => (b.appliedAt || 0) - (a.appliedAt || 0));

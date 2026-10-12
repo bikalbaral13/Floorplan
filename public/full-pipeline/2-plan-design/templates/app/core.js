@@ -13,9 +13,16 @@
 */
 (() => {
 'use strict';
-const BUILD = window.__BRIEF_BUILD__ || {role: 'architect', version: 'dev'};
+/* MOUNT (optional, set by a host app such as the BuilderPluss editor before these scripts run):
+     {root, host, build, base, backend(api), onTabs(tabs, active), onSelect(element, canvasIds)}
+   root = where the page skeleton lives (a ShadowRoot), host = the element standing in for <body>, base = URL prefix of the
+   brief's data folder, backend = a factory with the localBackend() interface. Without it the page runs as before. */
+const MOUNT = window.__BRIEF_MOUNT__ || null;
+const ROOT = MOUNT?.root || document, HOST = MOUNT?.host || document.body;
+const BUILD = MOUNT?.build || window.__BRIEF_BUILD__ || {role: 'architect', version: 'dev'};
 const FILES = window.__BRIEF_FILES__ || {};          // standalone build: every sheet / reference / render inlined as a data URI
-const F = p => FILES[p] || p;
+const ABS = /^(\/|[a-z]+:)/i;
+const F = p => FILES[p] || (MOUNT?.base && p && !ABS.test(p) ? MOUNT.base + p : p);
 const CATS = [
   {id:'floor',name:'Flooring',p:'FL',c:'#A7712F'},{id:'ceiling',name:'Ceiling',p:'CL',c:'#2C6CB0'},{id:'wall',name:'Walls & finishes',p:'WL',c:'#5A8A26'},
   {id:'light',name:'Lighting',p:'LT',c:'#C29400'},{id:'joinery',name:'Joinery',p:'JN',c:'#8A5A44'},{id:'furniture',name:'Furniture',p:'FN',c:'#C0562A'},
@@ -28,7 +35,7 @@ const ROLE = {architect:'Architect', client:'Client', modeler:'3D modeler'};
 const SRC = {plan:'from plan', convention:'default', architect:''};
 
 /* ---------- helpers ---------- */
-const $ = (s, r=document) => r.querySelector(s);
+const $ = (s, r=ROOT) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rid = () => Math.random().toString(36).slice(2, 10);
 const clone = o => o == null ? o : JSON.parse(JSON.stringify(o));
@@ -37,7 +44,7 @@ const domain = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } 
 function deepMerge(t, p){ for (const k in p){ const v = p[k]; if (v && typeof v === 'object' && !Array.isArray(v) && t[k] && typeof t[k] === 'object' && !Array.isArray(t[k])) deepMerge(t[k], v); else t[k] = clone(v); } return t; }
 const ls = { get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} } };
 let toastT; function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 4200); }
-function busy(on, m){ let b = $('#busy'); if (on){ if (!b){ b = document.createElement('div'); b.id = 'busy'; b.className = 'busy'; b.innerHTML = '<div></div>'; document.body.appendChild(b); } b.firstChild.textContent = m || 'Working…'; } else if (b) b.remove(); }
+function busy(on, m){ let b = $('#busy'); if (on){ if (!b){ b = document.createElement('div'); b.id = 'busy'; b.className = 'busy'; b.innerHTML = '<div></div>'; HOST.appendChild(b); } b.firstChild.textContent = m || 'Working…'; } else if (b) b.remove(); }
 const fmtDate = t => { if (!t) return ''; const d = new Date(t); return d.toLocaleDateString(undefined, {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}); };
 
 /* ---------- state ---------- */
@@ -91,7 +98,7 @@ function localBackend(){
     async init(){
       let d = null; try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){}
       if (!d) d = window.__BRIEF_LOCAL__ ? clone(window.__BRIEF_LOCAL__) : null;
-      if (!d){ try { d = await (await fetch('data/local.json')).json(); } catch(e){ d = {meta: null}; } }
+      if (!d){ try { d = await (await fetch(F('data/local.json'))).json(); } catch(e){ d = {meta: null}; } }
       for (const k of COLS) S[k] = d[k] || {};
       S.meta = d.meta ?? null; S.loaded = true; ['meta', ...COLS].forEach(k => READY.add(k)); refresh();
     },
@@ -132,8 +139,8 @@ function uploadErr(e){
   toast(c === 'no_assets' ? 'Only editors of this brief can upload images.' : c === 'type' ? 'Use a PNG, JPG or WebP image.' : c === 'too_large' ? 'That file is over 20 MB.' : c === 'quota_or_state' ? 'Image storage for this brief is full.' : 'The upload did not go through. Try again.');
   console.warn(e);
 }
-const src = r => !r ? '' : r.startsWith('asset:') ? '/_blob/' + r.slice(6) : F(r);
-function refSrc(id){ if (!id) return ''; if (id.startsWith('asset:') || id.startsWith('data:')) return src(id); if (id.startsWith('library/')) return F(id); const r = (S.meta?.references || []).find(x => x.id === id); return r ? F('refs/' + r.asset) : ''; }
+const src = r => !r ? '' : r.startsWith('asset:') ? '/_blob/' + r.slice(6) : F(r);   // F keeps absolute URLs (a host backend's uploads)
+function refSrc(id){ if (!id) return ''; if (id.startsWith('asset:') || ABS.test(id)) return src(id); if (id.startsWith('library/')) return F(id); const r = (S.meta?.references || []).find(x => x.id === id); return r ? F('refs/' + r.asset) : ''; }
 function refMeta(id){ return (S.meta?.references || []).find(x => x.id === id) || null; }
 /* ---------- provenance, library, agent runs ---------- */
 const SNAP_KEYS = ['code', 'name', 'cat', 'shapes', 'spec', 'dims', 'notes', 'refs', 'options', 'lib', 'refInfo'];
@@ -297,19 +304,20 @@ async function resolveNames(){
 function renderTop(){
   const m = S.meta; const tabs = R.tabs();
   const me = myRole();
+  if (MOUNT?.onTabs) MOUNT.onTabs(tabs.map(([id, label, count, amber]) => ({id, label, count: count || 0, amber: !!amber})), UI.tab);
   $('#top').innerHTML = `
     <div class="tb" aria-label="Title block"><div class="tb-c prj"><span>Project</span><b>${esc(m?.project?.title || '—')}</b></div>
       <div class="tb-c spc"><span><i class="mob-hide-i">Space</i><i class="mob-only-i">${esc(m?.project?.title || '')}</i></span><b>${esc(m?.space?.label || '—')}</b></div><div class="tb-c iss"><span>Issue</span><b>${issueNo() ? 'I' + issueNo() : '—'}</b></div></div>
     <nav class="tabs" role="tablist">${tabs.map(([id, l, n, amber]) => `<button class="tab" role="tab" data-act="tab" data-id="${id}" aria-selected="${UI.tab === id}" aria-label="${esc(l)}"><span class="ti">${TAB_ICON[id] || TAB_ICON.board}${n ? `<span class="count ${amber ? 'amber' : ''}">${n}</span>` : ''}</span><span class="tl">${l}</span><span class="ts">${SHORT[l] || l}</span></button>`).join('')}</nav>
     <div class="who"><span class="rolechip" title="Your role on this brief is set by the architect">${ENV.me?.avatarUrl ? `<img src="${esc(ENV.me.avatarUrl)}" alt="">` : ''}${esc(ROLE[me] || 'No role')}</span>${R.topExtra ? R.topExtra() : ''}</div>`;
   const ban = [];
-  if (ENV.local && !ls.get('sb-ban-' + BUILD.role, false)) ban.push(BUILD.standalone ? `Trial copy: changes stay in this browser. Sharing comes with the published brief.` : `Local preview of the ${ROLE[BUILD.role]} page: changes stay in this browser.`);
+  if (ENV.local && !ENV.hosted && !ls.get('sb-ban-' + BUILD.role, false)) ban.push(BUILD.standalone ? `Trial copy: changes stay in this browser. Sharing comes with the published brief.` : `Local preview of the ${ROLE[BUILD.role]} page: changes stay in this browser.`);
   if (!ENV.local && S.loaded && me !== BUILD.role && !(me === 'architect')) ban.push(`This page is for the ${ROLE[BUILD.role]}. Your role here is ${ROLE[me] || 'not set'}, so actions are disabled.`);
   if (!ENV.local && S.loaded && me === 'architect' && BUILD.role !== 'architect') ban.push(`Previewing the ${ROLE[BUILD.role]} page as the architect. Decisions here would not count.`);
   if (ENV.readOnly) ban.push('View-only: your access does not allow changes.');
   const stale = S.meta?.pipeline && BUILD.run_id && S.meta.pipeline.run_id && S.meta.pipeline.run_id !== BUILD.run_id;
   if (stale) ban.push(`This page was built by pipeline run ${BUILD.run_id}; the brief data comes from run ${S.meta.pipeline.run_id}. Republish the apps from the latest run.`);
-  const b = $('#banner'); const onlyLocal = ENV.local && ban.length === 1 && !ENV.readOnly && !stale;
+  const b = $('#banner'); const onlyLocal = ENV.local && !ENV.hosted && ban.length === 1 && !ENV.readOnly && !stale;
   b.innerHTML = ban.length ? `<span>${esc(ban.join(' '))}</span>${onlyLocal ? '<button class="x" data-act="banClose" aria-label="Dismiss">✕</button>' : ''}` : '';
   b.className = 'banner' + (ENV.local || me === 'architect' ? ' info' : '');
 }
@@ -417,7 +425,7 @@ function renderTools(){
   const undo = d && !d.done && d.pts.length ? '<button data-act="undoPt">Undo</button>' : '';
   const cancel = ed && UI.tool !== 'select' ? '<button data-act="tool" data-id="select">Cancel</button>' : '';
   hb.innerHTML = d && d.done && R.drawCard ? R.drawCard(d) : (hint ? `<div class="hint"><span>${hint}</span>${undo}${canFin ? '<button class="go" data-act="finish">Finish</button>' : ''}${cancel}</div>` : '');
-  document.body.classList.toggle('drawing', ed && UI.tab === 'drawings' && UI.tool !== 'select');
+  HOST.classList.toggle('drawing', ed && UI.tab === 'drawings' && UI.tool !== 'select');
 }
 function finishDraft(){
   const d = CV.draft; if (!d) return;
@@ -464,12 +472,22 @@ function stageClick(target, cx, cy){
   const hit = target.closest && target.closest('[data-id]'); const id = hit && hit.dataset.id;
   if (id && S.elements[id]) selectEl(id); else if (UI.sel){ UI.sel = null; drawSheet(); renderInspector($('#insp')); renderSide(); }
 }
-function selectEl(id){ if (UI.sel !== id){ UI.galIdx = 0; UI.confirmDel = false; } UI.sel = id; refresh(); }
+function selectEl(id, quiet){ if (UI.sel !== id){ UI.galIdx = 0; UI.confirmDel = false; } UI.sel = id; refresh();
+  if (!quiet && MOUNT?.onSelect){ const e = S.elements[id]; MOUNT.onSelect(e || null, e ? canvasIds(e) : []); } }
+/* The plan entities an element was derived from, as canvas ids (segment / space / attachment ids). A wall run lists
+   its segments (origin.walls, recorded since 0.6.0). Elements the architect added by hand have none. */
+function canvasIds(e){ const o = e?.origin; if (!o) return []; if (o.type === 'run') return o.walls || [];
+  return [].concat(o.ref || []).filter(x => typeof x === 'string'); }
+/* Host → page: select the element derived from any of these canvas ids (no echo back to the host). */
+function selectCanvas(ids){ const want = new Set(ids || []); if (!want.size){ return null; }
+  if (UI.sel && canvasIds(S.elements[UI.sel]).some(i => want.has(i))) return UI.sel;   // already showing one of them
+  const hit = Object.values(S.elements).filter(e => canvasIds(e).some(i => want.has(i))).sort((a, b) => (a.order || 0) - (b.order || 0))[0];
+  if (hit && UI.sel !== hit.id) selectEl(hit.id, true); return hit ? hit.id : null; }
 
 /* ---------- element detail (read-only; roles add their own sections) ---------- */
 function renderInspector(box){
   if (!box) return;
-  if (box.contains(document.activeElement) && document.activeElement.matches('input,textarea,select') && box.dataset.for === (UI.sel || '')) return;
+  if (box.contains(ROOT.activeElement) && ROOT.activeElement.matches('input,textarea,select') && box.dataset.for === (UI.sel || '')) return;
   box.dataset.for = UI.sel || '';
   const e = UI.sel && viewOf(S.elements[UI.sel]); box.classList.toggle('none', !e); box.classList.toggle('open', !e && !!UI.peek); box.classList.toggle('full', !!e && !!UI.full);
   const grab = `<div class="grab-row mob-only-b" role="button" tabindex="0" data-act="sheetSize" aria-label="${e ? 'Resize panel' : 'Show overview'}"><span class="grab"></span></div>`;
@@ -477,16 +495,16 @@ function renderInspector(box){
   box.innerHTML = grab + peek + (!e ? (R.summary ? R.summary() : summary()) : (R.inspector ? R.inspector(e) : detail(e)));
 }
 /* bottom-sheet gestures (phones): drag the handle up to expand, down to collapse or close */
-document.addEventListener('pointerdown', ev => {
+ROOT.addEventListener('pointerdown', ev => {
   const g = ev.target.closest('.grab-row,.peekbar'); if (!g || !MOBILE()) return;
   const y0 = ev.clientY; let moved = false;
   const mv = e2 => { if (Math.abs(e2.clientY - y0) > 8) moved = true; };
-  const up = e2 => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up);
+  const up = e2 => { ROOT.removeEventListener('pointermove', mv); ROOT.removeEventListener('pointerup', up);
     const dy = e2.clientY - y0; if (!moved) return;
     g.dataset.swiped = '1'; setTimeout(() => delete g.dataset.swiped, 80);
     if (UI.sel){ if (dy < -40){ UI.full = true; } else if (dy > 40){ if (UI.full) UI.full = false; else { ACT.desel(); return; } } renderInspector($('#insp')); }
     else { if (dy < -30) UI.peek = true; else if (dy > 30) UI.peek = false; renderInspector($('#insp')); } };
-  document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+  ROOT.addEventListener('pointermove', mv); ROOT.addEventListener('pointerup', up);
 });
 function summary(){
   const all = els(), n = all.length || 1, c = {}; Object.keys(AP).forEach(k => c[k] = 0); all.forEach(e => c[apState(e)]++);
@@ -691,7 +709,7 @@ function unb64(t){ const s = atob(t); const u = new Uint8Array(s.length); for (l
 const deckName = (k, n) => `${(S.meta.project.code || 'BRIEF')}_brief_I${n}_v${k}.pptx`;
 async function saveFile(filename, blob){
   if (ENV.downloads){ try { await ENV.downloads.save({filename, data: blob}); return true; } catch(e){ if (e && e.code !== 'declined' && e.code !== 'cancelled') toast('The download did not complete.'); return false; } }
-  if (ENV.local){ const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); return true; }
+  if (ENV.local){ const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = filename; HOST.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); return true; }
   toast('Downloads are not available in this view.'); return false;
 }
 async function generateDeck(note){
@@ -766,16 +784,16 @@ const ACT = {
   copyList(){ const t = punchText(); const fb = () => { const b = $('#copybox'); b.hidden = false; b.value = t; b.select(); toast('Select and copy the text below.'); };
     try { navigator.clipboard.writeText(t).then(() => toast('Punch list copied.'), fb); } catch(e){ fb(); } },
 };
-document.addEventListener('click', ev => {
+ROOT.addEventListener('click', ev => {
   const t = ev.target.closest('[data-act]'); if (!t || t.matches('input[type=checkbox]') || t.closest('[data-swiped]')) return;
   const a = t.dataset.act; const fn = (R && R.acts && R.acts[a]) || ACT[a]; if (fn) fn(t.dataset.id, ev, t);
 });
-document.addEventListener('change', ev => {
+ROOT.addEventListener('change', ev => {
   const t = ev.target;
   if (t.matches('[data-act="layer"]')){ UI.layers[t.dataset.id] = t.checked; ls.set('sb-layers', UI.layers); drawSheet(); return; }
   if (R && R.onChange) R.onChange(ev);
 });
-document.addEventListener('keydown', ev => {
+ROOT.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && UI.modal){ UI.modal = null; refresh(); return; }
   if (ev.target.matches('input,textarea,select')){ if (ev.key === 'Enter' && ev.target.id === 'rp-text') ACT.reply(); if (ev.key === 'Enter' && ev.target.id === 'dc-name' && R.acts?.draftSave) R.acts.draftSave(); return; }
   if (UI.tab !== 'drawings'){ if (ev.key === 'Escape'){ UI.adding = false; UI.draft = null; UI.pin = null; refresh(); } return; }
@@ -795,15 +813,15 @@ function refresh(){
   if (S.loaded && !loadedOnce){ loadedOnce = true; if (R.onLoaded) R.onLoaded(); }
   renderTop();
   const main = $('#main');
-  const ae = document.activeElement; const keep = ae && ae.id && ae.matches('input,textarea') && main.contains(ae) ? {id: ae.id, v: ae.value, s: ae.selectionStart, e: ae.selectionEnd} : null;
+  const ae = ROOT.activeElement; const keep = ae && ae.id && ae.matches('input,textarea') && main.contains(ae) ? {id: ae.id, v: ae.value, s: ae.selectionStart, e: ae.selectionEnd} : null;
   if (lastTab !== UI.tab){ main.innerHTML = ''; lastTab = UI.tab; }
   if (UI.tab === 'drawings') renderDrawings(main);
-  else { CV.key = null; document.body.classList.remove('drawing'); R.render(UI.tab, main); }
-  if (keep){ const n = document.getElementById(keep.id); if (n && n !== document.activeElement){ n.value = keep.v; n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch(e){} } }
+  else { CV.key = null; HOST.classList.remove('drawing'); R.render(UI.tab, main); }
+  if (keep){ const n = ROOT.querySelector('#' + keep.id); if (n && n !== ROOT.activeElement){ n.value = keep.v; n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch(e){} } }
   renderModal();
   resolveNames();
 }
-function renderModal(){ const m = $('#modal'); if (!m) return; const h = R && R.modal ? R.modal() : ''; m.innerHTML = h; m.hidden = !h; document.body.classList.toggle('modal-open', !!h); }
+function renderModal(){ const m = $('#modal'); if (!m) return; const h = R && R.modal ? R.modal() : ''; m.innerHTML = h; m.hidden = !h; HOST.classList.toggle('modal-open', !!h); }
 
 async function boot(roleModule){
   R = roleModule; let db = null;
@@ -815,13 +833,14 @@ async function boot(roleModule){
     } catch(e){ console.warn(e); }
   }
   if (!db){ ENV.local = true; ENV.uid = 'local-' + BUILD.role; }
-  B = db ? dbBackend(db) : localBackend();
+  if (!db && MOUNT?.backend){ ENV.hosted = true; if (MOUNT.user){ ENV.me = MOUNT.user; ENV.uid = MOUNT.user.id || ENV.uid; ENV.names[ENV.uid] = MOUNT.user.name || ''; } }
+  B = db ? dbBackend(db) : ENV.hosted ? MOUNT.backend({S, COLS, READY, refresh, toast, clone, rid, shrink, BUILD}) : localBackend();
   await B.init();
   if (R.afterBoot) R.afterBoot();
   setTimeout(() => { if (!S.loaded){ S.loaded = true; if (S.meta === undefined) S.meta = null; refresh(); } }, 8000);
 }
 
-window.BRIEF = {BUILD, CATS, CAT, AP, PS, ROLE, $, esc, rid, clone, clamp, domain, toast, busy, fmtDate, S, ENV, UI, CV,
+window.BRIEF = {MOUNT, canvasIds, selectCanvas, tab: id => ACT.tab(id), BUILD, CATS, CAT, AP, PS, ROLE, $, esc, rid, clone, clamp, domain, toast, busy, fmtDate, S, ENV, UI, CV,
   putDoc, patchDoc, delDoc, saveMine, pickFile, ingest, uploadErr, src, refSrc, refMeta, sheets, sheetById, curSheet,
   roleOf, myRole, canActAs, canEditSpec, viewOf, els, decisionOf, apState, fixOf, pinState, repliesOf, clientComments,
   rounds, roundIdx, roundName, rendersIn, pinsOn, roundOfPin, elPins, catColor, issueNo, nameOf,

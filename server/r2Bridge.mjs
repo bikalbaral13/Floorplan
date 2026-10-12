@@ -12,7 +12,7 @@
 
 import path from "node:path";
 import crypto from "node:crypto";
-import { r2ConfigFrom, putObject, getObjectText, listObjects, listObjectsDetailed, deleteObject } from "../tools/r2.mjs";
+import { r2ConfigFrom, putObject, getObjectText, signedRequest, listObjects, listObjectsDetailed, deleteObject } from "../tools/r2.mjs";
 
 
 /** Content types for what the Library holds; /save accepts only these. */
@@ -234,6 +234,17 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
         totals: { files: root.files ?? 0, folders, bytes: root.bytes ?? 0 },
         tree: root,
       });
+    }
+
+    // GET /raw/<key> → the object's bytes with its content type. Path-based so a pipeline app page loaded
+    // with <base href="/__r2/raw/<folder>/"> resolves its relative files (data/, sheets/, refs/) through here.
+    if (req.method === "GET" && route.startsWith("/raw/")) {
+      const key = cleanBucketKey(decodeURIComponent(route.slice("/raw/".length)));
+      if (!key) return sendJson(res, 400, { error: "need a key (no leading slash, no '..' segments)" });
+      const r = await signedRequest(cfg, "GET", key);
+      if (!r.ok) return sendJson(res, r.status === 404 ? 404 : 502, { error: `R2 ${r.status} for ${key}` });
+      res.writeHead(200, { "content-type": r.headers.get("content-type") || "application/octet-stream", "cache-control": "no-cache" });
+      return res.end(Buffer.from(await r.arrayBuffer()));
     }
 
     // GET /get?key= → the object's leading bytes as text, for the inline preview.

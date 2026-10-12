@@ -27,7 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PanelLeft, PanelRight, PanelRightClose } from "lucide-react";
+import { PanelLeft, PanelRight, PanelRightClose, Workflow } from "lucide-react";
+import { usePipelineTabs } from "./PipelineTabs";
 import { SpaceReferences } from "./components/SpaceReferences";
 import "./propsPanel.css";
 import { ToolButton } from "@/components/toolbutton";
@@ -6014,6 +6015,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** The left navigator — open per browser on desktop; a phone starts it folded. Toggled by the panel button
    *  at the top-left (next to the logo); folded, it disappears and the canvas takes the full width. */
   const [navOpen, setNavOpen] = useState(() => readNavigatorOpen(false));
+  // A loaded pipeline's app (Import ▸ Pipeline) selects plan entities through this; set once selectElement exists.
+  const pipelineSelectRef = useRef<((ids: string[]) => void) | null>(null);
+  const pipelineTabs = usePipelineTabs({ onSelect: (ids) => pipelineSelectRef.current?.(ids) });
   useEffect(() => { if (isMobile) setNavOpen(false); }, [isMobile]);
   const toggleNav = () => setNavOpen((o) => { if (!isMobile) saveNavigatorOpen(!o); return !o; });
   /** Layers section: search across layer names and the elements on them; which layer rows are folded open. */
@@ -29092,6 +29096,33 @@ User request: ${aiPrompt.trim()}`;
   const isElementSelected = (e: NavElement) => e.host.type === "node"
     ? selectedNodeKey === e.host.stableKey
     : !selectedNodeKey && selection.selectedIds.includes(e.host.id);
+  /* Pipeline app ↔ canvas selection. The app's elements name the canvas entities they came from: segment and space
+     ids, and attachment ids (on a segment, a space or a node). Each resolves to its host, selected as a click would. */
+  const hostOfCanvasId = (id: string): NavElement["host"] | null => {
+    for (const w of history.state.walls) if (w.id === id || w.attachments?.some((a) => a.id === id)) return { type: "wall", id: w.id };
+    for (const r of history.state.rooms) if (r.id === id || r.attachments?.some((a) => a.id === id)) return { type: "room", id: r.id };
+    for (const [key, m] of Object.entries(history.state.nodeMeta ?? {})) if (m?.attachments?.some((a) => a.id === id)) return { type: "node", stableKey: key };
+    return null;
+  };
+  pipelineSelectRef.current = (ids) => {
+    const hosts = ids.map(hostOfCanvasId).filter((h): h is NavElement["host"] => !!h);
+    if (!hosts.length) return;
+    const ownIds = hosts.flatMap((h) => (h.type === "node" ? [] : [h.id]));
+    if (ownIds.length > 1 && hosts.every((h) => h.type !== "node")) { setSelectedNodeKey(null); selection.setSelection(ownIds); return; }
+    selectElement({ host: hosts[0] } as NavElement);
+  };
+  /** The canvas ids of what is selected on the canvas: the selected walls / spaces, their attachments, a node's attachments. */
+  const canvasSelectionIds = (): string[] => {
+    if (selectedNodeKey) return (history.state.nodeMeta?.[selectedNodeKey]?.attachments ?? []).map((a) => a.id);
+    const ids: string[] = [];
+    for (const id of selection.selectedIds) {
+      const host = history.state.walls.find((w) => w.id === id) ?? history.state.rooms.find((r) => r.id === id);
+      ids.push(id, ...(host?.attachments ?? []).map((a) => a.id));
+    }
+    return ids;
+  };
+  const canvasSelectionKey = `${selectedNodeKey ?? ""}|${selection.selectedIds.join(",")}`;
+  useEffect(() => { pipelineTabs.selectCanvas(canvasSelectionIds()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [canvasSelectionKey]);
   const navElements = buildElements({
     walls: history.state.walls, rooms: visibleRooms, nodes: wallNodes,
     nodeMeta: (history.state.nodeMeta ?? {}) as Record<string, NodeMeta | undefined>, layers: history.state.layers ?? [],
@@ -31137,6 +31168,7 @@ User request: ${aiPrompt.trim()}`;
     { id: "image-lib", icon: <CloudDownload className="h-4 w-4 text-sky-600" />, label: "Image from Library", hint: "An underlay from the Library's Images", onSelect: () => setImportImageOpen(true) },
     { id: "map", icon: <MapPin className="h-4 w-4 text-sky-600" />, label: "Map", hint: "A .geojson site or map file", onSelect: () => geojsonInputRef.current?.click() },
     { id: "moodboard", icon: <Palette className="h-4 w-4 text-amber-600" />, label: "Moodboard", hint: "Picks from a Library moodboard", onSelect: () => setMoodboardOpen(true) },
+    { id: "pipeline", icon: <Workflow className="h-4 w-4 text-violet-600" />, label: "Pipeline", hint: "A Library pipeline's tabs (Schedule, Review, …) in the top bar", onSelect: pipelineTabs.openImport },
   ];
   const exportOptions: FilePickerOption[] = [
     { id: "json", icon: <FileJson className="h-4 w-4" />, label: "JSON", hint: "The plan as .json (re-importable)", onSelect: exportJsonFile },
@@ -31305,7 +31337,8 @@ User request: ${aiPrompt.trim()}`;
           <p className="hidden text-sm font-semibold tracking-wide text-slate-700 md:block">
             BUILDER<span className="font-extrabold text-slate-900">PLUSS</span>
           </p>
-
+          {/* Workspace tabs: Drawings (built in) + the loaded pipeline's tabs (see PipelineTabs.tsx). */}
+          {pipelineTabs.tabBar}
         </div>
         {/* Top-right toolbar: Preferences, Layers (with Levels), View Mode. The old Files menu is gone:
             Import… / Export… live on the Chat bar, New / Save / Reload in Preferences ▸ Project. */}
@@ -31342,6 +31375,8 @@ User request: ${aiPrompt.trim()}`;
       </div>
 
       <div className="relative flex h-[calc(100%-64px)] gap-2 p-2">
+        {pipelineTabs.frame}
+        {pipelineTabs.dialog}
         {/* Left navigation bar — the R2 Library as a foldable, resizable tree (replaces Files ▸ Inspect). */}
         {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} preferences={preferencesBody} open={navOpen} onToggle={toggleNav} planSections={navigatorPlanSections} query={navQuery} onQuery={setNavQuery} />}
         {/* Floating, draggable Drawing toolbar (SketchUp-style). Fixed-positioned over the canvas; drag

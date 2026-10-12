@@ -49,11 +49,11 @@ def build(geo, sheets, levels, refs):
         sh = elev[r["id"]]; top = r.get("height") or levels["soffit_mm"] / 1000
         line = {"sheet": "plan", "type": "line", "pts": V.to_norm(plan, [r["a"], r["b"]])}
         if r["glazed"]:
-            add("partition", f"Glazed partition · Elev {r['letter']}", {"type": "run", "ref": r["id"], "letter": r["letter"]},
+            add("partition", f"Glazed partition · Elev {r['letter']}", {"type": "run", "ref": r["id"], "letter": r["letter"], "walls": list(r.get("walls", []))},
                 [line, _elev_rect(sh, 0, r["length"], 0, levels.get("partition_mm", 2600) / 1000)],
                 [{"k": "Length", "v": mm(r["length"]), "src": "plan"}, {"k": "Head", "v": f"+{levels.get('partition_mm', 2600)} mm", "src": "convention"}])
         else:
-            add("wall", f"Wall finish · Elev {r['letter']} ({r['looks']})", {"type": "run", "ref": r["id"], "letter": r["letter"]},
+            add("wall", f"Wall finish · Elev {r['letter']} ({r['looks']})", {"type": "run", "ref": r["id"], "letter": r["letter"], "walls": list(r.get("walls", []))},
                 [line, _elev_rect(sh, 0, r["length"], 0, min(fc, top))],
                 [{"k": "Length", "v": mm(r["length"]), "src": "plan"}, {"k": "Finish up to", "v": f"+{levels['ceiling_mm']} mm (FC)", "src": "convention"}])
     for r in geo["runs"]:

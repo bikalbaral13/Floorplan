@@ -2,7 +2,7 @@
  "schema": "pipeline/1",
  "id": "space-brief",
  "title": "Space Brief Pipeline",
- "version": "0.5.0",
+ "version": "0.6.0",
  "phase": "design",
  "entry": {
   "agents": "AGENTS.md",
