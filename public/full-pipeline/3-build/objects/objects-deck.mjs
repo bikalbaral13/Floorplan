@@ -1,6 +1,6 @@
 /** New parametric objects the plan deck asked for and the library did not have (S4 resolve).
  *  Six-node spine via tools/tmp-pobj/common.mjs. Built + evaluated by build-objects.mjs. */
-import { FRAME, FIT, ANCHOR, KERNEL, MAPW, solid, plan, tubes, rng, sel, chk } from "../../../tools/tmp-pobj/common.mjs";
+import { FRAME, FIT, ANCHOR, KERNEL, MAPW, solid, plan, tubes, rng, sel, chk } from "../lib/pobj-common.mjs";
 
 const body = (parts) => parts.filter(Boolean).join("\n");
 

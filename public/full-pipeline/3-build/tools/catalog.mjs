@@ -1,13 +1,12 @@
 // S4 helper: snapshot the R2 object + material library into one catalog for matching.
-//   node public/build-from-deck-pipeline/tools/catalog.mjs <out.json>     (repo root: needs .env)
+//   node tools/catalog.mjs <out.json>     (needs R2_* in .env here or in a parent folder, or in the environment)
 // Objects: host kind, title, first description line, every input-props param {id, name, type, value, options}.
 // Materials: id, title, category, base colour if stated.
 import fs from "node:fs";
-import * as r2 from "../../../tools/r2.mjs";
+import * as r2 from "../lib/r2.mjs";
 
 const out = process.argv[2];
-const env = Object.fromEntries(fs.readFileSync(".env", "utf8").split(/\r?\n/).filter(l => l.includes("=") && !l.startsWith("#"))
-  .map(l => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }));
+const env = r2.loadEnv();
 const cfg = r2.r2ConfigFrom(env);
 
 async function getJson(key) {

@@ -1,5 +1,5 @@
 // Evaluate a built object at its defaults (optionally on a given host) and dump its 3D rows -> JSON for preview.
-//   node public/build-from-deck-pipeline/objects/dump.mjs <object.json> <out.json> ['[[x,y],...]'] ['{"param":value}']
+//   node objects/dump.mjs <object.json> <out.json> ['[[x,y],...]'] ['{"param":value}']
 import { readFileSync, writeFileSync } from "node:fs";
 import { runExprBody, liftScopeValue } from "@builderpluss/engine/node";
 const [file, out, host, over] = process.argv.slice(2);

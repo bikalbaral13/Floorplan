@@ -1,15 +1,14 @@
 // Publish a project's canvas + every image it references (plan underlay, refImages) to R2.
-//   node public/build-from-deck-pipeline/tools/publish.mjs <project_dir> <deck_dir>   (run from repo root: needs .env)
+//   node tools/publish.mjs <project_dir> <deck_dir>   (needs R2_* in .env here or in a parent folder, or in the environment)
 // Images -> library/Images/Decks/<CODE>/<file>, canvas -> library/Designs/Decks/<CODE>.json,
 // brief -> library/Designs/Decks/<CODE>.roombrief.json
 import fs from "node:fs";
 import path from "node:path";
-import * as r2 from "../../../tools/r2.mjs";
+import * as r2 from "../lib/r2.mjs";
 
 const [projectDir, deckDir] = process.argv.slice(2);
 const code = path.basename(projectDir);
-const env = Object.fromEntries(fs.readFileSync(".env", "utf8").split(/\r?\n/).filter(l => l.includes("=") && !l.startsWith("#"))
-  .map(l => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }));
+const env = r2.loadEnv();
 const cfg = r2.r2ConfigFrom(env);
 const TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
 

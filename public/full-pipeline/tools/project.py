@@ -141,15 +141,18 @@ def vtuple(v):
 
 
 def check_release(store):
-    """Compare this copy with the published release (library/Pipelines/full-pipeline/latest.json)."""
-    try: latest = get_json(store, "library/Pipelines/full-pipeline/latest.json")
-    except Exception: return
-    if not latest: return
-    mine, theirs = CFG.get("version"), latest.get("version")
-    if vtuple(theirs) > vtuple(mine):
-        print(f"  ! Full Pipeline {theirs} is published (this copy is {mine}). Update from library/Pipelines/full-pipeline/{theirs}/ before working.")
-    elif vtuple(mine) > vtuple(theirs):
-        print(f"  (this copy is {mine}, newer than the published {theirs}: publish it with tools/publish_library.py when tested)")
+    """Compare each phase folder with its standalone release (library/Pipelines/<pipeline>-pipeline/release.json)."""
+    for ph in CFG.get("phases", []):
+        try:
+            mine = json.load(open(os.path.join(FULL, ph["dir"], "pipeline.json"), encoding="utf-8")).get("version")
+            latest = get_json(store, f"library/Pipelines/{ph['pipeline']}-pipeline/release.json")
+        except Exception: continue
+        if not latest: continue
+        theirs = latest.get("version")
+        if vtuple(theirs) > vtuple(mine):
+            print(f"  ! {ph['pipeline']} {theirs} is published (this copy of {ph['dir']} is {mine}). Update from library/Pipelines/{ph['pipeline']}-pipeline/ before working.")
+        elif vtuple(mine) > vtuple(theirs):
+            print(f"  ({ph['dir']} is {mine}, newer than the published {theirs}: publish it with tools/publish_library.py --only {ph['id']} when tested)")
 
 
 def allowed(m, ph, who):

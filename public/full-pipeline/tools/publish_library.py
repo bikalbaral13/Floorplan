@@ -1,12 +1,17 @@
-"""Publish this Full Pipeline as a versioned snapshot in the shared library.
+"""Publish the four phases of this Full Pipeline to the shared library as standalone pipelines.
 
-    python tools/publish_library.py [--dry-run] [--store local:<dir>]
+    python tools/publish_library.py [--only <phase id>] [--dry-run] [--store local:<dir>]
 
-Writes  library/Pipelines/full-pipeline/<version>/<every file>   (the repo stays the place it is edited and tested)
-        library/Pipelines/full-pipeline/<version>/release.json  (full-pipeline-release/1: version, kit, files + sha256)
-        library/Pipelines/full-pipeline/latest.json             (which version is current)
-A version that is already published is never overwritten: bump full.json "version" first.
-`project.py` compares the local copy with latest.json and says when a newer release exists.
+For each phase in full.json (program, plan, build, present) it writes
+        library/Pipelines/<pipeline id>-pipeline/<every file of that phase folder>
+        library/Pipelines/<pipeline id>-pipeline/release.json   (pipeline-release/1: version, files + sha256)
+e.g. 1-program → library/Pipelines/program-pipeline/, sitting beside exterior-mesh-pipeline and floorplan-tracer-pipeline.
+
+The Full Pipeline itself is NOT published (its R2 copy was removed 2026-10-13; local backup in
+backups/r2-full-pipeline-2026-10-13). It stays in the repo as the composer of the four phases.
+Run `node tools/gen-pipeline-manifest.mjs` from the repo root first so each phase's manifest.json is current.
+Files are overwritten in place; a file deleted locally is not removed from R2.
+`project.py` compares each phase's pipeline.json version with its release.json and says when they differ.
 """
 import argparse, datetime, json, os, sys
 
@@ -18,43 +23,51 @@ for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8")
     except Exception: pass
 
-PREFIX = "library/Pipelines/full-pipeline/"
-SKIP_DIRS = {"__pycache__", "upstream"}
+ROOT = "library/Pipelines/"
+SKIP_DIRS = {"__pycache__", "upstream", "cache", "output", "work"}
 
 
-def files():
+def prefix(phase):
+    """R2 folder of one phase: library/Pipelines/<pipeline id>-pipeline/."""
+    return f"{ROOT}{phase['pipeline']}-pipeline/"
+
+
+def files(root):
     out = []
-    for dp, dns, fns in os.walk(FULL):
+    for dp, dns, fns in os.walk(root):
         dns[:] = [d for d in dns if d not in SKIP_DIRS and not d.startswith("ZZ_")]
         for f in fns:
-            p = os.path.join(dp, f)
-            out.append(os.path.relpath(p, FULL).replace(os.sep, "/"))
+            out.append(os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/"))
     return sorted(out)
 
 
+def publish(store, phase, dry):
+    root = os.path.join(FULL, phase["dir"])
+    pj = json.load(open(os.path.join(root, "pipeline.json"), encoding="utf-8"))
+    base = prefix(phase)
+    rel = {"schema": "pipeline-release/1", "id": pj["id"], "title": pj.get("title"), "version": pj.get("version"),
+           "phase": phase["id"], "source": f"app repo public/full-pipeline/{phase['dir']}",
+           "published": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "files": {}}
+    total = 0
+    for rel_path in files(root):
+        data = open(os.path.join(root, rel_path), "rb").read(); total += len(data)
+        rel["files"][rel_path] = {"sha256": r2.sha256(data), "bytes": len(data)}
+        if not dry: store.put(base + rel_path, data, r2.content_type(rel_path))
+    if not dry: store.put(base + "release.json", json.dumps(rel, ensure_ascii=False, indent=1).encode("utf-8"), "application/json")
+    print(f"{'(dry run) ' if dry else ''}{pj['id']} {pj.get('version')}: {len(rel['files'])} files, {total / 1e6:.1f} MB → {base}  (+ release.json)")
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(); ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--store", default="")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", default="", help="one phase id from full.json (program, plan, build, present)")
+    ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--store", default="")
     a = ap.parse_args(argv)
     store = r2.LocalStore(a.store[6:]) if a.store.startswith("local:") else r2.default_store(FULL)
-    cfg = json.load(open(os.path.join(FULL, "full.json"), encoding="utf-8"))
-    ver = cfg["version"]; base = f"{PREFIX}{ver}/"
-    if store.head(base + "release.json") is not None:
-        sys.exit(f"{base} is already published — bump full.json version before publishing again")
-    rel = {"schema": "full-pipeline-release/1", "id": "full-pipeline", "version": ver, "kit": cfg.get("kit"),
-           "published": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-           "phases": [{"id": p["id"], "label": p["label"], "dir": p["dir"], "pipeline": p["pipeline"]} for p in cfg["phases"]],
-           "files": {}}
-    total = 0
-    for rel_path in files():
-        data = open(os.path.join(FULL, rel_path), "rb").read(); total += len(data)
-        rel["files"][rel_path] = {"sha256": r2.sha256(data), "bytes": len(data)}
-        if not a.dry_run: store.put(base + rel_path, data, r2.content_type(rel_path))
-    body = json.dumps(rel, ensure_ascii=False, indent=1).encode("utf-8")
-    latest = json.dumps({"schema": "full-pipeline-latest/1", "version": ver, "release": base + "release.json", "published": rel["published"]}, indent=1).encode("utf-8")
-    if not a.dry_run:
-        store.put(base + "release.json", body, "application/json")
-        store.put(PREFIX + "latest.json", latest, "application/json")
-    print(f"{'(dry run) ' if a.dry_run else ''}full-pipeline {ver}: {len(rel['files'])} files, {total / 1e6:.1f} MB → {base}  (+ release.json, latest.json)")
+    phases = json.load(open(os.path.join(FULL, "full.json"), encoding="utf-8"))["phases"]
+    if a.only:
+        phases = [p for p in phases if a.only in (p["id"], p["pipeline"], p["dir"])]
+        if not phases: sys.exit(f"no phase {a.only!r} in full.json")
+    for p in phases: publish(store, p, a.dry_run)
 
 
 if __name__ == "__main__":

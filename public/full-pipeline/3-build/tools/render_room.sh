@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# S7: composed canvas -> render-ready .blend (+ low-quality stills). Run from the repo root.
-#   bash public/build-from-deck-pipeline/tools/render_room.sh <CODE> [stills-args...]
+# S7: composed canvas -> render-ready .blend (+ low-quality stills). Runs from any folder.
+#   bash tools/render_room.sh <CODE> [stills-args...]     (BUILD_WORK=<dir> overrides the work folder, default <pipeline>/work)
 #   e.g. ... INFRA_RECEPTION --res 960 --samples 24            all deck cameras
 #        ... INFRA_RECEPTION --res 640 --samples 12 --only CAM-A
 set -e
 CODE=$1; shift
 ROOT=$(pwd)
-PIPE=$ROOT/public/build-from-deck-pipeline
-WORK=$ROOT/pipeline-work/build-from-deck
+PIPE=$(cd "$(dirname "$0")/.." && pwd)
+WORK=${BUILD_WORK:-$PIPE/work}
 R=$WORK/renderer           # Floorplan Renderer skill scripts (R2 library/Skills/Floorplan Renderer/)
 OUT=$WORK/render
 BLENDER="/c/Program Files/Blender Foundation/Blender 4.5/blender.exe"

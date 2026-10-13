@@ -1,12 +1,12 @@
 /** Build + check the deck objects (objects-deck.mjs) — wiring, shared-name collisions, and an
  *  EVALUATION at the defaults and at every select option / checkbox flip, validating every face list.
- *    node public/build-from-deck-pipeline/objects/build-objects.mjs      (repo root)
+ *    node objects/build-objects.mjs      (from this pipeline folder)
  *  Writes objects/out/<file>.json. Text props (material, semantics, materialPath, finishes and the
  *  deck provenance group) are appended after the wiring so no geometry can read them.
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { exprInputs, runExprBody, liftScopeValue } from "@builderpluss/engine/node";
-import { buildFlow, FRAME, FIT, ANCHOR, KERNEL, MAPW } from "../../../tools/tmp-pobj/common.mjs";
+import { buildFlow, FRAME, FIT, ANCHOR, KERNEL, MAPW } from "../lib/pobj-common.mjs";
 import * as D from "./objects-deck.mjs";
 
 const OUT = new URL("./out/", import.meta.url);

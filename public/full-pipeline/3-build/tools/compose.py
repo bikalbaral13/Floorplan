@@ -110,7 +110,11 @@ def main(project_dir):
     # an object's own material binding lives in its definition; the renderer reads only the attachment's
     # params, so copy the defaults onto every attachment that does not state its own
     defaults = {}
-    cat = Path(__file__).resolve().parents[3] / "pipeline-work" / "build-from-deck" / "catalog.json"
+    # the S4 catalog: <pipeline>/work/catalog.json, else pipeline-work/build-from-deck/catalog.json in any parent folder
+    root = Path(__file__).resolve().parent.parent
+    cat = next((c for c in [root / "work" / "catalog.json",
+                            *(p / "pipeline-work" / "build-from-deck" / "catalog.json" for p in root.parents)] if c.exists()),
+               root / "work" / "catalog.json")
     if cat.exists():
         for o in json.loads(cat.read_text(encoding="utf-8"))["objects"]:
             defaults[o["path"]] = {q["id"]: q["value"] for q in o["params"] if q["id"] in ("materialPath", "finishes") and q["value"]}
