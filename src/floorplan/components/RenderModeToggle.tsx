@@ -1,9 +1,12 @@
 /**
- * Screen-wide Render mode toggle (header, left of the Files button): Graph | Primitives | Detailed.
+ * Screen-wide Render mode toggle (header, left of the Files button): Graph | Primitives | Detailed | Realistic.
  *
  *   Graph      — nodes, segments and spaces only; no parametric object is evaluated or drawn.
  *   Primitives — each attached object as its bounding outline in 2D and bounding cuboid in 3D.
- *   Detailed   — every object fully evaluated in 2D and 3D.
+ *   Detailed   — every object fully evaluated in 2D and 3D, shown plainly in 3D: flat colours, one sun, no
+ *                shadows / HDRI / textures / post effects — the fast mode to model in.
+ *   Realistic  — the same geometry as Detailed, fully lit in 3D: PBR materials with albedo / normal / roughness
+ *                maps, HDRI image light, sun shadows, the fixtures' lamps, ambient occlusion. 2D = Detailed.
  *
  * Per-browser view setting (localStorage), never written into the design. The per-object
  * `renderMode` parameter stays in the files but is meant to be passive once this drives rendering.
@@ -11,12 +14,13 @@
  */
 import { useSyncExternalStore } from "react";
 
-export type UiRenderMode = "geometry" | "primitives" | "detailed";
+export type UiRenderMode = "geometry" | "primitives" | "detailed" | "realistic";
 
 const MODES: { id: UiRenderMode; label: string; title: string }[] = [
   { id: "geometry", label: "Graph", title: "Graph only: nodes, segments and spaces; no object is rendered (still listed in Properties)" },
   { id: "primitives", label: "Primitives", title: "Primitives: each object as its bounding outline in 2D and bounding cuboid in 3D" },
-  { id: "detailed", label: "Detailed", title: "Detailed: every object fully evaluated in 2D and 3D (slow on big plans)" },
+  { id: "detailed", label: "Detailed", title: "Detailed: every object fully evaluated in 2D and 3D, plain shading in 3D (no shadows, HDRI or textures)" },
+  { id: "realistic", label: "Realistic", title: "Realistic: Detailed geometry with full 3D lighting: PBR textures (albedo, normal, roughness), HDRI, sun shadows, lamps, ambient occlusion" },
 ];
 
 const KEY = "bp.editor.renderMode";
@@ -25,7 +29,7 @@ const listeners = new Set<() => void>();
 function read(): UiRenderMode {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "geometry" || v === "primitives" || v === "detailed") return v;
+    if (v === "geometry" || v === "primitives" || v === "detailed" || v === "realistic") return v;
   } catch {
     /* storage blocked: fall back to the default */
   }

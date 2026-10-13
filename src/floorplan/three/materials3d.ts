@@ -11,12 +11,38 @@ import * as THREE from "three";
 import { useEffect, useState } from "react";
 import { DEFAULT_LIBRARY_PATH, cloudLibraryBaseUrl } from "../cloudLibrary";
 
+/** Image maps a material may ship (Library-relative paths or URLs; .png / .jpg / .webp / .ktx2). `sizeM` is
+ *  how many metres one tile of the image covers — UVs are in metres, so repeat = 1 / sizeM. */
+export interface MaterialMaps {
+  albedo?: string; normal?: string; roughness?: string; metallic?: string; ao?: string;
+  sizeM?: number;
+  /** "gl" (default, three.js / Blender) or "dx" (green channel flipped). */
+  normalConvention?: "gl" | "dx";
+}
 export interface MaterialDef {
   id?: string;
   procedural?: { type?: string; params?: Record<string, unknown> };
-  pbr?: { baseColor?: string; roughness?: number; metallic?: number; transmission?: number; ior?: number; sheen?: number };
+  pbr?: { baseColor?: string; roughness?: number; metallic?: number; transmission?: number; ior?: number; sheen?: number; maps?: MaterialMaps };
+  /** The Blender-side surface detail; the Realistic view reads normal strength, coat and roughness variation. */
+  surface?: {
+    normal?: { strength?: number; scale?: number };
+    coat?: { weight?: number; roughness?: number; ior?: number };
+    roughnessVariation?: { amount?: number; scale?: number };
+  };
+  /** Same image maps as pbr.maps, accepted at the top level too. */
+  maps?: MaterialMaps;
   emission?: { kelvin?: number; luminance?: number };
 }
+
+/** How the 3D view shows surfaces: "basic" (Detailed mode) = flat colour, no maps, no environment response;
+ *  "realistic" = physical material with albedo / normal / roughness maps. */
+export type SurfaceLook = "basic" | "realistic";
+
+/** Redraw hooks of the mounted 3D canvases: a texture that finishes loading after the frame was drawn must
+ *  ask for a new one, because the canvas only renders on demand. */
+const redraws = new Set<() => void>();
+export function registerRedraw(fn: () => void): () => void { redraws.add(fn); return () => { redraws.delete(fn); }; }
+const redrawAll = () => redraws.forEach((f) => f());
 export { rowMaterialPath, type MaterialBinding } from "./materialBinding";
 import type { MaterialBinding } from "./materialBinding";
 
@@ -185,13 +211,113 @@ export function proceduralTexture(path: string, def: MaterialDef | null | undefi
   return out;
 }
 
+/* ── Realistic maps ─────────────────────────────────────────────────────────────────────────────────────
+ * No material in the Library ships image maps yet, so a Realistic surface derives its normal and roughness
+ * maps from the same procedural canvas the albedo comes from: the canvas's luminance is read as a height
+ * field (dark grout, plank joints and veins sit lower), its slope becomes a tangent-space normal map, and
+ * `surface.roughnessVariation` modulates roughness by the same field. Image maps, when a material lists them,
+ * replace the derived ones. All of it is built on first use in Realistic mode only. */
+const derivedCache = new Map<string, { normal: THREE.Texture; rough: THREE.Texture } | null>();
+function derivedMaps(path: string, def: MaterialDef, albedo: { tex: THREE.Texture; periodM: number }): { normal: THREE.Texture; rough: THREE.Texture } | null {
+  if (derivedCache.has(path)) return derivedCache.get(path)!;
+  const src = (albedo.tex as THREE.CanvasTexture).image as HTMLCanvasElement | undefined;
+  if (!src?.getContext) { derivedCache.set(path, null); return null; }
+  const W = src.width, H = src.height;
+  const px = src.getContext("2d")!.getImageData(0, 0, W, H).data;
+  const h = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) h[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
+  const at = (x: number, y: number) => h[((y + H) % H) * W + ((x + W) % W)];
+  const strength = (def.surface?.normal?.strength ?? 0.4) * 6;
+  const rv = def.surface?.roughnessVariation?.amount ?? 0.1;
+  const baseR = def.pbr?.roughness ?? 0.6;
+  const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; };
+  const nc = mk(), rc = mk();
+  const nImg = nc.getContext("2d")!.createImageData(W, H), rImg = rc.getContext("2d")!.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    // Sobel slope, wrapping at the edges so the tile stays seamless
+    const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+    const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+    let nx = -dx * strength, ny = -dy * strength, nz = 1;
+    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    const k = (y * W + x) * 4;
+    nImg.data[k] = (nx * 0.5 + 0.5) * 255; nImg.data[k + 1] = (ny * 0.5 + 0.5) * 255; nImg.data[k + 2] = (nz * 0.5 + 0.5) * 255; nImg.data[k + 3] = 255;
+    // lower (darker) parts read rougher: grout and joints are matt, the faces carry the sheen
+    const r = Math.min(1, Math.max(0.02, baseR + (0.5 - at(x, y)) * rv * 2));
+    rImg.data[k] = rImg.data[k + 1] = rImg.data[k + 2] = r * 255; rImg.data[k + 3] = 255;
+  }
+  nc.getContext("2d")!.putImageData(nImg, 0, 0);
+  rc.getContext("2d")!.putImageData(rImg, 0, 0);
+  const wrap = (c: HTMLCanvasElement) => {
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.repeat.copy(albedo.tex.repeat);
+    t.colorSpace = THREE.NoColorSpace;
+    return t;
+  };
+  const out = { normal: wrap(nc), rough: wrap(rc) };
+  derivedCache.set(path, out);
+  return out;
+}
+
+/** Image texture loading (png / jpg / webp, and KTX2 once a renderer has registered the transcoder). */
+let ktx2: { load: (url: string, onLoad: (t: THREE.Texture) => void, onProgress?: unknown, onError?: (e: unknown) => void) => void } | null = null;
+export function setKtx2Loader(loader: typeof ktx2) { ktx2 = loader; }
+const imageTex = new Map<string, Promise<THREE.Texture | null>>();
+async function loadImageTexture(ref: string, color: boolean, sizeM: number): Promise<THREE.Texture | null> {
+  const key = `${ref}|${color}|${sizeM}`;
+  let p = imageTex.get(key);
+  if (!p) {
+    base ??= cloudLibraryBaseUrl().catch(() => "").then((b) => (b || DEFAULT_LIBRARY_PATH).replace(/\/+$/, ""));
+    p = base.then((b) => new Promise<THREE.Texture | null>((resolve) => {
+      const url = /^https?:/i.test(ref) ? ref : `${b}/${ref.replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/")}`;
+      const done = (t: THREE.Texture) => {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.repeat.set(1 / sizeM, 1 / sizeM);
+        t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        t.needsUpdate = true;
+        resolve(t);
+      };
+      if (/\.ktx2$/i.test(url)) {
+        if (!ktx2) { resolve(null); return; }
+        ktx2.load(url, done, undefined, () => resolve(null));
+      } else new THREE.TextureLoader().load(url, done, undefined, () => resolve(null));
+    }));
+    imageTex.set(key, p);
+  }
+  return p;
+}
+/** Hang a material's image maps on it as they arrive (the derived maps show until then). */
+function applyImageMaps(mat: THREE.MeshPhysicalMaterial, maps: MaterialMaps) {
+  const size = maps.sizeM && maps.sizeM > 0 ? maps.sizeM : 1;
+  const set = (ref: string | undefined, color: boolean, apply: (t: THREE.Texture) => void) => {
+    if (!ref) return;
+    void loadImageTexture(ref, color, size).then((t) => { if (t) { apply(t); mat.needsUpdate = true; redrawAll(); } });
+  };
+  set(maps.albedo, true, (t) => { mat.map = t; mat.color.set("#ffffff"); });
+  set(maps.normal, false, (t) => { mat.normalMap = t; if (maps.normalConvention === "dx") mat.normalScale.y = -Math.abs(mat.normalScale.y); });
+  set(maps.roughness, false, (t) => { mat.roughnessMap = t; mat.roughness = 1; });
+  set(maps.metallic, false, (t) => { mat.metalnessMap = t; mat.metalness = 1; });
+  set(maps.ao, false, (t) => { mat.aoMap = t; });
+}
+
 const cache = new Map<string, THREE.Material>();
+/** Basic look (Detailed mode): a Lambert surface in the material's base colour — no maps, no reflections, no
+ *  environment response, so it costs a fraction of a physical material per pixel. Glazing stays see-through. */
+function basicMaterial(color: string, def: MaterialDef | null | undefined, opts?: { emissive?: string; emissiveIntensity?: number }): THREE.Material {
+  const pbr = def?.pbr;
+  const glass = (pbr?.transmission ?? 0) > 0;
+  const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(pbr?.baseColor ?? color), side: THREE.DoubleSide });
+  if (glass) { mat.transparent = true; mat.opacity = 0.3; mat.depthWrite = false; }
+  if (opts?.emissiveIntensity) { mat.emissive = new THREE.Color(opts.emissive ?? "#2563eb"); mat.emissiveIntensity = opts.emissiveIntensity; }
+  return mat;
+}
+
 /** A shared THREE material for a library path (falls back to the row colour while loading / on failure). */
-export function libraryMaterial(path: string, fallbackColor: string, def: MaterialDef | null | undefined, opts?: { emissive?: string; emissiveIntensity?: number }): THREE.Material {
+export function libraryMaterial(path: string, fallbackColor: string, def: MaterialDef | null | undefined, opts?: { emissive?: string; emissiveIntensity?: number; look?: SurfaceLook }): THREE.Material {
+  const look: SurfaceLook = opts?.look ?? "realistic";
   const sel = opts?.emissiveIntensity ? `|sel:${opts.emissive}:${opts.emissiveIntensity}` : "";
-  const key = `${def ? path : `flat:${fallbackColor}`}${sel}`;
+  const key = `${look}|${def ? path : `flat:${fallbackColor}`}${sel}`;
   let m = cache.get(key);
   if (m) return m;
+  if (look === "basic") { m = basicMaterial(fallbackColor, def, opts); cache.set(key, m); return m; }
   const pbr = def?.pbr;
   const transmission = pbr?.transmission ?? 0;
   const mat = new THREE.MeshPhysicalMaterial({
@@ -211,6 +337,15 @@ export function libraryMaterial(path: string, fallbackColor: string, def: Materi
   // The procedural, drawn to a texture: the colour then comes from the map (white base so it is not tinted twice).
   const pt = transmission > 0 ? null : proceduralTexture(path, def);
   if (pt) { mat.map = pt.tex; mat.color = new THREE.Color("#ffffff"); }
+  // Realistic surface detail: a normal map and a roughness map from the same procedural, and the coat.
+  if (pt && def) {
+    const dm = derivedMaps(path, def, pt);
+    if (dm) { mat.normalMap = dm.normal; mat.normalScale.set(1, 1); mat.roughnessMap = dm.rough; mat.roughness = 1; }
+  }
+  const coat = def?.surface?.coat;
+  if (coat?.weight) { mat.clearcoat = coat.weight; mat.clearcoatRoughness = coat.roughness ?? 0.1; }
+  const maps = def?.pbr?.maps ?? def?.maps;
+  if (maps && transmission === 0) applyImageMaps(mat, maps);
   if (def?.emission?.luminance) { mat.emissive = new THREE.Color("#fff3e0"); mat.emissiveIntensity = Math.min(4, def.emission.luminance / 300); }
   if (opts?.emissiveIntensity) { mat.emissive = new THREE.Color(opts.emissive ?? "#2563eb"); mat.emissiveIntensity = opts.emissiveIntensity; }
   cache.set(key, mat);

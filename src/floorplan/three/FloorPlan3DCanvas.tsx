@@ -2,7 +2,8 @@
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Edges, Environment, Html, OrbitControls, useTexture } from "@react-three/drei";
-import { addBoxUV, libraryMaterial, rowMaterialPath, useMaterialDefs, type MaterialBinding } from "./materials3d";
+import { addBoxUV, libraryMaterial, rowMaterialPath, useMaterialDefs, type MaterialBinding, type SurfaceLook } from "./materials3d";
+import { LookContext, useLook, MovingContext, useCameraMotion, RedrawBridge, Ktx2Setup, StaticShadows, LampLights, type LampPlacement } from "./realistic3d";
 import { EffectComposer, N8AO, SMAA } from "@react-three/postprocessing";
 import { Component as ReactComponent } from "react";
 import { DEFAULT_LIBRARY_PATH } from "../cloudLibrary";
@@ -297,8 +298,26 @@ function FlowMeshes({ meshes, ppm, onSelectHost, selectedHost }: { meshes: Hoste
   }, [meshes, ppm]);
   const matDefs = useMaterialDefs(built.map((x) => x.path));
   useEffect(() => () => built.forEach((x) => x.geom.dispose()), [built]);
+  const look = useLook();
+  // Realistic: a light for every lighting fixture, at the bottom centre of its mesh (where a pendant's bulb,
+  // a downlight's lens or a strip's diffuser faces the room). Same local frame as the meshes.
+  const lamps = useMemo((): LampPlacement[] => {
+    if (look !== "realistic") return [];
+    const out: LampPlacement[] = [];
+    for (const m of meshes) {
+      const ref = m.bind?.lamp;
+      if (!ref) continue;
+      const box = new THREE.Box3();
+      for (const x of built) if (x.key.startsWith(`${m.id}|`)) { x.geom.computeBoundingBox(); if (x.geom.boundingBox) box.union(x.geom.boundingBox); }
+      if (box.isEmpty()) continue;
+      const c = box.getCenter(new THREE.Vector3());
+      out.push({ key: m.id, ref, pos: [c.x, box.min.y - 0.02, c.z], spanM: Math.max(box.max.x - box.min.x, box.max.z - box.min.z) });
+    }
+    return out;
+  }, [look, meshes, built]);
   return (
     <group>
+      {lamps.length > 0 && <LampLights lamps={lamps} />}
       {built.map((x) => {
         const sel = sameHost(x.host, selectedHost);
         return (
@@ -309,7 +328,7 @@ function FlowMeshes({ meshes, ppm, onSelectHost, selectedHost }: { meshes: Hoste
             geometry={x.geom}
             userData={x.host ? { host: x.host } : undefined}
             onClick={x.host && onSelectHost ? (ev: ThreeEvent<MouseEvent>) => { ev.stopPropagation(); onSelectHost(x.host!, !!ev.nativeEvent?.shiftKey); } : undefined}
-            material={libraryMaterial(x.path, x.color, x.path ? matDefs.get(x.path) : null, sel ? { emissive: SELECT_EMISSIVE, emissiveIntensity: 0.45 } : undefined)}
+            material={libraryMaterial(x.path, x.color, x.path ? matDefs.get(x.path) : null, sel ? { emissive: SELECT_EMISSIVE, emissiveIntensity: 0.45, look } : { look })}
           >
             {!x.path && <Edges color="#0f172a" threshold={15} lineWidth={1} />}
           </mesh>
@@ -403,6 +422,8 @@ interface Props {
   selectedHost?: MeshHost | null;
   /** Image-based light: "indoor" (default), "outdoor", or a Library path / URL to an .hdr (see HDRI_PRESETS). */
   hdri?: string;
+  /** Render mode look: "basic" (Detailed — plain, fast) or "realistic" (PBR maps, HDRI, shadows, lamps, AO). */
+  look?: SurfaceLook;
   /** The plan's walkthrough entity (route + camera path) — enables the Walkthrough bar. */
   walkthrough?: Walkthrough;
   /** Build a walkthrough from this plan (shown on the bar when the plan has none). */
@@ -719,14 +740,14 @@ class EnvFallback extends ReactComponent<{ children: ReactNode; fallback: ReactN
 
 /** Key light with soft shadows, aimed at the building centre, its shadow frustum sized to the building —
  *  a default 5 m frustum clips the shadows of anything larger, and a huge one blurs every shadow. */
-function SunLight({ cx, cy, span }: { cx: number; cy: number; span: number }) {
+function SunLight({ cx, cy, span, shadows = true }: { cx: number; cy: number; span: number; shadows?: boolean }) {
   const { scene } = useThree();
   const light = useMemo(() => new THREE.DirectionalLight("#ffffff", 1.35), []);
   useEffect(() => {
     const half = Math.max(8, span * 0.75);
     light.position.set(cx + span * 0.6, cy - span * 0.45, Math.max(14, span * 0.9));
     light.target.position.set(cx, cy, 0);
-    light.castShadow = true;
+    light.castShadow = shadows;
     light.shadow.mapSize.set(2048, 2048);
     Object.assign(light.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 0.5, far: span * 4 + 40 });
     light.shadow.camera.updateProjectionMatrix();
@@ -736,7 +757,7 @@ function SunLight({ cx, cy, span }: { cx: number; cy: number; span: number }) {
     light.shadow.normalBias = Math.max(0.05, (half * 2) / 2048 * 2.5);
     scene.add(light, light.target);
     return () => { scene.remove(light, light.target); };
-  }, [scene, light, cx, cy, span]);
+  }, [scene, light, cx, cy, span, shadows]);
   return null;
 }
 
@@ -757,6 +778,21 @@ function ShadowFlags() {
     invalidate();
   });
   return null;
+}
+
+/** Realistic post effects. Contact darkening where surfaces meet (corners, under furniture, between baffles) +
+ *  clean edges; N8AO is screen-space, so it costs the same on a room or a floor — but it is the most expensive
+ *  pass, so it is dropped while the camera moves and comes back when it stops. */
+function RealisticEffects() {
+  const moving = useCameraMotion(true);
+  return (
+    <MovingContext.Provider value={moving}>
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        {moving ? <></> : <N8AO aoRadius={0.6} distanceFalloff={0.4} intensity={2.2} quality="medium" halfRes />}
+        <SMAA />
+      </EffectComposer>
+    </MovingContext.Provider>
+  );
 }
 
 /** Bridge component mounted inside <Canvas/> so it has access to gl/scene/camera
@@ -1045,7 +1081,11 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, levels, activeElevationM, contentOnly = false, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef, onSelectHost, selectedHost, hdri = "indoor", walkthrough, onGenerateWalkthrough }: Props) {
+export default function FloorPlan3DCanvas({ model, levels, activeElevationM, contentOnly = false, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef, onSelectHost, selectedHost, hdri = "indoor", walkthrough, onGenerateWalkthrough, look: lookProp }: Props) {
+  // A level drawn inside another canvas (contentOnly) inherits the outer canvas's look.
+  const inheritedLook = useLook();
+  const look: SurfaceLook = lookProp ?? (contentOnly ? inheritedLook : "basic");
+  const realistic = look === "realistic";
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -1453,7 +1493,7 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
             position={[tf?.tx ?? 0, y + (tf?.ty ?? 0), tf?.tz ?? 0]}
             rotation={[tf?.rx ?? 0, tf?.ry ?? 0, tf?.rz ?? 0]}
             scale={[tf?.mx ?? 1, tf?.my ?? 1, tf?.mz ?? 1]}
-            {...(pm.materialPath && !ds ? { material: libraryMaterial(pm.materialPath, pm.color, primMatDefs.get(pm.materialPath), sameHost(pm.host, selectedHost) ? { emissive: SELECT_EMISSIVE, emissiveIntensity: 0.45 } : undefined) } : {})}
+            {...(pm.materialPath && !ds ? { material: libraryMaterial(pm.materialPath, pm.color, primMatDefs.get(pm.materialPath), sameHost(pm.host, selectedHost) ? { emissive: SELECT_EMISSIVE, emissiveIntensity: 0.45, look } : { look }) } : {})}
           >
             {geom}
             {!(pm.materialPath && !ds) && <meshStandardMaterial
@@ -3332,7 +3372,11 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
       // plane reads as the floor and height rises vertically. Framed on the building centre (bcX, bcY).
       camera={{ position: [bcX + camDist, bcY - camDist, camDist * 0.8], up: [0, 0, 1], fov: 45, near: 0.1, far: 1000 }}
       style={{ width: "100%", height: "100%", background: "#eef2f7" }}
+      // Shadow maps stay ENABLED in both looks (toggling it would recompile every material); in Detailed no
+      // light casts, so no shadow pass runs. Frames are drawn on demand: controls, loads and the walkthrough
+      // ask for them, so an idle view costs nothing.
       shadows="soft"
+      frameloop="demand"
       gl={{ preserveDrawingBuffer: true }}
       onCreated={({ camera, gl }) => {
         camera.up.set(0, 0, 1);
@@ -3356,26 +3400,37 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
           centerY={bcY}
         />
       )}
-      {/* Image-based light: an HDRI gives physical materials something to reflect (glass, brass, lacquer)
-          and soft, directional fill. The two key lights stay for shape; the ambient drops, the HDRI fills. */}
-      <EnvFallback key={hdri} fallback={<Suspense fallback={null}><Environment preset="apartment" environmentIntensity={1.0} /></Suspense>}>
-        <Suspense fallback={null}>
-          <Environment files={hdriUrl(hdri)} environmentIntensity={hdri === "outdoor" ? 0.9 : 1.1} />
-        </Suspense>
-      </EnvFallback>
-      {/* The post-processing composer draws onto the clear colour, not the CSS background — without an explicit
-          scene background every open sky reads black. */}
-      <color attach="background" args={["#e8e9eb"]} />
-      <hemisphereLight args={["#ffffff", "#d9d7d2", 0.45]} />
-      <SunLight cx={bcX} cy={bcY} span={Math.max(widthM, depthM)} />
-      <directionalLight position={[-15, 20, -10]} intensity={0.3} />
-      <ShadowFlags />
-      {/* Contact darkening where surfaces meet (corners, under furniture, between baffles) + clean edges.
-          N8AO is screen-space and depth-aware, so it costs about the same on a 10 m room or a whole floor. */}
-      <EffectComposer multisampling={0} enableNormalPass={false}>
-        <N8AO aoRadius={0.6} distanceFalloff={0.4} intensity={2.2} quality="medium" halfRes />
-        <SMAA />
-      </EffectComposer>
+      <LookContext.Provider value={look}>
+      <RedrawBridge />
+      {realistic ? (
+        <>
+          <Ktx2Setup />
+          {/* Image-based light: an HDRI gives physical materials something to reflect (glass, brass, lacquer)
+              and soft, directional fill. The two key lights stay for shape; the ambient drops, the HDRI fills. */}
+          <EnvFallback key={hdri} fallback={<Suspense fallback={null}><Environment preset="apartment" environmentIntensity={1.0} /></Suspense>}>
+            <Suspense fallback={null}>
+              <Environment files={hdriUrl(hdri)} environmentIntensity={hdri === "outdoor" ? 0.9 : 1.1} />
+            </Suspense>
+          </EnvFallback>
+          {/* The post-processing composer draws onto the clear colour, not the CSS background — without an explicit
+              scene background every open sky reads black. */}
+          <color attach="background" args={["#e8e9eb"]} />
+          <hemisphereLight args={["#ffffff", "#d9d7d2", 0.45]} />
+          <SunLight cx={bcX} cy={bcY} span={Math.max(widthM, depthM)} />
+          <directionalLight position={[-15, 20, -10]} intensity={0.3} />
+          <ShadowFlags />
+          <StaticShadows enabled />
+          <RealisticEffects />
+        </>
+      ) : (
+        <>
+          {/* Detailed: plain shading — a brighter hemisphere fill stands in for the HDRI, the sun casts nothing. */}
+          <color attach="background" args={["#eef2f7"]} />
+          <hemisphereLight args={["#ffffff", "#cfd4dc", 1.1]} />
+          <SunLight cx={bcX} cy={bcY} span={Math.max(widthM, depthM)} shadows={false} />
+          <directionalLight position={[-15, 20, -10]} intensity={0.35} />
+        </>
+      )}
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[bcX, bcY, 1]} />
       <ZUpController />
 
@@ -3417,6 +3472,7 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
         ))}
       </group>
       <WalkCamera walk={walkthrough} ppm={ppm} state={walkRef} />
+      </LookContext.Provider>
     </Canvas>
     {(walkthrough || onGenerateWalkthrough) && (
       <WalkthroughBar walk={walkthrough} state={walkRef} onGenerate={onGenerateWalkthrough} />

@@ -2074,7 +2074,7 @@ const defaultBinding = (obj: object | undefined): MaterialBinding => {
     // A definition without a spine (a Python object, incl. Math Engine translations) declares them as parameters.
     const params = ((obj as { parameters?: { key: string; default?: unknown }[] }).parameters ?? []);
     const val = (id: string) => String(props.find((p) => p.id === id)?.value ?? params.find((p) => p.key === id)?.default ?? "");
-    b = { materialPath: val("materialPath"), finishes: val("finishes") };
+    b = { materialPath: val("materialPath"), finishes: val("finishes"), lamp: val("lamp") };
     defaultBindingCache.set(obj, b);
   }
   return b;
@@ -2091,7 +2091,7 @@ const roomFloorBind = (att: { params?: Record<string, unknown> }, obj: object | 
 /** An attachment's material binding (what `rowMaterialPath` reads): its own params, else the definition's defaults. */
 const bindOf = (att: { params?: Record<string, unknown> }, obj?: object): MaterialBinding => {
   const d = defaultBinding(obj);
-  return { materialPath: String(att.params?.materialPath || d.materialPath || ""), finishes: String(att.params?.finishes || d.finishes || "") };
+  return { materialPath: String(att.params?.materialPath || d.materialPath || ""), finishes: String(att.params?.finishes || d.finishes || ""), lamp: String(att.params?.lamp || d.lamp || "") };
 };
 export type PrimMass3D = {
   /** The canvas host this solid belongs to (node / segment / space + attachment), so a 3D click can select it. */
@@ -3698,7 +3698,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Header ▸ Plan | Build | Present — drives which workflow buttons lead the Drawing toolbar. */
   /** Geometry mode draws every segment (walls, doors, windows, opening pieces) as a plain centreline. */
   const geomOnly = uiRenderMode === "geometry";
-  const viewRenderMode = uiRenderMode === "detailed" ? "Full" : uiRenderMode === "primitives" ? "Basic" : "Nothing";
+  const viewRenderMode = uiRenderMode === "detailed" || uiRenderMode === "realistic" ? "Full" : uiRenderMode === "primitives" ? "Basic" : "Nothing";
   const vp = (params?: Record<string, unknown>): Record<string, unknown> => ({ ...(params ?? {}), renderMode: viewRenderMode });
   /** The 3D canvas is mounted only in these modes. The mesh builders feeding it (wall bands, openings,
    *  parametric objects, other levels) are skipped otherwise — they re-ran on every 2D edit for a view
@@ -32037,6 +32037,7 @@ User request: ${aiPrompt.trim()}`;
                   massingExtrudeUpwards={massingExtrudeUpwards}
                   massingPreview={flowMassingPreview}
                   meshPreview={shell3d ? undefined : meshPreviewAll}
+                  look={uiRenderMode === "realistic" ? "realistic" : "basic"}
                   mapUnderlay={(() => {
                     // Prefer the OSM basemap clipped to the site region (the real map under the building);
                     // else fall back to the dropped image underlay textured on the ground (Approach A).

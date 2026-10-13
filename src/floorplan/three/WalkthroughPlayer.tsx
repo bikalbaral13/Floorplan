@@ -66,6 +66,13 @@ export function WalkCamera({ walk, ppm, state }: { walk?: Walkthrough; ppm: numb
   const saved = useRef<{ pos: THREE.Vector3; fov: number; target?: THREE.Vector3 } | null>(null);
   useEffect(() => { state.current.canvas = gl.domElement; }, [gl, state]);
   useEffect(() => { state.current.lengthM = c?.length ?? 0; state.current.stopU = c?.stopU ?? []; }, [c, state]);
+  // The canvas draws on demand, and Play / Exit / scrubbing happen in the HTML bar — outside any frame. While a
+  // walk is active the frame loop below keeps itself going; this wakes it when the bar starts or leaves one.
+  useEffect(() => {
+    let was = false;
+    const id = setInterval(() => { const on = !!state.current.active; if (on || was) invalidate(); was = on; }, 100);
+    return () => clearInterval(id);
+  }, [state, invalidate]);
   useFrame((_, dtRaw) => {
     const st = state.current;
     const cam = camera as THREE.PerspectiveCamera;

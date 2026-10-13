@@ -1,7 +1,12 @@
 /** How an attachment's params bind library materials to its rows — split out of materials3d.ts so the 2D editor can
  *  resolve a row's material path without pulling three.js into its chunk (materials3d re-exports all of this). */
 /** The attachment params that bind materials. */
-export interface MaterialBinding { materialPath?: string; finishes?: string }
+export interface MaterialBinding {
+  materialPath?: string;
+  finishes?: string;
+  /** A lighting fixture's lamp/1 reference ("Objects/Photometry/LED/…json") — Realistic 3D lights it. */
+  lamp?: string;
+}
 
 /** Row name as `finishes` matches it: the head before any em dash / " - ", lower-cased. */
 const head = (s: string) => s.split("—")[0].split(" - ")[0].trim().toLowerCase();
