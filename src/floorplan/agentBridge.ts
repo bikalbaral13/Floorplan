@@ -168,22 +168,32 @@ export function startAgentBridge(base = bridgeBase()): () => void {
     }).catch(() => { /* result post is best-effort */ });
   };
 
+  /** Last time a command arrived: right after one, more usually follow, so the relay is polled fast. */
+  let lastCommandAt = 0;
   const loop = async (): Promise<void> => {
     while (!stopped) {
       try {
         const focused = typeof document !== "undefined" && document.hasFocus() ? "1" : "0";
         const design = relay && linkedDesignPath ? `&design=${encodeURIComponent(linkedDesignPath)}` : "";
-        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}${design}`, { method: "GET", headers: auth });
+        // hold=1: the relay may keep this request open while the agent is active; batch=1: it may hand
+        // over several queued calls at once (`more`), run here in the order given.
+        const caps = relay ? "&hold=1&batch=1" : "";
+        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}${design}${caps}`, { method: "GET", headers: auth });
         if (relay && res.status === 401) { setRelaySession(null); emitRelayState("expired"); stopped = true; running = false; break; }
-        const cmd = (await res.json()) as { id?: string; tool?: string; args?: Record<string, unknown>; latched?: boolean };
+        type Cmd = { id?: string; tool?: string; args?: Record<string, unknown> };
+        const cmd = (await res.json()) as Cmd & { latched?: boolean; held?: boolean; more?: Cmd[] };
         if (relay) emitRelayState(cmd.latched === false ? "idle" : "connected");
         if (cmd && cmd.id && cmd.tool) {
-          const job = { id: cmd.id, tool: cmd.tool, args: cmd.args };
-          if (DETACHED_TOOLS.has(cmd.tool)) void run(job); // keep polling while it waits on the user
-          else await run(job);
-        } else if (relay) {
-          // The relay answers at once (a function cannot hold a long-poll cheaply): poll about once a second.
-          await new Promise((r) => setTimeout(r, 1000));
+          lastCommandAt = Date.now();
+          for (const c of [cmd, ...(cmd.more ?? [])]) {
+            if (!c.id || !c.tool) continue;
+            const job = { id: c.id, tool: c.tool, args: c.args };
+            if (DETACHED_TOOLS.has(c.tool)) void run(job); // keep polling while it waits on the user
+            else await run(job);
+          }
+        } else if (relay && !cmd.held) {
+          // Not held: poll fast for 30 s after the last command (calls come in bursts), else about once a second.
+          await new Promise((r) => setTimeout(r, Date.now() - lastCommandAt < 30_000 ? 150 : 1000));
         }
       } catch {
         // Server not reachable (not started yet / restarted) — back off, then retry.

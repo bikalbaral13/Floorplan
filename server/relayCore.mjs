@@ -19,17 +19,25 @@
  *  RELAY_WAIT_MS returns a TICKET, and the agent keeps waiting with the extra `await_result` tool. */
 
 import crypto from "node:crypto";
-import { putObject, getObjectText, listObjects, deleteObject } from "../tools/r2.mjs";
+import { AsyncLocalStorage } from "node:async_hooks";
+import * as r2raw from "../tools/r2.mjs";
 import { TOOLS, timeoutFor, newRunState, stepGate } from "../packages/floorplan-bridge/tools.mjs";
 import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
 import { RELAY_HEADLESS_TOOLS, HEADLESS_TOOL_NAMES, runHeadless, validDesignPath, saveDesignJson } from "./relayHeadless.mjs";
 import { VIEWER_TOOLS, VIEWER_TOOL_NAMES, runViewerTool, handleViewerRoute } from "./viewerSessions.mjs";
 
 const WAIT_MS = Number(process.env.RELAY_WAIT_MS || 50_000);      // one /mcp request waits this long, then tickets
-const POLL_MS = 400;                                              // how often /mcp checks for the result
+const POLL_MS = 150;                                              // how often /mcp checks for the result
+/** While the agent is active (a call within HOT_MS), /next holds up to NEXT_HOLD_MS for a call to arrive
+ *  instead of answering "idle" at once, so the tab picks a call up almost at once. When the agent is quiet
+ *  it answers at once, so an idle tab costs no function time. */
+const NEXT_HOLD_MS = Number(process.env.RELAY_NEXT_HOLD_MS || 8_000);
+const NEXT_POLL_MS = 250;
+const HOT_MS = 60_000;
+const AGENT_SEEN_WRITE_MS = 20_000;                               // lastAgentCallAt is written at most this often
+const MAX_BATCH = 20;                                             // calls handed to a batch-capable tab per /next
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LATCH_STALE_MS = 30_000;
-const MAX_QUEUED = 200;
 const INLINE_LIMIT = 4_000_000;                                   // Vercel caps bodies at ~4.5 MB
 const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 /** Reads can safely run again on another tab; anything else must never run twice. */
@@ -72,9 +80,41 @@ const originAllowed = (o) => !o || LOCAL_ORIGIN.test(o) || PREVIEW_ORIGIN.test(o
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const rand = (n) => crypto.randomBytes(n).toString("base64url");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* ── timing: every R2 request inside one relay request is counted, and the totals go out as a
+ *  Server-Timing header (and a console line with RELAY_TIMING=1), so a slow call shows where it waited. ── */
+const timing = new AsyncLocalStorage();
+const timed = (fn, name) => async (...a) => {
+  const t = timing.getStore(), t0 = performance.now();
+  try { return await fn(...a); } finally {
+    const ms = performance.now() - t0;
+    if (t) { t.ops++; t.r2ms += ms; if (ms > 1000) (t.notes.slow ??= []).push(`${name} ${String(a[1]).split("/").slice(-2).join("/")} ${ms.toFixed(0)}ms`); }
+  }
+};
+/** R2 now and then leaves one request hanging for 10 s or more. A read that has not answered within
+ *  READ_RETRY_MS is sent again and whichever answers first wins (a read is safe to repeat). Writes are not
+ *  retried: a late PUT landing after a newer one would overwrite it. */
+const READ_RETRY_MS = Number(process.env.RELAY_READ_RETRY_MS || 1_500);
+const hedged = (fn) => (...a) => new Promise((resolve, reject) => {
+  // An error (a 404 for a result not written yet) is an answer too: it settles at once. Only silence re-sends.
+  let done = false;
+  const settle = (f) => (v) => { if (!done) { done = true; clearTimeout(timer); f(v); } };
+  const attempt = () => fn(...a).then(settle(resolve), settle(reject));
+  const timer = setTimeout(() => { if (!done) { note("hedged", (timing.getStore()?.notes.hedged ?? 0) + 1); attempt(); } }, READ_RETRY_MS);
+  attempt();
+});
+const putObject = timed(r2raw.putObject, "put"), getObjectText = timed(hedged(r2raw.getObjectText), "get");
+const listObjects = timed(hedged(r2raw.listObjects), "list"), deleteObject = timed(r2raw.deleteObject, "delete");
+const note = (k, v) => { const t = timing.getStore(); if (t) t.notes[k] = v; };
 const P = (sid) => `relay/${sid}`;
 const send = (res, status, body, headers = {}) => {
   res.statusCode = status;
+  const t = timing.getStore();
+  if (t && !res.headersSent) {
+    const total = performance.now() - t.start;
+    res.setHeader("Server-Timing", `total;dur=${total.toFixed(0)}, r2;dur=${t.r2ms.toFixed(0)};desc="${t.ops} ops${t.notes.slow ? `; slow: ${t.notes.slow.join(", ")}` : ""}"`);
+    if (process.env.RELAY_TIMING === "1") console.log(`[relay] ${t.route} ${total.toFixed(0)}ms r2=${t.ops}ops/${t.r2ms.toFixed(0)}ms`, JSON.stringify(t.notes));
+  }
   for (const [k, v] of Object.entries({ "Content-Type": "application/json", "Cache-Control": "no-store", ...headers })) res.setHeader(k, v);
   res.end(typeof body === "string" ? body : JSON.stringify(body));
 };
@@ -117,6 +157,22 @@ function presign(cfg, method, key, expiresSec = 300) {
   return `${url.protocol}//${host}${path}?${canonQ}&X-Amz-Signature=${crypto.createHmac("sha256", kSig).update(sts).digest("hex")}`;
 }
 
+/** sid → { agentHash, tabHash, expiresAt, at }: best effort per instance (a warm function keeps it). Only
+ *  token checks use it; anything that reads session STATE still reads session.json. */
+const authCache = new Map();
+const AUTH_CACHE_MS = 60_000;
+const rememberAuth = (sid, s) => { if (s?.tabHash || s?.agentHash) authCache.set(sid, { agentHash: s.agentHash, tabHash: s.tabHash, expiresAt: s.expiresAt, at: Date.now() }); };
+
+/** Token check for routes that need no session state: answered from the cache when it can be. */
+async function authFor(cfg, req, kind) {
+  const m = /^Bearer\s+(fp[at])_([A-Za-z0-9]{10,40})_([A-Za-z0-9_-]{20,})$/.exec(String(req.headers.authorization || ""));
+  if (!m || m[1] !== (kind === "agent" ? "fpa" : "fpt")) return { error: 401 };
+  const sid = m[2], c = authCache.get(sid);
+  const want = sha(`${m[1]}_${sid}_${m[3]}`);
+  if (c && Date.now() - c.at < AUTH_CACHE_MS && Date.now() <= c.expiresAt && want === (kind === "agent" ? c.agentHash : c.tabHash)) return { sid };
+  return sessionFor(cfg, req, kind);
+}
+
 /** `fpa_<sid>_<secret>` (agent) / `fpt_<sid>_<secret>` (tab) → the session, if the token matches. */
 async function sessionFor(cfg, req, kind) {
   const m = /^Bearer\s+(fp[at])_([A-Za-z0-9]{10,40})_([A-Za-z0-9_-]{20,})$/.exec(String(req.headers.authorization || ""));
@@ -127,6 +183,7 @@ async function sessionFor(cfg, req, kind) {
   if (Date.now() > s.expiresAt) return { error: 401, expired: true };
   const token = `${m[1]}_${sid}_${m[3]}`;
   if (sha(token) !== (kind === "agent" ? s.agentHash : s.tabHash)) return { error: 401 };
+  rememberAuth(sid, s);
   return { sid, s };
 }
 
@@ -208,9 +265,34 @@ async function next(cfg, req, res, url) {
   if (s.latch.client === client && design && validDesignPath(design) && design !== s.design) { s.design = design; s.designSetBy = "tab"; changed = true; }
   if (changed) await putJson(cfg, `${P(sid)}/session.json`, s);
   if (s.latch.client !== client) return send(res, 200, { idle: true, latched: false });
+  // A tab that sends hold=1 / batch=1 understands a held reply and a `more` list; older tabs get neither.
+  const canHold = url.searchParams.get("hold") === "1", canBatch = url.searchParams.get("batch") === "1";
+  const hot = canHold && !!s.lastAgentCallAt && now - s.lastAgentCallAt < HOT_MS;
+  const until = hot ? now + NEXT_HOLD_MS : 0;
+  let rounds = 0;
+  for (;;) {
+    rounds++;
+    const got = await takeCalls(cfg, sid, client, canBatch ? MAX_BATCH : 1);
+    if (got.length) {
+      note("rounds", rounds); note("calls", got.length);
+      const [first, ...more] = got;
+      return send(res, 200, { ...first, latched: true, ...(more.length ? { more } : {}) });
+    }
+    if (Date.now() + NEXT_POLL_MS >= until) break;
+    await sleep(NEXT_POLL_MS);
+  }
+  note("rounds", rounds);
+  send(res, 200, { idle: true, latched: true, held: hot });
+}
+
+/** Take up to `max` queued calls for this tab, oldest first, marking each taken. */
+async function takeCalls(cfg, sid, client, max) {
+  const now = Date.now();
   const keys = (await listObjects(cfg, `${P(sid)}/calls/`)).sort();
-  for (const k of keys) {
-    const c = await getJson(cfg, k);
+  if (!keys.length) return [];
+  const docs = await Promise.all(keys.map(async (k) => [k, await getJson(cfg, k)]));
+  const out = [];
+  for (const [k, c] of docs) {
     if (!c) continue;
     if (now > c.deadline) { await deleteObject(cfg, k).catch(() => {}); continue; }
     if (c.state === "taken") {
@@ -221,27 +303,33 @@ async function next(cfg, req, res, url) {
         continue;
       }
     }
+    if (out.length >= max) break;
+    out.push([k, c]);
+  }
+  return Promise.all(out.map(async ([k, c]) => {
     await putJson(cfg, k, { ...c, state: "taken", client, takenAt: now });
     let args = c.args;
     if (c.argsBlob) args = JSON.parse((await getObjectText(cfg, `${P(sid)}/blobs/${c.id}.args`, 60_000_000)).text);
-    return send(res, 200, { id: c.id, tool: c.tool, args, latched: true });
-  }
-  send(res, 200, { idle: true, latched: true });
+    return { id: c.id, tool: c.tool, args };
+  }));
 }
 
 async function result(cfg, req, res) {
-  const a = await sessionFor(cfg, req, "tab");
+  const a = await authFor(cfg, req, "tab");
   if (a.error) return send(res, 401, { ok: false });
   let r; try { r = JSON.parse(await readBody(req)); } catch { return send(res, 400, { ok: false, error: "bad result body" }); }
   if (!r?.id) return send(res, 400, { ok: false });
+  // The result must be stored before replying; removing the call is clean-up (a leftover taken call is
+  // skipped by this tab and expires at its deadline), so the reply does not wait for it.
+  const cleanup = deleteObject(cfg, `${P(a.sid)}/calls/${r.id}.json`).catch(() => {});
   await putJson(cfg, `${P(a.sid)}/results/${r.id}.json`, { ok: !!r.ok, result: r.result ?? null, error: r.error ?? "", blob: !!r.blob, finishedAt: Date.now() });
-  await deleteObject(cfg, `${P(a.sid)}/calls/${r.id}.json`).catch(() => {});
   send(res, 200, { ok: true });
+  await cleanup;
 }
 
 /** A presigned PUT for a result too big for a function body. */
 async function blob(cfg, req, res) {
-  const a = await sessionFor(cfg, req, "tab");
+  const a = await authFor(cfg, req, "tab");
   if (a.error) return send(res, 401, { ok: false });
   let b; try { b = JSON.parse(await readBody(req)); } catch { return send(res, 400, { ok: false }); }
   if (!/^c_[A-Za-z0-9_]+$/.test(String(b?.id))) return send(res, 400, { ok: false });
@@ -251,6 +339,7 @@ async function blob(cfg, req, res) {
 async function endSession(cfg, req, res) {
   const a = await sessionFor(cfg, req, "tab");
   if (a.error) return send(res, 200, { ok: true });
+  authCache.delete(a.sid);
   for (const k of await listObjects(cfg, `${P(a.sid)}/`)) await deleteObject(cfg, k).catch(() => {});
   send(res, 200, { ok: true });
 }
@@ -278,7 +367,7 @@ async function waitResult(cfg, sid, id, until) {
 
 /** Turn a stored result into the tool's reply, applying the step gate the same way the local bridge does. */
 async function finish(cfg, sid, call, r) {
-  await deleteObject(cfg, `${P(sid)}/results/${call.id}.json`).catch(() => {});
+  const cleanup = deleteObject(cfg, `${P(sid)}/results/${call.id}.json`).catch(() => {});
   if (r.blob) {
     const key = `${P(sid)}/blobs/${call.id}.json`;
     let body = null;
@@ -286,8 +375,11 @@ async function finish(cfg, sid, call, r) {
     if (body != null) { await deleteObject(cfg, key).catch(() => {}); r = { ...r, result: JSON.parse(body) }; }
     else return text({ ok: r.ok, resultTooLargeToInline: true, downloadUrl: presign(cfg, "GET", key, 600), note: "The result is larger than 4 MB; fetch it from downloadUrl (valid 10 minutes)." });
   }
+  // Deleting the stored result is clean-up and runs alongside; ids are never reused, so a leftover is inert.
+  void cleanup;
   if (!r.ok) return errText(r.error || "command failed");
-  const s = await getJson(cfg, `${P(sid)}/session.json`);
+  // Only get_state and checkpoint touch the step gate, so only they read the session again.
+  const s = call.tool === "get_state" || call.tool === "checkpoint" ? await getJson(cfg, `${P(sid)}/session.json`) : null;
   if (s) {
     const g = stepGate(s.run ?? (s.run = newRunState()));
     if (call.tool === "get_state") return text({ ...(r.result ?? {}), stepState: g.stepState() });
@@ -300,8 +392,8 @@ async function finish(cfg, sid, call, r) {
   return text(r.result);
 }
 
-async function callTool(cfg, sid, name, args) {
-  const s = await getJson(cfg, `${P(sid)}/session.json`);
+async function callTool(cfg, sid, name, args, preloaded = null) {
+  const s = preloaded ?? await getJson(cfg, `${P(sid)}/session.json`);
   if (!s) return errText("session ended — connect again from the editor");
 
   if (name === "await_result") {
@@ -378,8 +470,6 @@ export async function workflowToolsFor(cfg, sid) {
 
 /** Queue one command for the tab and wait for it (or hand back a ticket). `extra` is merged into a success result. */
 async function enqueue(cfg, sid, s, name, args, extra) {
-  if ((await listObjects(cfg, `${P(sid)}/calls/`)).length >= MAX_QUEUED) return errText("too many queued calls — wait for the editor to catch up");
-
   const now = Date.now();
   const id = `c_${now}_${rand(4).replace(/[^A-Za-z0-9]/g, "x")}`;
   const deadline = now + timeoutFor(name);
@@ -390,10 +480,13 @@ async function enqueue(cfg, sid, s, name, args, extra) {
     await putObject(cfg, `${P(sid)}/blobs/${id}.args`, argText);
     call.args = null; call.argsBlob = true;
   }
-  await putJson(cfg, `${P(sid)}/calls/${id}.json`, call);
-  s.lastAgentCallAt = now; await putJson(cfg, `${P(sid)}/session.json`, s);
+  // lastAgentCallAt marks the session hot (so /next holds); it only needs refreshing now and then.
+  const writeSeen = !s.lastAgentCallAt || now - s.lastAgentCallAt > AGENT_SEEN_WRITE_MS;
+  if (writeSeen) s.lastAgentCallAt = now;
+  await Promise.all([putJson(cfg, `${P(sid)}/calls/${id}.json`, call), writeSeen ? putJson(cfg, `${P(sid)}/session.json`, s) : null]);
 
   const r = await waitResult(cfg, sid, id, Math.min(deadline, now + WAIT_MS));
+  note("wait", Date.now() - now);
   if (r) return extra && r.ok ? text({ ...extra, live: true, tab: r.result }) : finish(cfg, sid, call, r);
   await putJson(cfg, `${P(sid)}/tickets/${id}.json`, { ...call, args: undefined });
   return text({ pending: true, ticket: id, tool: name,
@@ -426,7 +519,8 @@ async function mcp(cfg, req, res) {
       if (g.describe) return reply(text(describeOps(g.describe, RELAY_TOOLS)));
       const name = g.name, args = g.args ?? {};
       if (!RELAY_TOOLS.some((t) => t.name === name) && !isWorkflowTool(name)) return fail(-32602, `unknown tool: ${name}`);
-      try { return reply(await callTool(cfg, a.sid, name, args)); } catch (e) { return reply(errText(e?.message || "relay error")); }
+      note("tool", name);
+      try { return reply(await callTool(cfg, a.sid, name, args, Array.isArray(msg) ? null : a.s)); } catch (e) { return reply(errText(e?.message || "relay error")); }
     }
     return fail(-32601, `method not found: ${method}`);
   };
@@ -515,6 +609,9 @@ export async function callConnectorTool(cfg, user, name, args) {
 /* ── router ─────────────────────────────────────────────────────────────────────────────────────────── */
 /** @param route "/mcp" or "/pair" | "/claim" | "/next" | "/result" | "/blob" | "/session" | "/status" */
 export async function handleRelay(req, res, route, url, cfg = relayConfig()) {
+  return timing.run({ route, start: performance.now(), ops: 0, r2ms: 0, notes: {} }, () => handleRelayTimed(req, res, route, url, cfg));
+}
+async function handleRelayTimed(req, res, route, url, cfg) {
   const origin = req.headers.origin;
   setRelayBaseFrom(req);
   // The R2 viewer (library/Viewer/v1, served from the public bucket) may call the viewer routes only.
