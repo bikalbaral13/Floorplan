@@ -129,7 +129,7 @@ import { cloudLibraryBaseUrl, libraryPath, setLibraryPath, DEFAULT_LIBRARY_PATH,
 import { toStandardPlan, fromStandardPlan, isStandardPlan, type StandardPlan } from "./planFormat";
 import { buildWalkthrough, type WalkPlanIn } from "./walkthrough";
 import { rasterizePdfFirstPage } from "./pdfRaster";
-import { saveLibraryFile, listParametricObjectFiles, deleteLibraryObjectFiles, pobjFolderFor, fetchLibraryJson, LIB_OBJECTS } from "./libraryFiles";
+import { saveLibraryFile, listParametricObjectFiles, deleteLibraryObjectFiles, pobjFolderFor, fetchLibraryJson, listLibraryFiles, LIB_OBJECTS } from "./libraryFiles";
 import { vectorizeImage, type VectorizeColorMode } from "@builderpluss/engine";
 import { detectObjects, splitDataUrl, DEFAULT_DETECTION_MODEL, type Detection, type DetectionMode } from "./algorithms/vision/geminiObjectDetection";
 
@@ -230,6 +230,9 @@ import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/Ad
 import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/SegmentTypeParamsDialog";
 import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
 import { ChatAIPanel, type ChatMessage, type ChatAgentTab, type AgentAccessView } from "./components/ChatAIPanel";
+import { buildContext, executeCalls, type CommandHostDeps } from "./commandEngine/host";
+import { currentEngine, engineStatus, getChatMode, rememberChoice, semanticEngine, setChatMode, type ChatMode } from "./commandEngine/runtime";
+import type { Parsed } from "../../packages/command-engine/src";
 import { serializeForAI, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys } from "./ai/aiChat";
 import { runAgentChat, AGENT_SYSTEM_PROMPT, DESIGN_AGENT_SYSTEM_PROMPT, PARAMETRIC_AGENT_SYSTEM_PROMPT, buildDetailedObjectCatalog, type AgentToolApi, type AgentEvent } from "./ai/agentChat";
 import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateFlowGraph, type FlowAgentApi } from "./ai/flowAgent";
@@ -6473,7 +6476,144 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     });
     answerAsk(answer);
   }, []);
+
+  // ── Command Engine (Chat Mode Manual / Auto): routine edits parsed locally, no AI ─────────────────────
+  // See docs/command-engine-plan.md. The engine turns the sentence into the same tool calls Claude would
+  // make; commandHost runs them on this canvas. Auto hands anything it can't read on to Claude.
+  const [chatMode, setChatModeState] = useState<ChatMode>(getChatMode);
+  const chatModeRef = useRef(chatMode);
+  chatModeRef.current = chatMode;
+  const changeChatMode = useCallback((m: ChatMode) => {
+    setChatModeState(m);
+    setChatMode(m);
+    if (m !== "ai") void semanticEngine();
+  }, []);
+  useEffect(() => { if (getChatMode() !== "ai") void semanticEngine(); }, []);
+  const switchLevelRef = useRef<(id: string) => void>(() => {});
+  const levelMetaRef = useRef(levelMeta);
+  levelMetaRef.current = levelMeta;
+  const activeLevelIdRef = useRef(activeLevelId);
+  activeLevelIdRef.current = activeLevelId;
+  const commandHost: CommandHostDeps = {
+    getState: () => historyRef.current.state,
+    setState: (n) => historyRef.current.set(n),
+    ppm: () => bridgePpmRef.current,
+    rooms: () => visibleRoomsRef.current,
+    selection: () => ({ ids: selectionRef.current.selectedIds, nodeKey: selectedNodeKeyRef.current }),
+    setSelection: (ids) => selectionRef.current.setSelection(ids),
+    api: () => agentApiRef.current,
+    setView: (m) => setViewMode(m),
+    levels: () => sortLevels(levelMetaRef.current).map((l) => ({ id: l.id, name: l.name })),
+    activeLevelId: () => activeLevelIdRef.current,
+    switchLevel: (id) => switchLevelRef.current(id),
+    undo: () => historyRef.current.undo(),
+    redo: () => historyRef.current.redo(),
+    listDesigns: async () => (await listLibraryFiles("Designs")) ?? [],
+    loadDesign: async (path) => {
+      const parsed = await fetchLibraryJson<unknown>(`Designs/${path}`);
+      return parsed != null && (await importPlanTextRef.current(JSON.stringify(parsed), `Designs/${path}`));
+    },
+    // Timers, not requestAnimationFrame: rAF stops while the tab isn't painting (hidden / behind another
+    // window) and the command queue would hang. Two macrotasks let React commit and re-render.
+    settle: () => new Promise((r) => setTimeout(() => setTimeout(r, 0), 16)),
+  };
+  const commandHostRef = useRef(commandHost);
+  commandHostRef.current = commandHost;
+  /** Engine results the chat still refers to: suggestions awaiting a pick, and undo step counts. */
+  const commandsRef = useRef(new Map<number, { text: string; options?: Parsed[]; undoSteps?: number }>());
+  const nextCmdId = useRef(1);
+  const [engineNote, setEngineNote] = useState("");
+
+  /** Run parsed commands on the canvas and report them in the chat. Returns false if the FIRST call
+   *  failed before changing anything — Auto then passes the sentence on to Claude. */
+  const runParsedCommands = useCallback(async (parsed: Parsed[], allowFallback: boolean): Promise<boolean> => {
+    const NON_UNDO = new Set(["history", "set_view", "set_level", "list_spaces", "import_design", "select_entities"]);
+    let undoSteps = 0, done = 0;
+    const lines: string[] = [];
+    for (const p of parsed) {
+      try {
+        const results = await executeCalls(commandHostRef.current, p.calls);
+        undoSteps += p.calls.filter((c) => !NON_UNDO.has(c.tool)).length;
+        done++;
+        let line = `✓ ${p.summary}`;
+        if (p.intent === "rooms.list") {
+          const list = (results[0] as { label: string; areaM2: number }[] | undefined) ?? [];
+          line = `✓ ${list.length} rooms: ${list.map((r) => `${r.label} (${r.areaM2} m²)`).join(", ")}`;
+        }
+        const skipped = (results.find((r) => (r as { skipped?: string[] })?.skipped) as { skipped?: string[] } | undefined)?.skipped;
+        if (skipped?.length) line += `\n  (no such parameter: ${skipped.join(", ")})`;
+        lines.push(line);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (done === 0 && allowFallback) {
+          setAiMessages((m) => [...m, { role: "tool", text: `▸ Command Engine: “${p.summary}” failed (${msg}) — passing to Claude` }]);
+          return false;
+        }
+        lines.push(`✗ ${p.summary} — ${msg}`);
+        break;
+      }
+    }
+    const cmdId = nextCmdId.current++;
+    commandsRef.current.set(cmdId, { text: "", undoSteps });
+    const via = parsed.map((p) => (p.via === "grammar" ? "rule" : `meaning ${Math.round(p.confidence * 100)}%`)).join(" · ");
+    setAiMessages((m) => [...m, {
+      role: "command", text: lines.join("\n"), cmdId: undoSteps ? cmdId : undefined, via,
+      json: JSON.stringify(parsed.flatMap((p) => p.calls), null, 1),
+    }]);
+    return true;
+  }, []);
+
+  /** Commands run one at a time: each reads the state the previous one left, never a stale copy. */
+  const commandQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  /** Try the Command Engine. True = handled here; false = Auto should send it to Claude. */
+  const tryCommandEngine = useCallback((prompt: string): Promise<boolean> => {
+    const job = commandQueueRef.current.then(() => tryCommandEngineNow(prompt));
+    commandQueueRef.current = job.catch(() => {});
+    return job;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const tryCommandEngineNow = async (prompt: string): Promise<boolean> => {
+    const engine = await currentEngine();
+    setEngineNote(engineStatus.semantic === "on" ? `meaning-matching on${engineStatus.version ? ` (v${engineStatus.version})` : ""}` : engineStatus.semantic === "loading" ? "loading the meaning model…" : "rules only");
+    const decision = await engine.decide(prompt, buildContext(commandHostRef.current));
+    const auto = chatModeRef.current === "auto";
+    if (decision.kind === "fallback") {
+      if (auto) { setAiMessages((m) => [...m, { role: "tool", text: `▸ Command Engine: ${decision.reason} — sent to Claude` }]); return false; }
+      setAiMessages((m) => [...m, { role: "user", text: prompt }, { role: "error", text: `Not understood: ${decision.reason}.${decision.hints?.length ? `\nTry e.g. “${decision.hints.slice(0, 2).join("”, “")}”.` : ""}\n(Switch Chat Mode to Auto or AI to ask Claude.)` }]);
+      return true;
+    }
+    setAiMessages((m) => [...m, { role: "user", text: prompt }]);
+    setAiCollapsed(false);
+    if (decision.kind === "suggest") {
+      const cmdId = nextCmdId.current++;
+      commandsRef.current.set(cmdId, { text: prompt, options: decision.options });
+      setAiMessages((m) => [...m, {
+        role: "suggest", cmdId, text: `Did you mean… (${decision.reason})`,
+        options: [...decision.options.map((o) => o.summary), auto ? "None — ask Claude" : "None of these"],
+      }]);
+      return true;
+    }
+    if (!(await runParsedCommands(decision.parsed, auto))) {
+      // Claude's path adds its own copy of the user line; drop ours.
+      setAiMessages((m) => { const out = [...m]; const i = out.map((x) => x.role === "user" && x.text === prompt).lastIndexOf(true); if (i >= 0) out.splice(i, 1); return out; });
+      return false;
+    }
+    return true;
+  };
+
+  const handleUndoCommand = useCallback(async (cmdId: number) => {
+    const rec = commandsRef.current.get(cmdId);
+    if (!rec?.undoSteps) { toast.info("Nothing to undo for that command"); return; }
+    for (let i = 0; i < rec.undoSteps; i++) { historyRef.current.undo(); await commandHostRef.current.settle(); }
+    commandsRef.current.set(cmdId, { ...rec, undoSteps: 0 });
+    setAiMessages((m) => [...m, { role: "tool", text: `↶ undone (${rec.undoSteps} step${rec.undoSteps > 1 ? "s" : ""})` }]);
+  }, []);
+
   const handleAiSend = useCallback(async (prompt: string, file?: File) => {
+    // Chat Mode Manual / Auto: the local Command Engine reads plain commands first (no attachment, no open question).
+    if (chatModeRef.current !== "ai" && prompt && !file && !hasPendingAsk()) {
+      if (await tryCommandEngine(prompt)) return;
+    }
     // The chat always goes to Claude (queued for chat.wait — Claude does the work on this live canvas). The
     // Gemini path below is no longer reachable from the UI; the engine switch is gone from the chat bar.
     const claudeOnly = true;
@@ -6578,7 +6718,25 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     } finally {
       setAiSendBusy(false);
     }
-  }, [aiApiKey, aiModel, pixelsPerMeter, aiSelectedAgentId, aiAgents, aiAgentSystemPrompt, aiFlowSystemPrompt]);
+  }, [aiApiKey, aiModel, pixelsPerMeter, aiSelectedAgentId, aiAgents, aiAgentSystemPrompt, aiFlowSystemPrompt, tryCommandEngine]);
+
+  /** A "did you mean" chip: run the picked option and learn the phrasing, or hand the sentence on. */
+  const handlePickSuggestion = useCallback(async (cmdId: number, option: number) => {
+    const rec = commandsRef.current.get(cmdId);
+    if (!rec?.options) return;
+    const label = option < 0 ? null : rec.options[option];
+    setAiMessages((m) => m.map((x) => (x.role === "suggest" && x.cmdId === cmdId ? { ...x, answered: label?.summary ?? x.options?.[x.options.length - 1] } : x)));
+    commandsRef.current.set(cmdId, { text: rec.text });
+    if (!label) {
+      if (chatModeRef.current === "auto") {
+        setAiMessages((m) => [...m, { role: "tool", text: "▸ Sent to Claude" }]);
+        sendToInbox({ prompt: rec.text, selection: selectionForAgent(librarySelectionRef.current), sentAt: Date.now() });
+      }
+      return;
+    }
+    await rememberChoice(rec.text, label.intent);
+    await runParsedCommands([label], false);
+  }, [runParsedCommands]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -29955,6 +30113,24 @@ User request: ${aiPrompt.trim()}`;
               </label>
             ))}
           </div>
+          {/* Chat Mode — who reads the chat: Claude, the local Command Engine, or the engine first. */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Chat mode</p>
+            <div className="flex rounded-md bg-slate-100 p-0.5 text-[11px] font-semibold" role="group" aria-label="Chat mode">
+              {([["ai", "AI"], ["auto", "Auto"], ["manual", "Manual"]] as const).map(([m, label]) => (
+                <button key={m} type="button" onClick={() => changeChatMode(m)} aria-pressed={chatMode === m}
+                  className={`flex-1 rounded px-2 py-1 ${chatMode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] text-slate-500">
+              {chatMode === "ai" ? "Every chat message goes to Claude."
+                : chatMode === "auto" ? "Simple edits run instantly on this device; anything else goes to Claude."
+                : "Only the local Command Engine — no AI, works offline."}
+              {chatMode !== "ai" && engineNote ? ` (${engineNote})` : ""}
+            </p>
+          </div>
           {/* Project — metadata that belongs to the DESIGN rather than to this browser (unlike the Chat AI
               key below, which is deliberately local): it travels in Files ▸ Export JSON and comes back on
               import, so the tags survive a hand-off. */}
@@ -31023,6 +31199,7 @@ User request: ${aiPrompt.trim()}`;
     setActiveLevelId(id);
     selection.clearSelection();
   };
+  switchLevelRef.current = switchLevel;
   /** Add a level on top of the stack and switch to it. The first press turns the single-level plan into
    *  "Ground floor" + "First floor". */
   const addLevel = () => {
@@ -31887,6 +32064,10 @@ User request: ${aiPrompt.trim()}`;
           claudeWorking={aiSendBusy}
           claudeAsking={inboxStatus.asking}
           onAnswer={answerChatAsk}
+          chatMode={chatMode}
+          onPickSuggestion={handlePickSuggestion}
+          onUndoCommand={handleUndoCommand}
+          engineNote={engineNote}
           agents={[
             { id: "orchestrator", label: "⚡ Global Agent", title: "Global Agent — one self-contained agent with the full toolbox: canvas design, the Flow engine, saved workflows + designs, and the parametric object library. It delegates to nothing." },
             ...aiAgents.map((a): ChatAgentTab => ({ id: a.id, label: a.label ?? a.name, title: a.description ?? a.name })),

@@ -1,0 +1,11 @@
+{
+  "name": "@builderpluss/command-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Natural-language floor-plan commands → editor tool calls, locally (grammar + embeddings + router). No AI.",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "jiti test/run.ts"
+  }
+}

@@ -9,8 +9,9 @@ import { LibrarySourceNote } from "./LibrarySourceNote";
 import { KIND_LABEL, KIND_ORDER, useLibrarySelection } from "../librarySelection";
 
 export interface ChatMessage {
-  /** "tool" = one agent tool call / result line (rendered as a compact mono log row). */
-  role: "user" | "ai" | "error" | "tool" | "ask";
+  /** "tool" = one agent tool call / result line (rendered as a compact mono log row).
+   *  "command" = something the local Command Engine ran; "suggest" = its "did you mean …?" choices. */
+  role: "user" | "ai" | "error" | "tool" | "ask" | "command" | "suggest";
   text: string;
   /** role "ask": Claude Code's question — clickable answers (the user may also type one). */
   options?: string[];
@@ -18,7 +19,16 @@ export interface ChatMessage {
   multi?: boolean;
   /** role "ask": set once answered, so the chips go inert. */
   answered?: string;
+  /** role "command": the tool calls it ran, shown folded as JSON. */
+  json?: string;
+  /** role "command" / "suggest": the Command Engine result this message belongs to. */
+  cmdId?: number;
+  /** role "command": how it was understood — "grammar" or "semantic 83%". */
+  via?: string;
 }
+
+/** Who reads the chat: Claude (AI), the local Command Engine (Manual), or the engine first then Claude. */
+export type ChatMode = "ai" | "manual" | "auto";
 
 /** The built-in agent modes (kept for the tool catalog + the always-present Global Agent). Imported
  *  agents from the Library are identified by their own id, not this union. */
@@ -98,7 +108,23 @@ export interface ChatAIPanelProps {
   onImportCanvas?: () => void;
   /** Export button right of Send — opens the editor's export picker. */
   onExport?: () => void;
+  /** Chat Mode (Settings): AI = Claude, Manual = local Command Engine only, Auto = engine first. */
+  chatMode?: ChatMode;
+  onChatModeChange?: (m: ChatMode) => void;
+  /** A "did you mean" chip was clicked: option index into that suggestion, or -1 = none of these. */
+  onPickSuggestion?: (cmdId: number, option: number) => void;
+  /** Undo a command the engine ran. */
+  onUndoCommand?: (cmdId: number) => void;
+  /** Semantic layer state for the mode switch tooltip. */
+  engineNote?: string;
 }
+
+const MODE_LABEL: Record<ChatMode, string> = { ai: "AI", auto: "Auto", manual: "Manual" };
+const MODE_TITLE: Record<ChatMode, string> = {
+  ai: "AI — every message goes to Claude",
+  auto: "Auto — the local Command Engine runs routine edits instantly; anything it can't read goes to Claude",
+  manual: "Manual — only the local Command Engine (no AI, works offline)",
+};
 
 /** Foldable "Chat AI" bar pinned to the top of the canvas. Pick an agent (built-in Global Agent or one
  *  imported from the Library's Agents/ folder), inspect its system prompt / tools / resource access, then type
@@ -111,7 +137,9 @@ export const ChatAIPanel = ({
   tools, access, examples, engine = "gemini", onEngineChange, claudeListening = false,
   claudeWorking = false, claudeAsking = false, onAnswer,
   onImportCanvas, onExport,
+  chatMode = "ai", onChatModeChange, onPickSuggestion, onUndoCommand, engineNote,
 }: ChatAIPanelProps) => {
+  const [openJson, setOpenJson] = useState<Record<number, boolean>>({});
   /** Ticked options of an open multi-select question (by message index). */
   const [picked, setPicked] = useState<Record<number, string[]>>({});
   /** The input is locked while the agent works — except when it is waiting on the user's answer. */
@@ -204,7 +232,44 @@ export const ChatAIPanel = ({
                 </p>
               )}
               {messages.map((m, i) => (
-                m.role === "ask" ? (
+                m.role === "command" ? (
+                  // Command Engine result: what it understood + did, the calls as JSON (folded), Undo.
+                  <div key={i} className="flex justify-start">
+                    <div className="max-w-[90%] space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-slate-800">
+                      <div className="flex items-center gap-1.5">
+                        <span className="rounded bg-emerald-600 px-1 text-[9px] font-semibold uppercase tracking-wide text-white">Command</span>
+                        {m.via && <span className="text-[9px] text-emerald-700">{m.via}</span>}
+                      </div>
+                      <div className="whitespace-pre-wrap">{m.text}</div>
+                      <div className="flex gap-2 text-[10px]">
+                        {m.json && (
+                          <button type="button" className="text-emerald-700 underline decoration-dotted" onClick={() => setOpenJson((o) => ({ ...o, [i]: !o[i] }))}>
+                            {openJson[i] ? "Hide JSON" : "JSON"}
+                          </button>
+                        )}
+                        {onUndoCommand && m.cmdId != null && (
+                          <button type="button" className="text-emerald-700 underline decoration-dotted" onClick={() => onUndoCommand(m.cmdId!)}>Undo</button>
+                        )}
+                      </div>
+                      {openJson[i] && m.json && <pre className="max-h-40 overflow-auto rounded bg-white/70 p-1.5 font-mono text-[9px] text-slate-600">{m.json}</pre>}
+                    </div>
+                  </div>
+                ) : m.role === "suggest" ? (
+                  <div key={i} className="flex justify-start">
+                    <div className="max-w-[90%] space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-slate-800">
+                      <div className="whitespace-pre-wrap">{m.text}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {(m.options ?? []).map((o, oi) => (
+                          <button key={oi} type="button" disabled={!!m.answered || !onPickSuggestion}
+                            onClick={() => onPickSuggestion?.(m.cmdId!, oi === (m.options!.length - 1) ? -1 : oi)}
+                            className={`rounded-full border px-2 py-0.5 text-left text-[10px] ${m.answered === o ? "border-amber-600 bg-amber-600 text-white" : "border-amber-300 bg-white text-amber-800 hover:bg-amber-100"} disabled:cursor-default disabled:opacity-70`}>
+                            {o}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : m.role === "ask" ? (
                   // Claude Code's question: answer with a chip, or type in the box below.
                   <div key={i} className="flex justify-start">
                     <div className="max-w-[90%] space-y-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] text-slate-800">
@@ -267,7 +332,7 @@ export const ChatAIPanel = ({
           </>
         )}
         {/* What the agent will read — the navigator's ticked Library items — and the conversation fold. */}
-        {(selection.length > 0 || onEngineChange || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
+        {(selection.length > 0 || onEngineChange || onChatModeChange || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
           {selection.length > 0 && <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {selGroups.map((g) => (
@@ -284,6 +349,17 @@ export const ChatAIPanel = ({
                   className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${engine === e ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                   {e === "claude" && <span className={`h-1.5 w-1.5 rounded-full ${claudeListening ? "bg-emerald-500" : "bg-slate-300"}`} aria-hidden />}
                   {e === "claude" ? "Claude Code" : "Gemini"}
+                </button>
+              ))}
+            </div>
+          )}
+          {onChatModeChange && (
+            <div className="flex shrink-0 items-center rounded-md bg-slate-100 p-0.5 text-[10px] font-semibold" role="group" aria-label="Chat mode">
+              {(["ai", "auto", "manual"] as const).map((md) => (
+                <button key={md} type="button" onClick={() => onChatModeChange(md)} aria-pressed={chatMode === md}
+                  title={MODE_TITLE[md] + (md !== "ai" && engineNote ? ` · ${engineNote}` : "")}
+                  className={`rounded px-1.5 py-0.5 ${chatMode === md ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+                  {MODE_LABEL[md]}
                 </button>
               ))}
             </div>
@@ -376,6 +452,8 @@ export const ChatAIPanel = ({
                     placeholder={!configured ? "Set the Gemini key in Preferences first"
                       : claudeAsking ? "Answer Claude's question… (Enter to send)"
                       : runner === "flow" ? "Describe the flow to build… (Enter to send)"
+                      : chatMode === "manual" ? "Type a command — e.g. “add a door on the north wall of bedroom 2”"
+                      : chatMode === "auto" ? "Command or question — simple edits run instantly, the rest goes to Claude"
                       : engine === "claude" ? "Ask Claude… (Enter to send)"
                       : "Generate or edit the plan… (attach an image/PDF, Enter to send)"}
                     value={draft}
