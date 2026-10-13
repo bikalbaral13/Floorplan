@@ -75,8 +75,8 @@ export const GROUPS = {
     ops: { set: "set_image_underlay", align: "align_underlay", analyze: "analyze_underlay" },
   },
   chat: {
-    summary: "The editor's Chat box, driven by YOU instead of Gemini: op:wait blocks until the user sends a prompt (it carries their ticked Library selection), op:reply posts progress and the answer back into the chat. Loop: wait → work on the live canvas → reply { final: true } → wait.",
-    ops: { wait: "chat_wait_prompt", reply: "chat_reply" },
+    summary: "The editor's Chat box, driven by YOU instead of Gemini: op:wait blocks until the user sends a prompt (it carries their ticked Library selection), op:reply posts progress and the answer back into the chat, op:ask puts a question (with optional option chips) to the user IN the chat and waits for the answer. The user cannot see your terminal: ask every question with op:ask, never in the terminal. Loop: wait → work on the live canvas (ask when needed) → reply { final: true } → wait.",
+    ops: { wait: "chat_wait_prompt", reply: "chat_reply", ask: "chat_ask" },
   },
   moodboard: {
     summary: "Moodboard picks (Plan step 4): open the picker for the USER, then read what they saved.",

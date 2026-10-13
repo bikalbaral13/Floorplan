@@ -40,12 +40,33 @@ export function waitForPrompt(): Promise<InboxPrompt> {
 
 export const inboxQueued = () => queue.length;
 
+/* ── chat_ask (chat.ask): Claude Code asks the USER a question in the Chat box and waits for the answer.
+ *  While a question is open, the next thing the user sends (typed, or a clicked option) is its answer —
+ *  not a new prompt. One question at a time; a new one replaces an unanswered one. */
+let pendingAsk: { resolve: (a: string) => void } | null = null;
+export const hasPendingAsk = () => !!pendingAsk;
+
+export function askUser(): Promise<string> {
+  pendingAsk?.resolve("(superseded by a newer question)");
+  return new Promise((resolve) => {
+    pendingAsk = { resolve: (a) => { pendingAsk = null; notify(); resolve(a); } };
+    notify();
+  });
+}
+
+/** The user answered (typed or clicked an option). False when no question was open. */
+export function answerAsk(answer: string): boolean {
+  if (!pendingAsk) return false;
+  pendingAsk.resolve(answer);
+  return true;
+}
+
 /** { listening, queued } for the chat box's status line. */
-export function useInboxStatus(): { listening: boolean; queued: number } {
+export function useInboxStatus(): { listening: boolean; queued: number; asking: boolean } {
   const snap = useSyncExternalStore(
     (l) => { listeners.add(l); return () => listeners.delete(l); },
-    () => `${listening}|${queue.length}`,
+    () => `${listening}|${queue.length}|${pendingAsk ? 1 : 0}`,
   );
-  const [l, q] = snap.split("|").map(Number);
-  return { listening: l > 0, queued: q };
+  const [l, q, a] = snap.split("|").map(Number);
+  return { listening: l > 0, queued: q, asking: a > 0 };
 }

@@ -211,7 +211,7 @@ import { FilePickerDialog, type FilePickerOption } from "./components/dialogs/Fi
 import { NavigatorBar, readNavigatorOpen, saveNavigatorOpen } from "./components/NavigatorBar";
 import { NavFoldSection, DrawingsSection, ElementRow, buildElements, elementMatches, NavIcons, type NavElement } from "./components/NavPlanSections";
 import { buildSelectionContext, selectionForAgent, setSelectionByPaths, useLibrarySelection } from "./librarySelection";
-import { sendToInbox, useInboxStatus, waitForPrompt } from "./chatInbox";
+import { sendToInbox, useInboxStatus, waitForPrompt, askUser, answerAsk, hasPendingAsk } from "./chatInbox";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ImportMoodboardDialog } from "./components/dialogs/ImportMoodboardDialog";
 import { DesignPlacementPanel } from "./components/DesignPlacementPanel";
@@ -6464,10 +6464,21 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  (agentChat.ts) with that mode's tool subset — the model inspects the live canvas / object library and
    *  edits through the same programmatic pipeline the MCP bridge uses, streaming each tool call into the
    *  transcript. FLOW mode: tool-loop that builds the node-graph Flow (flowAgent.ts). */
+  /** Answer Claude Code's open chat.ask question (typed or a clicked option): show it, freeze the chips. */
+  const answerChatAsk = useCallback((answer: string) => {
+    setAiMessages((m) => {
+      const out = [...m];
+      for (let i = out.length - 1; i >= 0; i--) if (out[i].role === "ask" && out[i].answered == null) { out[i] = { ...out[i], answered: answer }; break; }
+      return [...out, { role: "user", text: answer }];
+    });
+    answerAsk(answer);
+  }, []);
   const handleAiSend = useCallback(async (prompt: string, file?: File) => {
     // The chat always goes to Claude (queued for chat.wait — Claude does the work on this live canvas). The
     // Gemini path below is no longer reachable from the UI; the engine switch is gone from the chat bar.
     const claudeOnly = true;
+    // An open chat.ask question takes what the user sends as its answer, not as a new prompt.
+    if (claudeOnly && hasPendingAsk() && prompt) { answerChatAsk(prompt); return; }
     if (claudeOnly) {
       setAiMessages((m) => [...m, { role: "user", text: file ? `${prompt}
 📎 ${file.name} (attachments are not passed to Claude Code yet)` : prompt }]);
@@ -9051,9 +9062,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // ── The Chat box as Claude Code's inbox, and the navigator's Library selection (chat.* / library.selection). ──
     registerAgentCommand("chat_wait_prompt", async () => {
       const p = await asUserInteraction(() => waitForPrompt());
-      setAiSendBusy(true);
-      setAiMessages((m) => [...m, { role: "tool", text: "▸ Claude Code picked up the prompt" }]);
-      return { ...p, note: "Follow any `skill` items; read files with library.read (paths are Library-relative). Work on the live canvas, post progress with chat.reply, finish with chat.reply { final: true }, then chat.wait again." };
+      setAiSendBusy(true);   // the chat shows a green signal while Claude Code works (no log line)
+      return { ...p, note: "The user is in the editor chat and CANNOT see your terminal. Ask every question with chat.ask (options for choices) and wait for its answer — never ask in the terminal or with your own question tool. Follow any `skill` items; read files with library.read (paths are Library-relative). Work on the live canvas, post progress with chat.reply, finish with chat.reply { final: true }, then chat.wait again." };
+    });
+    registerAgentCommand("chat_ask", async (a) => {
+      const question = String(a.question ?? a.text ?? "").trim();
+      if (!question) throw new Error("chat_ask needs `question`");
+      const options = Array.isArray(a.options) ? (a.options as unknown[]).map((o) => String(o).trim()).filter(Boolean).slice(0, 12) : [];
+      const multi = a.multi === true && options.length > 1;
+      setAiMessages((m) => [...m, { role: "ask", text: question, ...(options.length ? { options } : {}), ...(multi ? { multi } : {}) }]);
+      setAiCollapsed(false);
+      const answer = await asUserInteraction(() => askUser());
+      return { question, answer, ...(options.length ? { choices: answer.split(" | ").filter((x) => options.includes(x)), typed: !answer.split(" | ").every((x) => options.includes(x)) } : {}) };
     });
     registerAgentCommand("chat_reply", (a) => {
       const text = String(a.text ?? "").trim();
@@ -31864,6 +31884,9 @@ User request: ${aiPrompt.trim()}`;
           configured
           engine="claude"
           claudeListening={inboxStatus.listening}
+          claudeWorking={aiSendBusy}
+          claudeAsking={inboxStatus.asking}
+          onAnswer={answerChatAsk}
           agents={[
             { id: "orchestrator", label: "⚡ Global Agent", title: "Global Agent — one self-contained agent with the full toolbox: canvas design, the Flow engine, saved workflows + designs, and the parametric object library. It delegates to nothing." },
             ...aiAgents.map((a): ChatAgentTab => ({ id: a.id, label: a.label ?? a.name, title: a.description ?? a.name })),

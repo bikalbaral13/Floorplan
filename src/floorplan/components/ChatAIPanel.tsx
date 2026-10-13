@@ -10,8 +10,14 @@ import { KIND_LABEL, KIND_ORDER, useLibrarySelection } from "../librarySelection
 
 export interface ChatMessage {
   /** "tool" = one agent tool call / result line (rendered as a compact mono log row). */
-  role: "user" | "ai" | "error" | "tool";
+  role: "user" | "ai" | "error" | "tool" | "ask";
   text: string;
+  /** role "ask": Claude Code's question — clickable answers (the user may also type one). */
+  options?: string[];
+  /** role "ask": several options may be picked, sent with one Send. */
+  multi?: boolean;
+  /** role "ask": set once answered, so the chips go inert. */
+  answered?: string;
 }
 
 /** The built-in agent modes (kept for the tool catalog + the always-present Global Agent). Imported
@@ -82,6 +88,12 @@ export interface ChatAIPanelProps {
   onEngineChange?: (e: "claude" | "gemini") => void;
   /** Claude Code is blocked in chat.wait right now. */
   claudeListening?: boolean;
+  /** Claude Code has picked up a prompt and is working on it (the green signal). */
+  claudeWorking?: boolean;
+  /** A chat.ask question is open: what the user sends now answers it. */
+  claudeAsking?: boolean;
+  /** Answer the open question with a clicked option. */
+  onAnswer?: (answer: string) => void;
   /** 📎 ▸ Import into canvas… — opens the editor's import picker (plan JSON, DXF, underlay, objects …). */
   onImportCanvas?: () => void;
   /** Export button right of Send — opens the editor's export picker. */
@@ -97,8 +109,13 @@ export const ChatAIPanel = ({
   agents, selectedAgentId, onSelectAgent, onImportAgents,
   runner, systemPrompt, onSystemPromptChange, defaultSystemPrompt, promptReadOnly, skills, composedLength,
   tools, access, examples, engine = "gemini", onEngineChange, claudeListening = false,
+  claudeWorking = false, claudeAsking = false, onAnswer,
   onImportCanvas, onExport,
 }: ChatAIPanelProps) => {
+  /** Ticked options of an open multi-select question (by message index). */
+  const [picked, setPicked] = useState<Record<number, string[]>>({});
+  /** The input is locked while the agent works — except when it is waiting on the user's answer. */
+  const inputBusy = busy && !claudeAsking;
   const [draft, setDraft] = useState("");
   // 🎤 dictation: each finished phrase is appended to the draft (the user still reviews and presses Send).
   const dictation = useDictation((t) => { if (t) setDraft((d) => (d.trim() ? `${d.trimEnd()} ${t}` : t)); });
@@ -148,7 +165,7 @@ export const ChatAIPanel = ({
   useEffect(() => { if (runner === "flow") { setFile(null); if (fileRef.current) fileRef.current.value = ""; } }, [runner]);
   const submit = () => {
     const p = draft.trim();
-    if ((!p && !file) || busy) return;
+    if ((!p && !file) || (busy && !claudeAsking)) return;
     onSend(p, file ?? undefined);
     setDraft("");
     setSugOpen(false);
@@ -187,7 +204,33 @@ export const ChatAIPanel = ({
                 </p>
               )}
               {messages.map((m, i) => (
-                m.role === "tool" ? (
+                m.role === "ask" ? (
+                  // Claude Code's question: answer with a chip, or type in the box below.
+                  <div key={i} className="flex justify-start">
+                    <div className="max-w-[90%] space-y-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] text-slate-800">
+                      <div className="whitespace-pre-wrap">{m.text}</div>
+                      {!!m.options?.length && (
+                        <div className="flex flex-wrap gap-1">
+                          {m.options.map((o) => {
+                            const on = m.answered ? m.answered.split(" | ").includes(o) : (picked[i] ?? []).includes(o);
+                            return (
+                              <button key={o} type="button" disabled={!!m.answered || !onAnswer}
+                                onClick={() => m.multi ? setPicked((p) => ({ ...p, [i]: on ? (p[i] ?? []).filter((x) => x !== o) : [...(p[i] ?? []), o] })) : onAnswer?.(o)}
+                                className={`rounded-full border px-2 py-0.5 text-[10px] ${on ? "border-violet-600 bg-violet-600 text-white" : "border-violet-300 bg-white text-violet-700 hover:bg-violet-100"} disabled:cursor-default disabled:opacity-70`}>
+                                {o}
+                              </button>
+                            );
+                          })}
+                          {m.multi && !m.answered && (
+                            <button type="button" disabled={!(picked[i] ?? []).length} onClick={() => onAnswer?.((picked[i] ?? []).join(" | "))}
+                              className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-40">Send</button>
+                          )}
+                        </div>
+                      )}
+                      {!m.answered && <div className="text-[10px] text-violet-500">{m.options?.length ? "Pick an answer, or type your own below." : "Type your answer below."}</div>}
+                    </div>
+                  </div>
+                ) : m.role === "tool" ? (
                   // Agent tool activity — compact mono log line (▸ call / ✓ ✗ result).
                   <div key={i} className="flex justify-start">
                     <div className="max-w-[95%] truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-500" title={m.text}>
@@ -211,9 +254,11 @@ export const ChatAIPanel = ({
                   </div>
                 )
               ))}
-              {busy && (
+              {busy && !claudeAsking && (
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {claudeWorking
+                    ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500" title="Claude Code picked up the prompt" aria-label="Claude Code is working" />
+                    : <Loader2 className="h-3 w-3 animate-spin" />}
                   {runner === "flow" ? "Building the flow — designing nodes and connections…" : "Working — the agent is inspecting and editing the canvas…"}
                 </div>
               )}
@@ -329,11 +374,12 @@ export const ChatAIPanel = ({
                     className="max-h-28 min-h-[2.25rem] w-full resize-none rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-violet-400"
                     rows={1}
                     placeholder={!configured ? "Set the Gemini key in Preferences first"
+                      : claudeAsking ? "Answer Claude's question… (Enter to send)"
                       : runner === "flow" ? "Describe the flow to build… (Enter to send)"
                       : engine === "claude" ? "Ask Claude… (Enter to send)"
                       : "Generate or edit the plan… (attach an image/PDF, Enter to send)"}
                     value={draft}
-                    disabled={!configured || busy}
+                    disabled={!configured || inputBusy}
                     onChange={(e) => { setDraft(e.target.value); setSugOpen(true); setSugIdx(-1); }}
                     onFocus={() => setSugOpen(true)}
                     onBlur={() => setSugOpen(false)}
@@ -354,7 +400,7 @@ export const ChatAIPanel = ({
                   variant="outline"
                   size="icon"
                   className={`h-9 w-9 shrink-0 ${dictation.listening ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : ""}`}
-                  disabled={!dictation.supported || !configured || busy}
+                  disabled={!dictation.supported || !configured || inputBusy}
                   onClick={() => { if (dictation.listening) inputRef.current?.focus(); dictation.toggle(); }}
                   title={!dictation.supported ? "Voice input needs Chrome, Edge or Safari on a secure page (https or localhost)"
                     : dictation.listening ? "Stop listening" : "Speak your prompt"}
@@ -363,8 +409,8 @@ export const ChatAIPanel = ({
                 >
                   {dictation.listening ? <MicOff className="h-4 w-4 animate-pulse" /> : <Mic className="h-4 w-4" />}
                 </Button>
-                <Button size="sm" className="h-9 gap-1.5 px-3 shrink-0" disabled={!configured || busy || (!draft.trim() && !file)} onClick={submit}>
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <Button size="sm" className="h-9 gap-1.5 px-3 shrink-0" disabled={!configured || inputBusy || (!draft.trim() && !file)} onClick={submit}>
+                  {inputBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
                 {onExport && (
                   <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={onExport} title="Export the plan…" aria-label="Export">
