@@ -131,7 +131,8 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
   const projDir = `${LIB}/Projects/${code}/${app.id}/`;
   const kv = ((await json(projDir + "storage.json")) ?? {}) as Record<string, string>;
   const inject = (html: string, base: string) => {
-    const pre = framePreamble(pub(base), { id: app.id, code, kv });
+    // space-brief's own tab row moves to the editor's top bar (beside Drawings); its Drawings tab is dropped.
+    const pre = framePreamble(pub(base), { id: app.id, code, kv, hostTabs: app.kind === "brief" });
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + pre) : pre + html;
   };
   const out = { app, code, page: "", css: "", scripts: [], fonts: [], local: "{}", kv, kvKey: projDir + "storage.json" };
@@ -279,7 +280,8 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     const st = manifestRef.current?.steps[r.step];
     if (!st) return;
     const frame = loadedRef.current?.app.mode === "frame";
-    setActive(frame ? FRAME_TAB : st.panel);
+    // A frame page that reported its tabs shows the step's panel as that tab; otherwise the one pipeline tab.
+    setActive(frame && !appTabs.current.has(st.panel) ? FRAME_TAB : st.panel);
     if (st.panel !== FRAME_TAB) briefRef.current?.tab(st.panel);
   };
 
@@ -424,9 +426,12 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   // when the iframe element is attached — before its srcdoc parses — so the page's first calls find a listener.
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const frameConn = useRef<ReturnType<typeof connectFrame> | null>(null);
+  /** Tab ids the frame page reported (they open in the page, not as the single FRAME_TAB). */
+  const appTabs = useRef<Set<string>>(new Set());
   const attachFrame = useCallback((el: HTMLIFrameElement | null) => {
     frameConn.current?.dispose(); frameConn.current = null;
     frameRef.current = el;
+    appTabs.current = new Set();
     if (!el || !loaded || loaded.app.mode !== "frame") return;
     setTabs([{ id: FRAME_TAB, label: loaded.app.title, count: 0, amber: false }]);
     const lib = (key: string) => key.replace(new RegExp(`^${LIB}/`), "");
@@ -460,6 +465,24 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         return { id: `../${key}` };
       },
       onEmit: (type, data) => pushEvent({ type: "ui", note: type, data }),
+      // The page's tabs replace the single pipeline tab; its own "drawings" is the editor's Drawings tab.
+      // A tab the page switched to itself (a link inside it) is followed in the top bar.
+      onTabs: (list, open) => {
+        const mine = list.filter((t) => t.id !== "drawings");
+        if (!mine.length) return;
+        const ids = new Set(mine.map((t) => t.id));
+        appTabs.current = ids;
+        setTabs(mine);
+        setActive((cur) => {
+          if (cur === FRAME_TAB) {
+            const st = runRef.current?.status === "running" ? manifestRef.current?.steps[runRef.current.step] : undefined;
+            const want = st && ids.has(st.panel) ? st.panel : open && ids.has(open) ? open : mine[0].id;
+            if (want !== open) conn.tab(want);
+            return want;
+          }
+          return ids.has(cur) && open && ids.has(open) ? open : cur;
+        });
+      },
     });
     frameConn.current = conn;
     live.api = store ? ({ S: store, get COLS() { return cols(); }, refresh: conn.refresh } as unknown as BackendApi) : null;

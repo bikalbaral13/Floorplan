@@ -37,7 +37,18 @@ var assets={upload:function(b,o){return call('upload',{blob:b,type:(o&&o.type)||
 var downloads={save:function(o){return call('download',{filename:o.filename,data:o.data});}};
 var ctx=window.__PIPE_CTX__||{};
 window.claude={use:function(n){return Promise.resolve(n==='db'?db:n==='assets'?assets:n==='downloads'?downloads:null);}};
-window.pipeline={db:db,assets:assets,downloads:downloads,project:ctx.code,id:ctx.id,emit:function(t,d){return call('emit',{type:t,data:d});}};
+window.pipeline={db:db,assets:assets,downloads:downloads,project:ctx.code,id:ctx.id,emit:function(t,d){return call('emit',{type:t,data:d});},
+  setTabs:function(tabs,active){var j=JSON.stringify([tabs,active]);if(j===lastTabs)return;lastTabs=j;call('tabs',{tabs:tabs,active:active});}};
+// The page's own tabs go to the editor's top bar (beside its Drawings tab): a page calls pipeline.setTabs, or —
+// space-brief — its tab buttons ([data-act=tab][data-id] in #top) are read here, and hidden in the page.
+var lastTabs='';
+function scanTabs(){var b=document.querySelectorAll('#top [data-act="tab"][data-id]');if(!b.length)return;var act=null;
+  window.pipeline.setTabs(Array.prototype.map.call(b,function(x){var l=x.querySelector('.tl'),c=x.querySelector('.count');
+    if(x.getAttribute('aria-selected')==='true')act=x.dataset.id;
+    return {id:x.dataset.id,label:((l&&l.textContent)||x.textContent||'').trim(),count:c?Number(c.textContent)||0:0,amber:!!(c&&c.classList.contains('amber'))};}),act);}
+if(ctx.hostTabs){var st=document.createElement('style');st.textContent='#top nav.tabs,#top [role=tablist]{display:none!important}';
+  (document.head||document.documentElement).appendChild(st);
+  addEventListener('DOMContentLoaded',function(){scanTabs();new MutationObserver(scanTabs).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-selected']});});}
 var kv=ctx.kv||{};
 var mem={getItem:function(k){return Object.prototype.hasOwnProperty.call(kv,k)?kv[k]:null;},
   setItem:function(k,v){kv[k]=String(v);call('kv',{k:k,v:String(v)});},removeItem:function(k){delete kv[k];call('kv',{k:k,v:null});},
@@ -50,7 +61,7 @@ try{Object.defineProperty(window,'localStorage',{value:mem,configurable:true});}
 export const FRAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads";
 
 /** <head> preamble: absolute <base> (the frame's origin is opaque), the context, then the shim — before the page's own scripts. */
-export function framePreamble(base: string, ctx: { id: string; code: string; kv: Record<string, string> }) {
+export function framePreamble(base: string, ctx: { id: string; code: string; kv: Record<string, string>; hostTabs?: boolean }) {
   const json = JSON.stringify(ctx).replace(/</g, "\\u003c");
   return `<base href="${base}"><script>window.__PIPE_CTX__=${json};</script><script>${FRAME_SHIM}</script>`;
 }
@@ -68,6 +79,8 @@ export interface FrameHostOptions {
   kv: Record<string, string>;
   upload: (blob: Blob, type: string) => Promise<{ id: string }>;
   onEmit: (type: string, data: unknown) => void;
+  /** The page's own tabs (shown in the editor's top bar) and which one it has open. */
+  onTabs?: (tabs: { id: string; label: string; count: number; amber: boolean }[], active: string | null) => void;
 }
 
 /** The editor side of one frame. Only messages from that frame's window are answered. */
@@ -110,6 +123,13 @@ export function connectFrame(frame: HTMLIFrameElement, o: FrameHostOptions) {
       o.onKv(o.kv); return true;
     },
     emit: (a) => { o.onEmit(String(a.type ?? "ui"), a.data); return true; },
+    tabs: (a) => {
+      const list = (Array.isArray(a.tabs) ? a.tabs : []).map((t: Record<string, unknown>) => ({
+        id: String(t.id ?? ""), label: String(t.label ?? t.id ?? ""), count: Number(t.count) || 0, amber: !!t.amber,
+      })).filter((t) => t.id);
+      o.onTabs?.(list, a.active == null ? null : String(a.active));
+      return true;
+    },
   };
   const onMessage = async (e: MessageEvent) => {
     if (e.source !== frame.contentWindow) return;
