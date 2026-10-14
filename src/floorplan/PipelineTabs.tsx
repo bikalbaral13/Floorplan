@@ -15,8 +15,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { LayoutGrid, Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { saveToCloudLibrary, uploadToBucket } from "./cloudLibrary";
+import { libraryPath, saveToCloudLibrary, uploadToBucket } from "./cloudLibrary";
 import { registerAgentCommand } from "./agentBridge";
+import { connectFrame, FRAME_SANDBOX, framePreamble, type Store } from "./pipelineFrame";
 
 interface PipelineApp {
   id: string; title: string; phase?: string; version?: string; description?: string; mount?: boolean;
@@ -24,13 +25,17 @@ interface PipelineApp {
    *  "frame": the app's own page in an iframe. kind "brief" (space-brief >= 0.7) gets its store through the
    *  window.claude.use('db') hook the app already speaks (an artifact runtime stand-in, saved to state.json);
    *  kind "page" (a program planner) is shown as it is. */
-  mode?: "mount" | "frame"; kind?: "brief" | "page";
+  mode?: "mount" | "frame"; kind?: "brief" | "page" | "app";
+  /** kind "app": a newer version being tried out (pipeline_run { channel: "preview" }), and the released ones. */
+  preview?: string; versions?: string[];
+  /** Set on the copy pipeline_run opened from the preview channel. */
+  isPreview?: boolean;
   templates: string; page: string; parts?: { css: string; core: string; deck: string; role?: string; editor?: string }; data?: string;
 }
 interface Loaded {
   app: PipelineApp; code: string; dataDir: string; page: string; css: string; scripts: string[]; fonts: string[]; local: string;
-  /** frame mode: the iframe's whole document. */
-  srcdoc?: string;
+  /** frame mode: the iframe's whole document, the store's first contents and where it and localStorage are saved. */
+  srcdoc?: string; seed?: Record<string, unknown> | null; storeKey?: string; kv?: Record<string, string>; kvKey?: string;
 }
 interface PipeTab { id: string; label: string; count: number; amber: boolean }
 /** window.BRIEF as space-brief's core.js exports it (the parts the host calls). */
@@ -43,14 +48,14 @@ interface BackendApi {
 }
 interface PipeStep { id: string; title: string; panel: string; by: "claude" | "user" | "both"; gate: boolean; hint?: string }
 interface PipeManifest { schema: string; id: string; version?: string; steps: PipeStep[]; outputs?: string[] }
-interface PipeEvent { n: number; at: number; step: string; type: "approve" | "changes" | "edit" | "start" | "advance" | "done"; note?: string; cols?: string[] }
+interface PipeEvent { n: number; at: number; step: string; type: "approve" | "changes" | "edit" | "start" | "advance" | "done" | "ui"; note?: string; cols?: string[]; data?: unknown }
 interface PipeRun {
   schema: "pipeline-run/1"; runId: string; pipeline: string; code: string; status: "running" | "done";
   step: number; approved: string[]; events: PipeEvent[]; startedAt: number;
 }
 /** What the backend shares with the run commands: core.js's store and the debounced save. */
 interface Live { api: BackendApi | null; save: () => void; claudeWriting: boolean }
-type Win = Window & { __BRIEF_MOUNT__?: unknown; BRIEF?: BriefApi; BRIEF_DECK?: unknown; __PIPE_HOST__?: { use(name: string): unknown } };
+type Win = Window & { __BRIEF_MOUNT__?: unknown; BRIEF?: BriefApi; BRIEF_DECK?: unknown };
 
 const LIB = "library";
 const FRAME_TAB = "app";
@@ -111,12 +116,26 @@ function r2Backend(dataDir: string, local: string, live: Live, onUserEdit: () =>
   };
 }
 
-/** Frame mode: the page as the pipeline builds it (index.html with its %%PARTS%% inlined), its relative files resolved
- *  through <base> = the project's data folder, and window.claude set up before the app's scripts run. */
+/** Frame mode: the pipeline's page in a sandboxed iframe (pipelineFrame.ts). Its relative files resolve through an
+ *  absolute <base>; the shim is injected first so window.claude / window.pipeline / localStorage exist before the
+ *  page's own scripts run. Per project: the store (state.json) and localStorage (storage.json) live in R2.
+ *    kind "brief"  space-brief >= 0.7 (index.html with %%PARTS%%), store seeded from its built data/local.json
+ *    kind "page"   a page shown as it is ("{planner}" = the program project's typology planner), no store
+ *    kind "app"    a pipeline UI made with the Pipeline Creator: index.html + its files, store seeded from seed.json */
 async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
   const t = app.templates;
+  // The frame's files come from the bucket's PUBLIC url: a sandboxed (opaque-origin) frame cannot reach the app's
+  // own /__r2 route on a local dev host, and version folders never change, so the public cache is safe.
+  const pub = (key: string) => `${libraryPath().replace(/\/+$/, "")}/${key.replace(new RegExp(`^${LIB}/`), "").split("/").map(encodeURIComponent).join("/")}`;
+  const json = async (key: string) => { try { return JSON.parse(await text(key, true)); } catch { return null; } };
+  const projDir = `${LIB}/Projects/${code}/${app.id}/`;
+  const kv = ((await json(projDir + "storage.json")) ?? {}) as Record<string, string>;
+  const inject = (html: string, base: string) => {
+    const pre = framePreamble(pub(base), { id: app.id, code, kv });
+    return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + pre) : pre + html;
+  };
+  const out = { app, code, page: "", css: "", scripts: [], fonts: [], local: "{}", kv, kvKey: projDir + "storage.json" };
   if (app.kind === "page") {
-    // "{planner}": the planner of the typology the project is pinned to (typologies/REGISTRY.json).
     let page = app.page;
     if (page === "{planner}") {
       const prj = JSON.parse(await text(`${t}projects/${code}/project.json`)) as { typology?: string };
@@ -125,9 +144,12 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
       if (!page) throw new Error(`project ${code} has no typology with a planner yet (pin one at P2)`);
     }
     const html = await text(t + page);
-    const dir = t + page.slice(0, page.lastIndexOf("/") + 1);
-    const srcdoc = html.replace(/<head([^>]*)>/i, `<head$1><base href="${raw(dir)}">`);
-    return { app, code, dataDir: t, page: "", css: "", scripts: [], fonts: [], local: "{}", srcdoc };
+    return { ...out, dataDir: projDir, srcdoc: inject(html, t + page.slice(0, page.lastIndexOf("/") + 1)), seed: null };
+  }
+  if (app.kind === "app") {
+    const html = await text(t + app.page);
+    const seed = (await json(projDir + "state.json")) ?? (await json(t + "seed.json")) ?? { meta: null };
+    return { ...out, dataDir: projDir, srcdoc: inject(html, t), seed, storeKey: projDir + "state.json" };
   }
   const dataDir = app.data!.replace("{CODE}", code);
   const p = app.parts!;
@@ -137,56 +159,15 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
   const meta = (JSON.parse(local).meta ?? {}) as { pipeline?: Record<string, unknown>; project?: { title?: string } };
   const build = { ...(meta.pipeline ?? {}), project: code, role: "architect", host: "builderpluss" };
   const inline = (js: string) => js.replace(/<\/script/gi, "<\/script");
-  const shim = "<script>window.claude={use:function(n){return window.parent.__PIPE_HOST__.use(n);}};</script>";
-  const srcdoc = page
-    .replace(/<head([^>]*)>/i, `<head$1><base href="${raw(dataDir)}">`)
+  const html = page
     .replace("%%TITLE%%", () => meta.project?.title ?? app.title)
     .replace("%%CSS%%", () => css)
     .replace("%%BUILD%%", () => JSON.stringify(build))
-    .replace("<script>%%CORE%%", () => `${shim}<script>${inline(core)}`)
+    .replace("%%CORE%%", () => inline(core))
     .replace("%%DECK%%", () => inline(deck))
     .replace("%%EDITOR%%", () => inline(editor));
-  return { app, code, dataDir, page: "", css: "", scripts: [], fonts: [], local, srcdoc };
-}
-
-type Doc = Record<string, unknown>;
-interface Store { meta: unknown; loaded: boolean; [col: string]: unknown }
-/** The window.claude.use('db') the app expects (doc / collection, onSnapshot, get, set, update, delete), over one
- *  in-memory store that is saved whole to state.json — the same file the mount backend writes. */
-function hostDb(store: Store, onWrite: () => void) {
-  const subs = new Map<string, Set<(snap: unknown) => void>>();
-  const clone = <T,>(o: T): T => (o == null ? o : JSON.parse(JSON.stringify(o)));
-  const split = (p: string) => { const i = p.indexOf("/"); return [p.slice(0, i), p.slice(i + 1)] as const; };
-  const docSnap = (v: unknown) => ({ exists: v != null, data: () => clone(v) });
-  const colSnap = (c: string) => ({ docs: Object.entries((store[c] as Record<string, Doc>) ?? {}).map(([id, d]) => ({ id, data: () => clone(d) })) });
-  const emit = (key: string) => subs.get(key)?.forEach((cb) => cb(key === "brief/meta" ? docSnap(store.meta) : colSnap(key)));
-  const read = (p: string) => { if (p === "brief/meta") return store.meta; const [c, id] = split(p); return (store[c] as Record<string, Doc> | undefined)?.[id]; };
-  const write = (p: string, d: Doc | null, how: "set" | "update" | "del") => {
-    if (p === "brief/meta") store.meta = how === "update" ? { ...((store.meta as Doc) ?? {}), ...d } : d;
-    else {
-      const [c, id] = split(p);
-      const col = ((store[c] as Record<string, Doc>) ??= {});
-      if (how === "del") delete col[id]; else col[id] = how === "update" ? { ...(col[id] ?? {}), ...clone(d!) } : clone(d!);
-    }
-    onWrite();
-  };
-  const on = (key: string, cb: (s: unknown) => void) => {
-    let set = subs.get(key); if (!set) subs.set(key, (set = new Set()));
-    set.add(cb); setTimeout(() => emit(key), 0);
-    return () => set!.delete(cb);
-  };
-  return {
-    db: {
-      doc: (p: string) => ({
-        onSnapshot: (cb: (s: unknown) => void) => on(p === "brief/meta" ? p : split(p)[0], p === "brief/meta" ? cb : () => cb(docSnap(read(p)))),
-        get: async () => docSnap(read(p)),
-        set: async (d: Doc) => write(p, d, "set"), update: async (d: Doc) => write(p, d, "update"), delete: async () => write(p, null, "del"),
-      }),
-      collection: (c: string) => ({ onSnapshot: (cb: (s: unknown) => void) => on(c, cb) }),
-    },
-    /** Re-send every subscribed key (after Claude patched the store). */
-    refresh: () => subs.forEach((_v, k) => emit(k)),
-  };
+  const seed = (await json(dataDir + "state.json")) ?? JSON.parse(local);
+  return { ...out, dataDir, local, srcdoc: inject(html, dataDir), seed, storeKey: dataDir + "state.json" };
 }
 
 async function fetchApp(app: PipelineApp, code: string): Promise<Loaded> {
@@ -239,6 +220,9 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
             const r2 = await fetch(`/__r2/list?dir=${encodeURIComponent(a.templates.replace(/^library\//, "") + "projects")}`);
             const fs2: string[] = r2.ok ? (await r2.json()).files ?? [] : [];
             by[a.id] = [...new Set(fs2.filter((f) => f.endsWith("/project.json") && !f.startsWith("_")).map((f) => f.split("/")[0]))].sort();
+          } else if (a.kind === "app") {
+            // Projects that have used this pipeline (any file under Projects/<CODE>/<id>/); a new code starts one.
+            by[a.id] = [...new Set(files.filter((f) => f.split("/")[1] === a.id).map((f) => f.split("/")[0]))].sort();
           } else by[a.id] = files.filter((f) => f.endsWith(`/${a.id}/app/data/local.json`)).map((f) => f.split("/")[0]).sort();
         }
         setApps(list); setProjects(by);
@@ -248,7 +232,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
 
   const teardown = () => {
     const w = window as Win;
-    delete w.__BRIEF_MOUNT__; delete w.BRIEF; delete w.BRIEF_DECK; delete w.__PIPE_HOST__;
+    delete w.__BRIEF_MOUNT__; delete w.BRIEF; delete w.BRIEF_DECK;
     briefRef.current = null;
   };
   const load = async (app: PipelineApp, code: string) => {
@@ -319,14 +303,21 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       const pipeline = String(a.pipeline ?? "space-brief"), code = String(a.code ?? "").trim();
       if (!code) throw new Error("pipeline_run needs `code` (the project code)");
       const list: PipelineApp[] = JSON.parse(await text(`${LIB}/Pipelines/apps.json`, true)).apps ?? [];
-      const app = list.find((x) => x.id === pipeline && x.mount);
-      if (!app) throw new Error(`no mountable app for pipeline "${pipeline}" in Pipelines/apps.json`);
-      const manifest: PipeManifest = JSON.parse(await text(`${LIB}/Pipelines/apps/${pipeline}/steps.json`, true));
+      const listed = list.find((x) => x.id === pipeline && x.mount);
+      if (!listed) throw new Error(`no app for pipeline "${pipeline}" in Pipelines/apps.json (have: ${list.map((x) => x.id).join(", ")})`);
+      // channel "preview": the version being tried out (pipelines.update), only in this tab until it is released.
+      const preview = a.channel === "preview";
+      if (preview && !listed.preview) throw new Error(`"${pipeline}" has no preview version`);
+      const app: PipelineApp = preview ? { ...listed, templates: listed.preview!, version: listed.preview!.split("/").filter(Boolean).pop(), isPreview: true } : listed;
+      // Steps: next to the version's files (Pipeline Creator), else the shared apps/<id>/steps.json.
+      let manifest: PipeManifest;
+      try { manifest = JSON.parse(await text(`${app.templates}steps.json`, true)); }
+      catch { manifest = JSON.parse(await text(`${LIB}/Pipelines/apps/${pipeline}/steps.json`, true)); }
       const l = await fetchApp(app, code);   // throws when the project has no published data
       manifestRef.current = manifest;
       let prior: PipeRun | null = null;
       if (a.restart !== true) { try { prior = JSON.parse(await text(`${LIB}/Projects/${code}/${pipeline}/run.json`, true)); } catch { /* new run */ } }
-      if (!loadedRef.current || loadedRef.current.app.id !== pipeline || loadedRef.current.code !== code) {
+      if (!loadedRef.current || loadedRef.current.app.id !== pipeline || loadedRef.current.code !== code || loadedRef.current.app.templates !== app.templates) {
         teardown(); live.api = null; setTabs([]); loadedRef.current = l; setLoaded(l);
       }
       const page = l.app.kind === "page";   // a page has no shared store: the run is steps + approvals only
@@ -429,64 +420,52 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     } catch (e) { setError(`${loaded.app.title} failed to start: ${(e as Error).message}`); }
   }, [loaded, live, onUserEdit]);
 
-  // Frame mode: window.__PIPE_HOST__ is what the page's window.claude.use(...) reaches. Set when the iframe element is
-  // attached — before its srcdoc parses — so the app's boot() finds it.
+  // Frame mode: the page runs sandboxed; connectFrame answers its postMessage calls (pipelineFrame.ts). Connected
+  // when the iframe element is attached — before its srcdoc parses — so the page's first calls find a listener.
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const frameConn = useRef<ReturnType<typeof connectFrame> | null>(null);
   const attachFrame = useCallback((el: HTMLIFrameElement | null) => {
+    frameConn.current?.dispose(); frameConn.current = null;
     frameRef.current = el;
     if (!el || !loaded || loaded.app.mode !== "frame") return;
     setTabs([{ id: FRAME_TAB, label: loaded.app.title, count: 0, amber: false }]);
-    if (loaded.app.kind === "page") return;
-    const d = JSON.parse(loaded.local) as Record<string, unknown>;
-    const store: Store = { meta: null, loaded: true };
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const relState = loaded.dataDir.replace(new RegExp(`^${LIB}/`), "") + "state.json";
-    const cols = () => Object.keys(store).filter((k) => k !== "meta" && k !== "loaded");
-    const save = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(async () => {
-        const r = await saveToCloudLibrary(relState, JSON.stringify(Object.fromEntries([["meta", store.meta], ...cols().map((k) => [k, store[k]])])));
-        if (!r.ok) setError(`Not saved to the Library: ${r.error}`);
-      }, SAVE_DELAY);
+    const lib = (key: string) => key.replace(new RegExp(`^${LIB}/`), "");
+    const debounced = (key: string, body: () => string) => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      return () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async () => { const r = await saveToCloudLibrary(lib(key), body()); if (!r.ok) setError(`Not saved to the Library: ${r.error}`); }, SAVE_DELAY);
+      };
     };
-    const hdb = hostDb(store, () => { save(); if (!live.claudeWriting) onUserEdit(); });
-    const ready = (async () => {
-      let s: Record<string, unknown> | null = null;
-      try { s = JSON.parse(await text(loaded.dataDir + "state.json", true)); } catch { /* first open: the built data */ }
-      const src = s ?? d;
-      for (const [k, v] of Object.entries(src)) store[k] = k === "meta" ? v ?? null : v ?? {};
-      live.api = { S: store, COLS: cols(), refresh: hdb.refresh } as unknown as BackendApi;
-      live.save = save;
-    })();
-    const put = async (blob: Blob, ext: string) => {
-      const key = `${loaded.dataDir}uploads/${Math.random().toString(36).slice(2, 10)}.${ext}`;
-      const r = await uploadToBucket(key, blob);
-      if (!r.ok) throw { code: "upload", message: r.error };
-      // The app shows an asset as '/_blob/<id>': this id walks back out of /_blob/ to the R2 raw route.
-      return { id: `../__r2/raw/${key}` };
-    };
-    (window as Win).__PIPE_HOST__ = {
-      async use(name: string) {
-        if (name === "db") { await ready; return hdb.db; }
-        if (name === "assets") return { upload: (b: Blob, o?: { type?: string }) => put(b, /json/.test(o?.type ?? b.type) ? "json" : /png/.test(b.type) ? "png" : "jpg") };
-        if (name === "downloads") return {
-          async save({ filename, data }: { filename: string; data: Blob | string }) {
-            const u = URL.createObjectURL(typeof data === "string" ? new Blob([data]) : data);
-            const a = document.createElement("a"); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(() => URL.revokeObjectURL(u), 4000);
-          },
-        };
-        return null;   // user: none — the app treats the store's editor as the architect
+    let store: Store | null = null;
+    if (loaded.seed && loaded.storeKey) {
+      store = { meta: null, loaded: true };
+      for (const [k, v] of Object.entries(loaded.seed)) store[k] = k === "meta" ? v ?? null : v ?? {};
+    }
+    const cols = () => (store ? Object.keys(store).filter((k) => k !== "meta" && k !== "loaded") : []);
+    const save = store ? debounced(loaded.storeKey!, () => JSON.stringify(Object.fromEntries([["meta", store!.meta], ...cols().map((k) => [k, store![k]])]))) : () => {};
+    const kv = loaded.kv ?? {};
+    const saveKv = debounced(loaded.kvKey!, () => JSON.stringify(kv));
+    const conn = connectFrame(el, {
+      store, kv,
+      onWrite: () => { save(); if (!live.claudeWriting) onUserEdit(); },
+      onKv: () => saveKv(),
+      upload: async (blob, type) => {
+        const ext = /json/.test(type) ? "json" : /png/.test(type) ? "png" : /svg/.test(type) ? "svg" : "jpg";
+        const key = `${loaded.dataDir}uploads/${Math.random().toString(36).slice(2, 10)}.${ext}`;
+        const r = await uploadToBucket(key, blob);
+        if (!r.ok) throw new Error(r.error);
+        // Pages show an asset as '/_blob/<id>' (artifact runtime), resolved against the frame's public base: this id
+        // walks back out of /_blob/ to the object's public path.
+        return { id: `../${key}` };
       },
-    };
+      onEmit: (type, data) => pushEvent({ type: "ui", note: type, data }),
+    });
+    frameConn.current = conn;
+    live.api = store ? ({ S: store, get COLS() { return cols(); }, refresh: conn.refresh } as unknown as BackendApi) : null;
+    live.save = save;
+    briefRef.current = { tab: (id) => conn.tab(id), selectCanvas: () => null };
   }, [loaded, live, onUserEdit]);
-  const onFrameLoad = useCallback(() => {
-    const w = frameRef.current?.contentWindow as (Window & { BRIEF?: { UI: { tab: string }; refresh(): void } }) | null;
-    briefRef.current = {
-      tab: (id) => { const b = w?.BRIEF; if (b) { b.UI.tab = id; b.refresh(); } },
-      selectCanvas: () => null,
-    };
-  }, []);
 
   // First tab list in: open the first pipeline tab, so importing a pipeline shows it.
   const opened = useRef<string | null>(null);
@@ -535,6 +514,12 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   const stepBar = run && cur ? (
     <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50 px-3 py-2 text-xs">
       <span className="font-semibold text-slate-700">{loaded?.app.title} run</span>
+      {loaded?.app.version && (
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${loaded.app.isPreview ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-600"}`}
+          title={loaded.app.isPreview ? "Preview version: only this tab sees it until it is released" : "Released version"}>
+          v{loaded.app.version}{loaded.app.isPreview ? " · preview" : ""}
+        </span>
+      )}
       <ol className="flex flex-wrap items-center gap-1">
         {steps.map((s, i) => {
           const done = run.approved.includes(s.id) || i < run.step || run.status === "done";
@@ -572,7 +557,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     <div className={`absolute inset-2 z-40 flex flex-col overflow-hidden rounded-lg border bg-white ${active === "drawings" ? "hidden" : ""}`}>
       {stepBar}
       {loaded.srcdoc != null ? (
-        <iframe key={`${loaded.app.id}/${loaded.code}`} ref={attachFrame} onLoad={onFrameLoad} srcDoc={loaded.srcdoc}
+        <iframe key={`${loaded.app.id}/${loaded.code}`} ref={attachFrame} srcDoc={loaded.srcdoc} sandbox={FRAME_SANDBOX}
           title={`${loaded.app.title} · ${loaded.code}`} className="min-h-0 w-full flex-1 border-0" />
       ) : (
         <div key={`${loaded.app.id}/${loaded.code}`} ref={mount} className="relative min-h-0 flex-1" />
@@ -599,7 +584,16 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
                   {busy === `${a.id}/${code}` && <Loader2 className="h-3 w-3 animate-spin" />} {code}
                 </button>
               ))}
-              {!(projects[a.id] ?? []).length && <span className="text-[11px] text-slate-400">No project has published this pipeline's app yet.</span>}
+              {a.kind === "app" ? (
+                <form className="inline-flex items-center gap-1" onSubmit={(e) => {
+                  e.preventDefault();
+                  const code = String(new FormData(e.currentTarget).get("code") ?? "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "_");
+                  if (code) void load(a, code);
+                }}>
+                  <input name="code" placeholder="New project code" className="w-36 rounded border border-slate-200 px-2 py-1 text-xs" />
+                  <button type="submit" disabled={!!busy} className="rounded border border-slate-200 px-2 py-1 text-xs hover:border-sky-400 hover:bg-sky-50">Open</button>
+                </form>
+              ) : !(projects[a.id] ?? []).length && <span className="text-[11px] text-slate-400">No project has published this pipeline's app yet.</span>}
             </div>
           </div>
         ))}

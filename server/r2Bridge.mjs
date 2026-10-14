@@ -243,7 +243,13 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
       if (!key) return sendJson(res, 400, { error: "need a key (no leading slash, no '..' segments)" });
       const r = await signedRequest(cfg, "GET", key);
       if (!r.ok) return sendJson(res, r.status === 404 ? 404 : 502, { error: `R2 ${r.status} for ${key}` });
-      res.writeHead(200, { "content-type": r.headers.get("content-type") || "application/octet-stream", "cache-control": "no-cache" });
+      // CORS + CORP: pipeline UIs run in a sandboxed iframe (opaque origin) inside the cross-origin-isolated editor
+      // (COEP require-corp), so their fetches need CORS and their <script>/<link>/<img> loads need CORP.
+      // Read-only, and the same objects are served from the bucket's public URL anyway.
+      res.writeHead(200, {
+        "content-type": r.headers.get("content-type") || "application/octet-stream", "cache-control": "no-cache",
+        "access-control-allow-origin": "*", "cross-origin-resource-policy": "cross-origin",
+      });
       return res.end(Buffer.from(await r.arrayBuffer()));
     }
 

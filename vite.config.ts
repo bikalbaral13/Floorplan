@@ -119,10 +119,12 @@ export default defineConfig(({ mode }) => {
     },
     host: "::",
     port: 3000,
-    // Required for SharedArrayBuffer used by web-ifc multi-threaded WASM
+    // Required for SharedArrayBuffer used by web-ifc multi-threaded WASM. `credentialless` (not require-corp) still
+    // makes the page cross-origin isolated in Chromium, and lets pipeline UIs — sandboxed iframes loading their
+    // files from the public bucket, which sends no CORP header — load their scripts, styles and images.
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Embedder-Policy": "credentialless",
     },
     fs: {
       // @builderpluss/engine is a linked package whose entry points at TypeScript SOURCE, not a

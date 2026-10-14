@@ -82,6 +82,10 @@ export const GROUPS = {
     summary: "Pipeline runs with their OWN UI: op:run opens the pipeline's app (e.g. space-brief) as a full tab in the editor; fill 'claude' steps with op:patch (live, small patches), wait for the user with op:events { wait: true }, op:advance once they approved. The user approves gates in the app — never approve for them.",
     ops: { run: "pipeline_run", status: "pipeline_status", state: "pipeline_state", patch: "pipeline_patch", events: "pipeline_events", advance: "pipeline_advance" },
   },
+  pipelines: {
+    summary: "Make NEW pipelines with their own UI in the R2 library, no app rebuild: op:create writes the pipeline folder, its UI (index.html + files) and run steps and registers it — the editor then opens the UI as a tab (pipeline.run). op:update makes a preview version, op:release (only after the user approves) makes it stable, op:rollback goes back. Read Skills/Pipeline Creator first.",
+    ops: { list: "pipeline_list", create: "pipeline_create", update: "pipeline_update", release: "pipeline_release", rollback: "pipeline_rollback" },
+  },
   moodboard: {
     summary: "Moodboard picks (Plan step 4): open the picker for the USER, then read what they saved.",
     ops: { open_picker: "open_moodboard_picker", get: "get_moodboards" },

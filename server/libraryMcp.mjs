@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
+import { PIPELINE_TOOLS, PIPELINE_TOOL_NAMES, callPipelineTool } from "./pipelinesMcp.mjs";
 import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
 import { relayConfig, setRelayBaseFrom, CONNECTOR_RELAY_TOOLS, linkConnector, openEditor, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
 
@@ -160,9 +161,9 @@ const CONNECTOR_TOOLS = [
 /** Built on first use: relayCore imports this module back (through relayHeadless), so its tool list may not
  *  exist yet while this module is evaluating. Our own tools win a name clash (list_objects). */
 let toolList = null;
-const OWN_NAMES = new Set([...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...CONNECTOR_TOOLS].map((t) => t.name));
+const OWN_NAMES = new Set([...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...PIPELINE_TOOLS, ...CONNECTOR_TOOLS].map((t) => t.name));
 function allTools() {
-  if (!toolList) toolList = [...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...CONNECTOR_TOOLS, ...CONNECTOR_RELAY_TOOLS.filter((t) => !OWN_NAMES.has(t.name))];
+  if (!toolList) toolList = [...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...PIPELINE_TOOLS, ...CONNECTOR_TOOLS, ...CONNECTOR_RELAY_TOOLS.filter((t) => !OWN_NAMES.has(t.name))];
   return toolList;
 }
 
@@ -349,6 +350,7 @@ async function callTool(cfg, name, args, user) {
     if (name === "edit_design" && !args.dryRun) console.log(`[library-mcp] ${user} edited ${r.path} → revision ${r.revision} (${args.ops.length} ops)`);
     return text(r);
   }
+  if (PIPELINE_TOOL_NAMES.has(name)) return text(await callPipelineTool(cfg, name, args, user));
   if (name === "list_library") return text(await listLibrary(cfg, args));
   if (name === "search_library") return text(await searchLibrary(cfg, args));
   if (name === "read_file") {

@@ -120,3 +120,19 @@ pipeline without a UI falls back to `viewer.form` for its gates.
 - program 0.5.0: `kind: "page"`, the project's typology planner (`typologies/REGISTRY.json`) in an iframe; no shared
   store, so `pipeline_patch/state` refuse — its stages run locally, the step bar carries the approvals.
 - Step files moved to `library/Pipelines/apps/<id>/steps.json` (source `tools/pipeline-app/pipelines/`).
+
+## Update 2026-10-14 — pipelines created through the connector, sandboxed UIs
+
+- **Create from the connector.** Tool group `pipelines` (server/pipelinesMcp.mjs, hosted library connector):
+  `list`, `create` (pipeline folder in `Pipelines/<Phase>/<id>-pipeline/`, UI as version 0.1.0 in
+  `Pipelines/apps/<id>/<version>/` with `steps.json` + `seed.json`, registered in apps.json + index.json),
+  `update` (new PREVIEW version = stable + changed files), `release` (user-approved), `rollback`. Version folders are
+  never rewritten; only kind "app" pipelines can be updated. Skill: `Skills/Pipeline Creator` (playbook + template).
+- **Sandboxed frames.** Every pipeline UI runs in `<iframe sandbox="allow-scripts …">` (no same-origin): no access to
+  the editor's DOM, storage or tokens. `src/floorplan/pipelineFrame.ts` injects a shim (window.claude.use,
+  window.pipeline, a per-project localStorage) and the editor answers its postMessage calls. Files load from the
+  bucket's public URL (a sandboxed frame cannot reach /__r2 on a local dev host).
+- **Dev header.** vite.config.ts COEP `require-corp` → `credentialless`: still cross-origin isolated (web-ifc MT), and
+  lets the frames load the bucket's files (r2.dev sends no CORP). Production sends no COEP.
+- `pipeline.run { channel: "preview" }` opens the preview version; the step bar shows `v<version>` (· preview).
+- Test pipeline: `site-checklist` (Program), project TEST01.

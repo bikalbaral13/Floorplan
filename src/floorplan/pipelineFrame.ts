@@ -1,0 +1,131 @@
+// The channel between the editor and a pipeline UI running in a SANDBOXED iframe (allow-scripts, no
+// allow-same-origin): the page cannot reach the editor's DOM, storage or tokens — everything goes through
+// postMessage, and the host answers only the calls below. Spec: docs/pipeline-ui-spec.md ("Pipeline UIs").
+//
+// Inside the frame (FRAME_SHIM, injected first into every pipeline page):
+//   window.claude.use('db' | 'assets' | 'downloads')   the artifact-runtime API space-brief >= 0.7 already speaks
+//   window.pipeline = { db, assets, downloads, emit(type, data), project }   the same, for new pipeline UIs
+//   localStorage                                        kept per project in R2 (storage.json), not the browser
+// Host → frame messages: { key, value } a store snapshot, { tab } show a panel (window.PIPELINE_UI.tab or space-brief).
+
+/** Runs in the frame. Plain ES5 so any pipeline page can host it. */
+export const FRAME_SHIM = `(function(){
+var P=parent,n=0,pend={},subs={};
+function clone(o){return o==null?o:JSON.parse(JSON.stringify(o));}
+function call(m,a){return new Promise(function(res,rej){var id=++n;pend[id]=[res,rej];P.postMessage({__pipe:1,id:id,m:m,a:a},'*');});}
+addEventListener('message',function(e){
+  if(e.source!==P)return;var d=e.data;if(!d||!d.__pipe)return;
+  if(d.re){var p=pend[d.re];if(p){delete pend[d.re];if(d.err)p[1](d.err);else p[0](d.v);}return;}
+  if(d.key){(subs[d.key]||[]).slice().forEach(function(cb){cb(d.value);});return;}
+  if(d.tab)showTab(d.tab,0);
+});
+// A step's panel can be asked for before the page has started: retry until it has (up to ~60 s).
+function showTab(id,k){var u=window.PIPELINE_UI,b=window.BRIEF;
+  if(u&&u.tab)u.tab(id);else if(b&&b.UI&&b.S&&b.S.loaded){b.UI.tab=id;b.refresh();}
+  else if(k<300)setTimeout(function(){showTab(id,k+1);},200);}
+function sub(key,cb){(subs[key]=subs[key]||[]).push(cb);call('sub',{key:key});return function(){subs[key]=(subs[key]||[]).filter(function(x){return x!==cb;});};}
+function dsnap(v){return {exists:v!=null,data:function(){return clone(v);}};}
+var db={
+  doc:function(p){var i=p.indexOf('/'),c=p.slice(0,i),id=p.slice(i+1),meta=p==='brief/meta';
+    return {onSnapshot:function(cb){return sub(meta?p:c,function(v){cb(dsnap(meta?v:(v||{})[id]));});},
+      get:function(){return call('get',{path:p}).then(dsnap);},
+      set:function(d){return call('set',{path:p,data:d});},update:function(d){return call('update',{path:p,data:d});},
+      delete:function(){return call('del',{path:p});}};},
+  collection:function(c){return {onSnapshot:function(cb){return sub(c,function(v){v=v||{};cb({docs:Object.keys(v).map(function(id){return {id:id,data:function(){return clone(v[id]);}};})});});}};}
+};
+var assets={upload:function(b,o){return call('upload',{blob:b,type:(o&&o.type)||b.type||''});}};
+var downloads={save:function(o){return call('download',{filename:o.filename,data:o.data});}};
+var ctx=window.__PIPE_CTX__||{};
+window.claude={use:function(n){return Promise.resolve(n==='db'?db:n==='assets'?assets:n==='downloads'?downloads:null);}};
+window.pipeline={db:db,assets:assets,downloads:downloads,project:ctx.code,id:ctx.id,emit:function(t,d){return call('emit',{type:t,data:d});}};
+var kv=ctx.kv||{};
+var mem={getItem:function(k){return Object.prototype.hasOwnProperty.call(kv,k)?kv[k]:null;},
+  setItem:function(k,v){kv[k]=String(v);call('kv',{k:k,v:String(v)});},removeItem:function(k){delete kv[k];call('kv',{k:k,v:null});},
+  clear:function(){kv={};call('kv',{clear:true});},key:function(i){return Object.keys(kv)[i]||null;}};
+Object.defineProperty(mem,'length',{get:function(){return Object.keys(kv).length;}});
+try{Object.defineProperty(window,'localStorage',{value:mem,configurable:true});}catch(e){}
+})();`;
+
+/** The sandbox for every pipeline frame: scripts yes, the editor's origin no. */
+export const FRAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads";
+
+/** <head> preamble: absolute <base> (the frame's origin is opaque), the context, then the shim — before the page's own scripts. */
+export function framePreamble(base: string, ctx: { id: string; code: string; kv: Record<string, string> }) {
+  const json = JSON.stringify(ctx).replace(/</g, "\\u003c");
+  return `<base href="${base}"><script>window.__PIPE_CTX__=${json};</script><script>${FRAME_SHIM}</script>`;
+}
+
+type Doc = Record<string, unknown>;
+export interface Store { meta: unknown; loaded: boolean; [col: string]: unknown }
+
+export interface FrameHostOptions {
+  /** The pipeline's shared store; null for a page without one (it still gets localStorage). */
+  store: Store | null;
+  /** The store changed: by the user (claude = false) or by pipeline_patch. */
+  onWrite: () => void;
+  /** localStorage changed. */
+  onKv: (kv: Record<string, string>) => void;
+  kv: Record<string, string>;
+  upload: (blob: Blob, type: string) => Promise<{ id: string }>;
+  onEmit: (type: string, data: unknown) => void;
+}
+
+/** The editor side of one frame. Only messages from that frame's window are answered. */
+export function connectFrame(frame: HTMLIFrameElement, o: FrameHostOptions) {
+  const subs = new Set<string>();
+  const post = (msg: Record<string, unknown>) => frame.contentWindow?.postMessage({ __pipe: 1, ...msg }, "*");
+  const split = (p: string) => { const i = p.indexOf("/"); return [p.slice(0, i), p.slice(i + 1)] as const; };
+  const valueOf = (key: string) => (key === "brief/meta" ? o.store?.meta ?? null : (o.store?.[key] as Doc | undefined) ?? {});
+  const send = (key: string) => post({ key, value: valueOf(key) });
+  const need = () => { if (!o.store) throw new Error("this pipeline has no shared store"); return o.store; };
+  const write = (p: string, d: Doc | null, how: "set" | "update" | "del") => {
+    const s = need();
+    if (p === "brief/meta") s.meta = how === "update" ? { ...((s.meta as Doc) ?? {}), ...d } : d;
+    else {
+      const [c, id] = split(p);
+      if (!c || !id || c === "meta" || c === "loaded") throw new Error(`bad document path "${p}" (collection/id)`);
+      const col = ((s[c] as Record<string, Doc>) ??= {});
+      if (how === "del") delete col[id]; else col[id] = how === "update" ? { ...(col[id] ?? {}), ...d } : { ...d };
+    }
+    o.onWrite();
+    send(p === "brief/meta" ? p : split(p)[0]);
+  };
+  const handlers: Record<string, (a: Record<string, unknown>) => unknown> = {
+    sub: (a) => { const k = String(a.key); subs.add(k); send(k); return true; },
+    get: (a) => { const p = String(a.path); if (p === "brief/meta") return o.store?.meta ?? null; const [c, id] = split(p); return (o.store?.[c] as Record<string, Doc> | undefined)?.[id] ?? null; },
+    set: (a) => write(String(a.path), a.data as Doc, "set"),
+    update: (a) => write(String(a.path), a.data as Doc, "update"),
+    del: (a) => write(String(a.path), null, "del"),
+    upload: (a) => o.upload(a.blob as Blob, String(a.type ?? "")),
+    download: (a) => {
+      const data = a.data as Blob | string;
+      const u = URL.createObjectURL(typeof data === "string" ? new Blob([data]) : data);
+      const el = document.createElement("a"); el.href = u; el.download = String(a.filename ?? "download"); document.body.appendChild(el); el.click(); el.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 4000);
+      return true;
+    },
+    kv: (a) => {
+      if (a.clear) for (const k of Object.keys(o.kv)) delete o.kv[k];
+      else if (a.v == null) delete o.kv[String(a.k)]; else o.kv[String(a.k)] = String(a.v);
+      o.onKv(o.kv); return true;
+    },
+    emit: (a) => { o.onEmit(String(a.type ?? "ui"), a.data); return true; },
+  };
+  const onMessage = async (e: MessageEvent) => {
+    if (e.source !== frame.contentWindow) return;
+    const d = e.data as { __pipe?: number; id?: number; m?: string; a?: Record<string, unknown> };
+    if (!d?.__pipe || !d.id || !d.m) return;
+    const h = handlers[d.m];
+    try {
+      if (!h) throw new Error(`unknown call ${d.m}`);
+      post({ re: d.id, v: await h(d.a ?? {}) });
+    } catch (err) { post({ re: d.id, err: { code: "host", message: (err as Error).message } }); }
+  };
+  window.addEventListener("message", onMessage);
+  return {
+    /** Re-send every subscribed key (after Claude patched the store). */
+    refresh: () => subs.forEach(send),
+    tab: (id: string) => post({ tab: id }),
+    dispose: () => window.removeEventListener("message", onMessage),
+  };
+}
