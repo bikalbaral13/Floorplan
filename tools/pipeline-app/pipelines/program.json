@@ -1,0 +1,15 @@
+{
+ "schema": "pipeline-steps/1",
+ "id": "program",
+ "version": "0.5.0",
+ "note": "program-pipeline 0.5.0 stages P1-P7. The stages run locally (python tools/run_task.py <CODE>); the planner page is the UI the user works in, and the user approves each gate in the step bar.",
+ "steps": [
+  { "id": "P1_SITE", "title": "Site", "panel": "app", "by": "claude", "gate": false, "hint": "site.json from the sketch" },
+  { "id": "P2_BRIEF", "title": "Brief + typology", "panel": "app", "by": "both", "gate": true, "hint": "confirm the brief and typology" },
+  { "id": "P3_RULES", "title": "Rules", "panel": "app", "by": "both", "gate": true, "hint": "confirm the planning rules" },
+  { "id": "P4_OPTIONS", "title": "Options", "panel": "app", "by": "claude", "gate": false, "hint": "compare options in the planner" },
+  { "id": "P5_SELECT", "title": "Select", "panel": "app", "by": "user", "gate": true, "hint": "pick an option in the planner" },
+  { "id": "P6_HANDOFF", "title": "Hand-off", "panel": "app", "by": "claude", "gate": false, "hint": "plan_trace.json to design" },
+  { "id": "P7_QC", "title": "QC", "panel": "app", "by": "claude", "gate": true, "hint": "approve qc.md to finish" }
+ ]
+}

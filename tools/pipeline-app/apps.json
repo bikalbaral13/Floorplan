@@ -1,22 +1,36 @@
 {
  "schema": "pipeline-apps/1",
- "note": "Pipelines whose app the editor loads as top-bar tabs (Import > Pipeline). templates = the app's template folder (published with tools/pipeline-app/publish.mjs --templates); per-project data at library/Projects/<CODE>/<id>/app/ (publish.mjs <site> <CODE>). mount: the app supports window.__BRIEF_MOUNT__ (space-brief >= 0.6.0).",
+ "note": "Pipelines whose app the editor opens as a tab (Import > Pipeline, or a Claude run via pipeline_run). mode 'mount': in a ShadowRoot via window.__BRIEF_MOUNT__ (space-brief 0.6.x); mode 'frame': the app's own page in an iframe — kind 'brief' gets its store through window.claude.use('db') (space-brief >= 0.7), kind 'page' is shown as is ('{planner}' = the project's typology planner). Run steps: pipelines/<id>.json -> library/Pipelines/apps/<id>/steps.json (publish.mjs --manifests).",
  "apps": [
   {
    "id": "space-brief",
    "title": "Space Brief",
    "phase": "design",
-   "version": "0.6.0",
-   "templates": "library/Pipelines/apps/space-brief/0.6.0/",
-   "page": "page.html",
+   "version": "0.7.6",
+   "mode": "frame",
+   "kind": "brief",
+   "templates": "library/Pipelines/apps/space-brief/0.7.6/",
+   "page": "index.html",
    "parts": {
-    "css": "base.css",
+    "css": "app.css",
     "core": "core.js",
     "deck": "deck.js",
-    "role": "architect.js"
+    "editor": "editor.js"
    },
    "data": "library/Projects/{CODE}/space-brief/app/",
-   "description": "Schedule, Agent, Review, Punch list, Issue & team, Brief deck for one space",
+   "description": "The architect's app: Drawings, Schedule, Agent, Issues, Brief deck",
+   "mount": true
+  },
+  {
+   "id": "program",
+   "title": "Program",
+   "phase": "program",
+   "version": "0.5.0",
+   "mode": "frame",
+   "kind": "page",
+   "templates": "library/Pipelines/program-pipeline/",
+   "page": "{planner}",
+   "description": "The typology planner of the project (TOWNHOME_RENTAL, VILLA_4BHK_G1)",
    "mount": true
   }
  ]

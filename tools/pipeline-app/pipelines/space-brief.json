@@ -1,0 +1,11 @@
+{
+ "schema": "pipeline-steps/1",
+ "id": "space-brief",
+ "version": "0.7.6",
+ "note": "The steps of a pipeline RUN in the editor (docs/pipeline-ui-spec.md). panel = the app's tab id (space-brief: board, issue, deck, drawings, agent); 'app' = the whole page. by: who fills the step in; gate: the user approves it in the step bar.",
+ "steps": [
+  { "id": "schedule", "title": "Schedule", "panel": "board", "by": "claude", "gate": true, "hint": "Claude fills the element schedule; check it" },
+  { "id": "issue", "title": "Issue", "panel": "issue", "by": "both", "gate": true, "hint": "issue a numbered revision" },
+  { "id": "deck", "title": "Brief deck", "panel": "deck", "by": "claude", "gate": true, "hint": "approve the deck to finish" }
+ ]
+}

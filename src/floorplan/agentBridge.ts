@@ -14,7 +14,7 @@ const handlers = new Map<string, AgentHandler>();
  *  poll loop keeps collecting commands while one sits open — otherwise nothing could ever arrive to
  *  resolve it, including the out-of-band `checkpoint_resolve`. Everything else stays strictly sequential,
  *  which is what keeps a run of draw calls landing in the order the agent issued them. */
-const DETACHED_TOOLS = new Set(["checkpoint", "chat_ask"]);
+const DETACHED_TOOLS = new Set(["checkpoint", "chat_ask", "pipeline_events"]);
 
 /** Register a command handler the MCP server can invoke by name (e.g. "draw_wall"). Re-registering replaces. */
 export function registerAgentCommand(name: string, fn: AgentHandler): void {

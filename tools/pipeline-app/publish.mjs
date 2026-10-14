@@ -4,6 +4,8 @@
 //   node tools/pipeline-app/publish.mjs --templates <templates/app dir> <pipeline id> <version>
 //     the app's code → library/Pipelines/apps/<id>/<version>/, then the registry tools/pipeline-app/apps.json →
 //     library/Pipelines/apps.json (point the entry at the new version there first)
+//   node tools/pipeline-app/publish.mjs --manifests
+//     each pipelines/<id>.json (a run's steps, docs/pipeline-ui-spec.md) → library/Pipelines/apps/<id>/steps.json
 import fs from "node:fs";
 import path from "node:path";
 import { r2ConfigFrom, putObject } from "../r2.mjs";
@@ -12,7 +14,8 @@ const args = process.argv.slice(2);
 const templates = args[0] === "--templates";
 if (templates) args.shift();
 const [site, code, pipeline = "space-brief"] = args;
-if (!site || !code || (templates && !args[2])) {
+const manifests = site === "--manifests";
+if (!manifests && (!site || !code || (templates && !args[2]))) {
   console.error("usage: publish.mjs <site dir> <CODE> [pipeline]  |  publish.mjs --templates <dir> <pipeline id> <version>");
   process.exit(1);
 }
@@ -24,6 +27,15 @@ try {
 } catch { /* keys from the environment only */ }
 const cfg = r2ConfigFrom(env);
 if (!cfg) { console.error("R2 keys missing (.env R2_*)"); process.exit(1); }
+if (manifests) {
+  const dir = path.join(import.meta.dirname, "pipelines");
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    const key = `${cfg.prefix}/Pipelines/apps/${f.replace(/\.json$/, "")}/steps.json`;
+    await putObject(cfg, key, fs.readFileSync(path.join(dir, f)), "application/json");
+    console.log(`manifest → ${key}`);
+  }
+  process.exit(0);
+}
 
 const TYPES = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html", ".json": "application/json", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png" };
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
