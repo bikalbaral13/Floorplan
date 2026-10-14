@@ -58,6 +58,44 @@ interface Live { api: BackendApi | null; save: () => void; claudeWriting: boolea
 type Win = Window & { __BRIEF_MOUNT__?: unknown; BRIEF?: BriefApi; BRIEF_DECK?: unknown };
 
 const LIB = "library";
+/** A library key ("library/Projects/…") → its public URL (the bucket's r2.dev address). */
+const pubUrl = (key: string) => `${libraryPath().replace(/\/+$/, "")}/${key.replace(new RegExp(`^${LIB}/`), "").split("/").map(encodeURIComponent).join("/")}`;
+
+type Pt = [number, number];
+type Shape = { sheet?: string; type?: string; pts?: Pt[] };
+/** Points that place a shape: a polygon's centre, points along a line (not its ends, which touch the neighbours),
+ *  a pin's point. Normalised sheet coordinates. */
+function shapeSamples(sh: Shape): Pt[] {
+  const p = sh.pts ?? [];
+  if (!p.length) return [];
+  if (sh.type === "poly" && p.length >= 3) return [[p.reduce((a, q) => a + q[0], 0) / p.length, p.reduce((a, q) => a + q[1], 0) / p.length]];
+  if (p.length >= 2) {
+    const out: Pt[] = [];
+    for (let i = 0; i + 1 < p.length; i++) for (const t of [0.25, 0.5, 0.75]) out.push([p[i][0] + (p[i + 1][0] - p[i][0]) * t, p[i][1] + (p[i + 1][1] - p[i][1]) * t]);
+    return out;
+  }
+  return [p[0]];
+}
+/** Inside the polygon, or within `tol` of its edge (a wall or door on the boundary belongs to the space). */
+function inOrOnPoly([x, y]: Pt, poly: Pt[], tol = 0.006): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    const dx = xj - xi, dy = yj - yi, L = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / L));
+    if (Math.hypot(x - (xi + t * dx), y - (yi + t * dy)) <= tol) return true;
+  }
+  return inside;
+}
+
+/** An element a pipeline has ISSUED for one canvas space (space-brief: origin.ref = the space id). */
+export interface IssuedRef {
+  id: string; code: string; name: string; cat: string; rev: number;
+  /** Edited after it was issued. */
+  changed: boolean;
+  images: { url: string; title?: string }[];
+}
 const FRAME_TAB = "app";
 const raw = (key: string) => `/__r2/raw/${key.split("/").map(encodeURIComponent).join("/")}`;
 const SAVE_DELAY = 800;
@@ -126,7 +164,7 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
   const t = app.templates;
   // The frame's files come from the bucket's PUBLIC url: a sandboxed (opaque-origin) frame cannot reach the app's
   // own /__r2 route on a local dev host, and version folders never change, so the public cache is safe.
-  const pub = (key: string) => `${libraryPath().replace(/\/+$/, "")}/${key.replace(new RegExp(`^${LIB}/`), "").split("/").map(encodeURIComponent).join("/")}`;
+  const pub = pubUrl;
   const json = async (key: string) => { try { return JSON.parse(await text(key, true)); } catch { return null; } };
   const projDir = `${LIB}/Projects/${code}/${app.id}/`;
   const kv = ((await json(projDir + "storage.json")) ?? {}) as Record<string, string>;
@@ -198,6 +236,8 @@ export interface PipelineTabsOptions {
 export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   tabBar: ReactNode; frame: ReactNode; dialog: ReactNode; openImport: () => void; selectCanvas: (ids: string[]) => void;
   sideTabs: PipeTab[]; sideActive: string | null; pickSide: (id: string | null) => void;
+  /** What the loaded pipeline has issued for a canvas space (live), and the pipeline's name. */
+  issuedForSpace: (spaceId: string) => IssuedRef[]; pipelineTitle: string | null;
 } {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [tabs, setTabs] = useState<PipeTab[]>([]);
@@ -254,6 +294,8 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
 
   // ── Pipeline runs (Claude drives, the user approves) ──
   const live = useRef<Live>({ api: null, save: () => {}, claudeWriting: false }).current;
+  /** Bumped whenever the pipeline's store changes, so views derived from it (issuedForSpace) re-render. */
+  const [storeRev, setStoreRev] = useState(0);
   const [run, setRun] = useState<PipeRun | null>(null);
   const runRef = useRef<PipeRun | null>(null);
   const manifestRef = useRef<PipeManifest | null>(null);
@@ -369,6 +411,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         api.refresh();
       } finally { live.claudeWriting = false; }
       live.save();
+      setStoreRev((v) => v + 1);
       if (r.status === "running") showStep(r);
       return { ok: true, cols };
     });
@@ -459,7 +502,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     const saveKv = debounced(loaded.kvKey!, () => JSON.stringify(kv));
     const conn = connectFrame(el, {
       store, kv,
-      onWrite: () => { save(); if (!live.claudeWriting) onUserEdit(); },
+      onWrite: () => { save(); setStoreRev((v) => v + 1); if (!live.claudeWriting) onUserEdit(); },
       onKv: () => saveKv(),
       upload: async (blob, type) => {
         const ext = /json/.test(type) ? "json" : /png/.test(type) ? "png" : /svg/.test(type) ? "svg" : "jpg";
@@ -493,6 +536,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     frameConn.current = conn;
     live.api = store ? ({ S: store, get COLS() { return cols(); }, refresh: conn.refresh } as unknown as BackendApi) : null;
     live.save = save;
+    setStoreRev((v) => v + 1);
     briefRef.current = { tab: (id) => conn.tab(id), selectCanvas: () => null };
   }, [loaded, live, onUserEdit]);
 
@@ -603,7 +647,46 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     </Dialog>
   );
 
+  // Elements issued for a canvas space: their ISSUED snapshot (code, name, refs), resolved to public image URLs.
+  const issuedForSpace = useCallback((spaceId: string): IssuedRef[] => {
+    const S = live.api?.S as (Record<string, unknown> & { meta?: { references?: { id: string; asset?: string; url?: string; title?: string }[] } }) | undefined;
+    if (!S || !loaded) return [];
+    const refs = new Map((S.meta?.references ?? []).map((r) => [r.id, r]));
+    const image = (r: string): { url: string; title?: string } | null => {
+      if (!r) return null;
+      if (/^(data:|https?:)/.test(r)) return { url: r };
+      if (r.startsWith("asset:")) return { url: pubUrl(r.slice(6).replace(/^(\.\.\/)+/, "")) };   // uploads: "../library/Projects/…"
+      if (r.startsWith(`${LIB}/`)) return { url: pubUrl(r) };
+      const m = refs.get(r);
+      if (m?.asset) return { url: pubUrl(`${loaded.dataDir}refs/${m.asset}`), title: m.title };
+      return m?.url ? { url: m.url, title: m.title } : null;
+    };
+    type El = { code?: string; name?: string; cat?: string; rev?: number; dirty?: boolean; origin?: { type?: string; ref?: unknown }; deleted?: boolean;
+      shapes?: Shape[]; issued?: { code?: string; name?: string; cat?: string; rev?: number; refs?: string[]; rooms?: string[]; shapes?: Shape[] } };
+    const all = Object.entries((S.elements as Record<string, El>) ?? {});
+    // The space's outline on the app's plan sheet: the plan shape of an element made FROM that space (its floor).
+    // Elements made from walls (runs), doors (openings) and furniture (objects) belong to the space their plan
+    // shape lies in or on the edge of.
+    const planShapes = (e: El) => (e.issued?.shapes ?? e.shapes ?? []).filter((sh) => sh.sheet === "plan");
+    const outline = all.map(([, e]) => e).filter((e) => e.origin?.type === "space" && e.origin.ref === spaceId)
+      .flatMap(planShapes).find((sh) => sh.type === "poly" && (sh.pts?.length ?? 0) >= 3)?.pts;
+    const inSpace = (e: El) => e.origin?.ref === spaceId || (e.issued?.rooms ?? []).includes(spaceId) ||
+      (!!outline && e.origin?.type !== "space" && planShapes(e).some((sh) => shapeSamples(sh).some((pt) => inOrOnPoly(pt, outline))));
+    return all
+      .filter(([, e]) => e.issued && !e.deleted && inSpace(e))
+      .map(([id, e]) => ({
+        id, code: String(e.issued!.code ?? e.code ?? id), name: String(e.issued!.name ?? e.name ?? ""), cat: String(e.issued!.cat ?? e.cat ?? ""),
+        rev: Number(e.issued!.rev ?? e.rev ?? 1), changed: !!e.dirty,
+        images: (e.issued!.refs ?? []).map(image).filter((x): x is { url: string; title?: string } => !!x),
+      }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, storeRev]);
+  // Dev only: inspect what a space would show (`__pipelineIssued("L0-sp021")`), like __agentRun. Stripped in production.
+  if (import.meta.env.DEV) (window as unknown as { __pipelineIssued?: unknown }).__pipelineIssued = issuedForSpace;
+
   return {
+    issuedForSpace, pipelineTitle: loaded?.app.title ?? null,
     tabBar, frame, dialog, openImport: () => { setError(""); setPickOpen(true); }, selectCanvas,
     sideTabs: loaded ? tabs : [], sideActive: loaded && active !== "drawings" ? active : null,
     pickSide: (id) => pick(id ?? "drawings"),

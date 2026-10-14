@@ -30,6 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { PanelLeft, PanelRight, PanelRightClose, Workflow } from "lucide-react";
 import { usePipelineTabs } from "./PipelineTabs";
 import { SpaceReferences } from "./components/SpaceReferences";
+import { PipelineIssuedRefs } from "./components/PipelineIssuedRefs";
 import "./propsPanel.css";
 import { ToolButton } from "@/components/toolbutton";
 import {
@@ -42332,6 +42333,7 @@ User request: ${aiPrompt.trim()}`;
                         // inside its card (Upload · Library · Generate) instead of two raw text fields.
                         hideParamKeys={["referenceImage", "referenceNote"]}
                         renderAttachmentExtra={(att) => /^room(-with-math)?$/i.test(att.objectId ?? "") || /\/room\.json$/i.test(att.objectPath ?? "") ? (
+                          <>
                           <SpaceReferences
                             image={String(att.params?.referenceImage ?? "")}
                             note={String(att.params?.referenceNote ?? "")}
@@ -42339,6 +42341,14 @@ User request: ${aiPrompt.trim()}`;
                             hasRoomObject
                             onChange={(patch) => { for (const [k, v] of Object.entries(patch)) if (v !== undefined) updateSpaceAttachmentParam(selectedRoom.id, att.id, k, v); }}
                           />
+                          {/* What a loaded pipeline (space-brief) has issued for this space, with its images. */}
+                          <PipelineIssuedRefs
+                            items={pipelineTabs.issuedForSpace(selectedRoom.id)}
+                            source={pipelineTabs.pipelineTitle ?? "the pipeline"}
+                            onUse={(url) => updateSpaceAttachmentParam(selectedRoom.id, att.id, "referenceImage", url)}
+                            onOpen={() => pipelineTabs.pickSide(pipelineTabs.sideTabs.find((t) => t.id === "board")?.id ?? pipelineTabs.sideTabs[0]?.id ?? null)}
+                          />
+                          </>
                         ) : null}
                         onUpdateChildParam={(attId, path, key, value) => updateSpaceAttachmentChildParam(selectedRoom.id, attId, path, key, value)}
                         selectedComponent={selectedComponent}
