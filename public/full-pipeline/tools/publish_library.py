@@ -3,9 +3,10 @@
     python tools/publish_library.py [--only <phase id>] [--dry-run] [--store local:<dir>]
 
 For each phase in full.json (program, plan, build, present) it writes
-        library/Pipelines/<pipeline id>-pipeline/<every file of that phase folder>
-        library/Pipelines/<pipeline id>-pipeline/release.json   (pipeline-release/1: version, files + sha256)
-e.g. 1-program → library/Pipelines/program-pipeline/, sitting beside exterior-mesh-pipeline and floorplan-tracer-pipeline.
+        library/Pipelines/<Phase>/<pipeline id>-pipeline/<every file of that phase folder>
+        library/Pipelines/<Phase>/<pipeline id>-pipeline/release.json   (pipeline-release/1: version, files + sha256)
+e.g. 1-program → library/Pipelines/Program/program-pipeline/, beside Program/floorplan-tracer-pipeline.
+Pipelines are grouped by phase (Program, Plan, Build, Present); library/Pipelines/index.json has each path.
 
 The Full Pipeline itself is NOT published (its R2 copy was removed 2026-10-13; local backup in
 backups/r2-full-pipeline-2026-10-13). It stays in the repo as the composer of the four phases.
@@ -24,12 +25,13 @@ for _s in (sys.stdout, sys.stderr):
     except Exception: pass
 
 ROOT = "library/Pipelines/"
+PHASE_DIR = {"program": "Program", "plan": "Plan", "build": "Build", "present": "Present"}
 SKIP_DIRS = {"__pycache__", "upstream", "cache", "output", "work"}
 
 
 def prefix(phase):
-    """R2 folder of one phase: library/Pipelines/<pipeline id>-pipeline/."""
-    return f"{ROOT}{phase['pipeline']}-pipeline/"
+    """R2 folder of one phase: library/Pipelines/<Phase>/<pipeline id>-pipeline/."""
+    return f"{ROOT}{PHASE_DIR[phase['id']]}/{phase['pipeline']}-pipeline/"
 
 
 def files(root):

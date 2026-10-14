@@ -1,4 +1,4 @@
-// Vendored copy of the app repo's tools/r2.mjs so this pipeline runs standalone (library/Pipelines/build-from-deck-pipeline/).
+// Vendored copy of the app repo's tools/r2.mjs so this pipeline runs standalone (library/Pipelines/Build/build-from-deck-pipeline/).
 /** Cloudflare R2 from Node, signed by hand — no SDK.
  *
  *  R2 speaks the S3 API, so a PUT is an ordinary HTTPS request carrying an AWS SigV4

@@ -1,112 +1,263 @@
 {
- "schema": "pipelines-index/1",
- "date": "2026-10-07 (pipeline/1 contract)",
+ "date": "2026-10-14 (pipelines grouped by phase: Program, Plan, Build, Present; program 0.5.0, space-brief 0.7.6)",
+ "hand_offs": [
+  [
+   "program",
+   "plan_trace.v1",
+   "design"
+  ],
+  [
+   "program",
+   "plan_trace.v1 → canvas.v1 per level (pipeline_kit.interop; space-brief tools/from_program.py)",
+   "space-brief"
+  ],
+  [
+   "floorplan-tracer",
+   "canvas.v1 / plan_trace",
+   "design"
+  ],
+  [
+   "floorplan-tracer",
+   "canvas.v1",
+   "space-brief"
+  ],
+  [
+   "floorplan-tracer (master plan route)",
+   "masterplan.v1",
+   "exterior-mesh"
+  ],
+  [
+   "space-brief",
+   "roombrief.json (roombrief/1, metres)",
+   "build-from-deck (metre branch planned)"
+  ],
+  [
+   "design (improved canvas)",
+   "canvas.v1",
+   "interior-mesh (planned canvas adapter)"
+  ]
+ ],
+ "kit": {
+  "adopted_by": [
+   "program (0.2.0)",
+   "space-brief (0.2.0)",
+   "floorplan-tracer (0.1.0)"
+  ],
+  "id": "pipeline-kit",
+  "master": "app repo packages/pipeline-kit",
+  "previous": "library/Pipelines/_kit/0.1.0/",
+  "snapshot": "library/Pipelines/_kit/0.2.0/kit.json",
+  "version": "0.2.0"
+ },
+ "note": "Find a pipeline by its `path` here, never by a hard-coded folder. Shared, not phase-bound: _kit/ (pipeline_kit), apps/ + apps.json (apps the editor opens, run steps). The app's phase list (src/floorplan/phases.ts) is still its own copy.",
  "phases": [
   "program",
   "plan",
-  "design",
   "build",
   "present"
  ],
  "pipelines": [
   {
-   "id": "program",
-   "title": "Program Pipeline",
-   "phase": "program",
-   "version": "0.3.1",
-   "location": "D:/program_pipeline (local repo)",
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
    "entry": "AGENTS.md; python tools/run_task.py <CODE>",
+   "id": "program",
    "inputs": [
     "site sketch / site_trace.json",
     "brief answers",
     "rules (confirmed)"
    ],
+   "location": "library/Pipelines/program-pipeline/ (source: app repo public/full-pipeline/1-program)",
    "outputs": [
     "options/*, selected.json",
-    "output/plan_trace.json (plan_trace.v1)"
+    "output/plan_trace.json (plan_trace.v1) → Projects/{CODE}/program/plan_trace.json"
    ],
+   "phase": "program",
+   "status": "standalone 2026-10-13: published on its own; also phase 1 of full-pipeline",
+   "title": "Program Pipeline",
    "uses_shared": [
+    "pipeline_kit 0.2.0 (vendored)",
     "Standards",
-    "Rules"
+    "Rules",
+    "Schemas"
    ],
-   "status": "working (TOWNHOME_RENTAL, HOUSE_SINGLE tested)"
+   "version": "0.5.0",
+   "path": "library/Pipelines/Program/program-pipeline/"
   },
   {
-   "id": "floorplan-tracer",
-   "title": "Floorplan Tracer Pipeline",
-   "phase": "plan",
-   "version": "0.1.0",
-   "location": "app repo public/floorplan-tracer-pipeline",
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
    "entry": "AGENTS.md; python tools/run_task.py <CODE>",
+   "id": "floorplan-tracer",
    "inputs": [
     "drawing image / PDF, or a hand-sketch photo"
    ],
+   "location": "app repo public/floorplan-tracer-pipeline",
    "outputs": [
     "plan.json (tracer-plan.v1)",
     "canvas JSON (canvas.v1)",
     "plan_trace (plan_trace-tracer.v0)",
     "SVG / overlay"
    ],
+   "phase": "program",
+   "status": "working (fixtures WINDSOR_B1, SCRIBBLE_2BHK; selftest 19/19; runs on pipeline_kit 0.1.0)",
+   "title": "Floorplan Tracer Pipeline",
    "uses_shared": [
     "pipeline_kit 0.1.0 (vendored)",
     "Standards",
     "Schemas",
     "Fixtures"
    ],
-   "status": "working (fixtures WINDSOR_B1, SCRIBBLE_2BHK; selftest 19/19; runs on pipeline_kit 0.1.0)",
-   "contract": "pipeline.json (pipeline/1) at the pipeline root"
+   "version": "0.1.0",
+   "path": "library/Pipelines/Program/floorplan-tracer-pipeline/"
   },
   {
-   "id": "interior-mesh",
-   "title": "Interior Mesh Pipeline",
-   "phase": "present",
-   "version": "0.1.0",
-   "location": "app repo public/interior-mesh-pipeline",
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
+   "entry": "AGENTS.md; python tools/run_task.py <CODE>; python tools/from_program.py <plan_trace.json> --level GF",
+   "id": "space-brief",
+   "inputs": [
+    "plan: canvas.v1 (editor / tracer) or plan_trace.v1 (program, via pipeline_kit.interop)",
+    "reference images",
+    "library mirror (Materials / Objects / Images)"
+   ],
+   "location": "library/Pipelines/space-brief-pipeline/ (source: app repo public/full-pipeline/2-plan-design)",
+   "outputs": [
+    "published brief: architect / client / modeler apps (issues, approvals, review, agent briefing)",
+    "brief decks .pptx + spacebrief.v1 per version → Projects/{CODE}/brief/decks/",
+    "roombrief.json",
+    "derived views SVG/PNG"
+   ],
+   "phase": "plan",
+   "status": "standalone 2026-10-13: published on its own; also phase 2 of full-pipeline",
+   "title": "Space Brief Pipeline",
+   "uses_shared": [
+    "pipeline_kit 0.2.0 (vendored)",
+    "Standards",
+    "Schemas",
+    "Materials",
+    "Objects"
+   ],
+   "version": "0.7.6",
+   "path": "library/Pipelines/Plan/space-brief-pipeline/"
+  },
+  {
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
    "entry": "AGENTS.md; Blender tools.run_task.run_next(<CODE>)",
+   "id": "interior-mesh",
    "inputs": [
     "modelling workbook (.xlsx)",
     "base .blend"
    ],
+   "location": "app repo public/interior-mesh-pipeline",
    "outputs": [
     "meshes in .blend",
     "FBX"
    ],
+   "phase": "build",
+   "status": "planned job RMD_FF: 0 tasks done, 54 of 60 families are specs",
+   "title": "Interior Mesh Pipeline",
    "uses_shared": [
     "Families (copy in R2)"
    ],
-   "status": "planned job RMD_FF: 0 tasks done, 54 of 60 families are specs",
-   "contract": "pipeline.json (pipeline/1) at the pipeline root"
+   "version": "0.1.0",
+   "path": "library/Pipelines/Build/interior-mesh-pipeline/"
   },
   {
-   "id": "exterior-mesh",
-   "title": "Exterior Mesh Pipeline",
-   "phase": "present",
-   "version": "0.2.0",
-   "location": "app repo public/exterior-mesh-pipeline (outputs in pipeline-work/exterior)",
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
    "entry": "AGENTS.md; python tools/plan_to_project.py <CODE>; blender -b --python tools/run_task.py -- <CODE> --all",
+   "id": "exterior-mesh",
    "inputs": [
     "master plan (masterplan.v1) + site canvas + envelopes",
     "design canvases from R2 Designs"
    ],
+   "location": "app repo public/exterior-mesh-pipeline (outputs in pipeline-work/exterior)",
    "outputs": [
     "building.v1 geometry",
     "instances.v1",
     "Blender scene",
     "Unreal FBX set + instances.csv/json + unreal_import.py"
    ],
+   "phase": "build",
+   "status": "working (RMD_EXT built, QC 0 fail)",
+   "title": "Exterior Mesh Pipeline",
    "uses_shared": [
     "Families (copy in R2)",
     "Schemas",
     "Fixtures"
    ],
-   "status": "working (RMD_EXT built, QC 0 fail)",
-   "contract": "pipeline.json (pipeline/1) at the pipeline root"
+   "version": "0.2.0",
+   "path": "library/Pipelines/Build/exterior-mesh-pipeline/"
+  },
+  {
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
+   "entry": "AGENTS.md; pipeline.json entry commands",
+   "id": "build-from-deck",
+   "inputs": [
+    "plan-phase deck (.pptx)",
+    "room chosen by the user"
+   ],
+   "location": "library/Pipelines/build-from-deck-pipeline/ (source: app repo public/full-pipeline/3-build)",
+   "outputs": [
+    "roombrief.json (roombrief/1)",
+    "canvas JSON with deck spec params on every attachment",
+    "DXF/PDF: plan, RCP, interior elevations, schedules",
+    ".blend + preview stills",
+    "QA.md"
+   ],
+   "phase": "build",
+   "status": "standalone 2026-10-13: published on its own; also phase 3 of full-pipeline",
+   "title": "Build from Plan Deck",
+   "uses_shared": [
+    "Floorplan Tracer canvas exporter",
+    "Floorplan Renderer skill",
+    "Objects",
+    "Materials"
+   ],
+   "version": "0.2.0",
+   "path": "library/Pipelines/Build/build-from-deck-pipeline/"
+  },
+  {
+   "id": "walkthrough-video",
+   "title": "Walkthrough Video generation Pipeline",
+   "phase": "present",
+   "version": "0.1.0",
+   "contract": "pipeline.json (pipeline/1) at the pipeline root",
+   "entry": "AGENTS.md; python tools/run_task.py <CODE>",
+   "location": "library/Pipelines/walkthrough-video-pipeline/ (source: app repo public/full-pipeline/4-present)",
+   "status": "standalone 2026-10-13: published on its own; also phase 4 of full-pipeline",
+   "path": "library/Pipelines/Present/walkthrough-video-pipeline/"
+  },
+  {
+   "id": "full-pipeline",
+   "version": "0.1.0",
+   "location": "app repo public/full-pipeline (composer of the four phase pipelines)",
+   "contract": "full.json (full-pipeline/1) + each phase's pipeline.json",
+   "entry": "AGENTS.md; python tools/project.py new|resume|save|handover|status <CODE>",
+   "phases": {
+    "program": "1-program",
+    "plan": "2-plan-design",
+    "build": "3-build",
+    "present": "4-present"
+   },
+   "project_state": "Projects/<CODE>/project.json (fullproject/1), one canvas at Projects/<CODE>/canvas/",
+   "status": "R2 release removed 2026-10-13 (local backup backups/r2-full-pipeline-2026-10-13); phases published standalone",
+   "path": null
   }
  ],
+ "places": {
+  "Projects/<CODE>/": "lasting for one project; published by each run (pipeline.json outputs.keep) with run.json",
+  "library/": "reusable across projects; promote with the user's approval",
+  "work_dir": "temporary; outside public/; safe to delete"
+ },
+ "projects": {
+  "registry": "Projects/index.json (projects-index/1): per project code, per pipeline → link, state file, next step",
+  "state": "Projects/<CODE>/<pipeline id>/state.json (pipeline-project/1), written by pipeline_kit.state"
+ },
+ "schema": "pipelines-index/1",
  "skills_by_phase": {
-  "plan": [
-   "Floorplan Tracer (skill)",
-   "Scribble to Floorplan (skill)"
+  "build": [
+   "Complete House Design",
+   "Plane Frame Analysis",
+   "EPANET Pipe Networks",
+   "DXF Plan Drawings"
   ],
   "design": [
    "Floorplan Improver",
@@ -115,51 +266,18 @@
    "Room Renderer",
    "Parametric Object Creator"
   ],
-  "build": [
-   "Complete House Design",
-   "Plane Frame Analysis",
-   "EPANET Pipe Networks",
-   "DXF Plan Drawings"
+  "plan": [
+   "Floorplan Tracer (skill)",
+   "Scribble to Floorplan (skill)"
   ],
   "present": [
    "Floorplan Renderer"
   ]
  },
- "hand_offs": [
-  [
-   "program",
-   "plan_trace.v1",
-   "design"
-  ],
-  [
-   "floorplan-tracer",
-   "canvas.v1 / plan_trace",
-   "design"
-  ],
-  [
-   "floorplan-tracer (master plan route)",
-   "masterplan.v1",
-   "exterior-mesh"
-  ],
-  [
-   "design (improved canvas)",
-   "canvas.v1",
-   "interior-mesh (planned canvas adapter)"
-  ]
- ],
- "note": "The app's phase list (src/floorplan/phases.ts) is still its own copy; it can read this file in a later phase.",
- "kit": {
-  "id": "pipeline-kit",
-  "version": "0.1.0",
-  "master": "app repo packages/pipeline-kit",
-  "snapshot": "library/Pipelines/_kit/0.1.0/",
-  "adopted_by": [
-   "floorplan-tracer"
-  ]
- },
- "places": {
-  "library/": "reusable across projects; promote with the user's approval",
-  "Projects/<CODE>/": "lasting for one project; published by each run (pipeline.json outputs.keep) with run.json",
-  "work_dir": "temporary; outside public/; safe to delete"
+ "phase_dirs": {
+  "program": "library/Pipelines/Program/",
+  "plan": "library/Pipelines/Plan/",
+  "build": "library/Pipelines/Build/",
+  "present": "library/Pipelines/Present/"
  }
 }

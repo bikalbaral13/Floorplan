@@ -28,7 +28,7 @@
    "version": "0.5.0",
    "mode": "frame",
    "kind": "page",
-   "templates": "library/Pipelines/program-pipeline/",
+   "templates": "library/Pipelines/Program/program-pipeline/",
    "page": "{planner}",
    "description": "The typology planner of the project (TOWNHOME_RENTAL, VILLA_4BHK_G1)",
    "mount": true
