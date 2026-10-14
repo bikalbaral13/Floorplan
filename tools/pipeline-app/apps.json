@@ -6,10 +6,10 @@
    "id": "space-brief",
    "title": "Space Brief",
    "phase": "design",
-   "version": "0.7.6",
+   "version": "0.7.7",
    "mode": "frame",
    "kind": "brief",
-   "templates": "library/Pipelines/apps/space-brief/0.7.6/",
+   "templates": "library/Pipelines/apps/space-brief/0.7.7/",
    "page": "index.html",
    "parts": {
     "css": "app.css",
@@ -18,7 +18,7 @@
     "editor": "editor.js"
    },
    "data": "library/Projects/{CODE}/space-brief/app/",
-   "description": "The architect's app: Drawings, Schedule, Agent, Issues, Brief deck",
+   "description": "The architect's app as tabs of the editor's right panel: Schedule, Issues, Brief deck",
    "mount": true
   },
   {

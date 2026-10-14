@@ -8,7 +8,7 @@
 //     each pipelines/<id>.json (a run's steps, docs/pipeline-ui-spec.md) → library/Pipelines/apps/<id>/steps.json
 import fs from "node:fs";
 import path from "node:path";
-import { r2ConfigFrom, putObject } from "../r2.mjs";
+import { r2ConfigFrom, putObject, getObjectText } from "../r2.mjs";
 
 const args = process.argv.slice(2);
 const templates = args[0] === "--templates";
@@ -49,6 +49,12 @@ for (const f of walk(site)) {
 }
 console.log(`uploaded ${n} files to ${dest}`);
 if (templates) {
-  await putObject(cfg, `${cfg.prefix}/Pipelines/apps.json`, fs.readFileSync(path.join(import.meta.dirname, "apps.json")), "application/json");
-  console.log(`registry → ${cfg.prefix}/Pipelines/apps.json`);
+  // MERGE into the R2 registry, entry by id: pipelines made through the connector (pipelines.create) live only there.
+  const local = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "apps.json"), "utf8"));
+  let remote = { apps: [] };
+  try { remote = JSON.parse((await getObjectText(cfg, `${cfg.prefix}/Pipelines/apps.json`, 5_000_000)).text); } catch { /* first publish */ }
+  const ids = new Set(local.apps.map((a) => a.id));
+  const merged = { ...local, apps: [...local.apps, ...(remote.apps ?? []).filter((a) => !ids.has(a.id))] };
+  await putObject(cfg, `${cfg.prefix}/Pipelines/apps.json`, JSON.stringify(merged, null, 1), "application/json");
+  console.log(`registry → ${cfg.prefix}/Pipelines/apps.json (${local.apps.length} from the repo, ${merged.apps.length - local.apps.length} kept from R2)`);
 }

@@ -136,3 +136,15 @@ pipeline without a UI falls back to `viewer.form` for its gates.
   lets the frames load the bucket's files (r2.dev sends no CORP). Production sends no COEP.
 - `pipeline.run { channel: "preview" }` opens the preview version; the step bar shows `v<version>` (· preview).
 - Test pipeline: `site-checklist` (Program), project TEST01.
+
+## Update 2026-10-14 — pipeline tabs in the right-hand panel
+
+- The canvas (middle) always shows the drawing. A loaded pipeline's tabs sit in the **right-hand panel header beside
+  Properties** (space-brief: Properties · Schedule · Issues · Brief deck); the page and the run's step bar render
+  inside that panel (34rem wide while a pipeline tab is open). The top bar shows only the loaded pipeline's chip.
+  A run step opens the panel on its tab (`onReveal`).
+- space-brief **0.7.7**: hosted mode (`build.host = "builderpluss"`) drops its Drawings and Agent tabs (the editor's
+  canvas and chat do those) and keeps element clicks on the current tab. Standalone unchanged.
+- Pipeline Creator: pages are right-panel tabs — no drawing view, no chat tab, ~540 px wide, tabs declared with
+  `window.pipeline.setTabs(...)`. Template updated.
+- `publish.mjs --templates` now MERGES apps.json by id (it had overwritten connector-created entries).

@@ -6020,7 +6020,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [navOpen, setNavOpen] = useState(() => readNavigatorOpen(false));
   // A loaded pipeline's app (Import ▸ Pipeline) selects plan entities through this; set once selectElement exists.
   const pipelineSelectRef = useRef<((ids: string[]) => void) | null>(null);
-  const pipelineTabs = usePipelineTabs({ onSelect: (ids) => pipelineSelectRef.current?.(ids) });
+  // A pipeline's tabs open in the right-hand panel; a run's step opens it (set once the panel state exists, below).
+  const pipelineRevealRef = useRef<(() => void) | null>(null);
+  const pipelineTabs = usePipelineTabs({ onSelect: (ids) => pipelineSelectRef.current?.(ids), onReveal: () => pipelineRevealRef.current?.() });
   useEffect(() => { if (isMobile) setNavOpen(false); }, [isMobile]);
   const toggleNav = () => setNavOpen((o) => { if (!isMobile) saveNavigatorOpen(!o); return !o; });
   /** Layers section: search across layer names and the elements on them; which layer rows are folded open. */
@@ -6029,6 +6031,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
   const propertiesPanelExpanded = isMobile ? mobilePropsOpen : uiPrefs.showProperties;
   const toggleProperties = () => (isMobile ? setMobilePropsOpen((o) => !o) : setUiPref("showProperties", !uiPrefs.showProperties));
+  pipelineRevealRef.current = () => {
+    setIsRightPanelCollapsed(false);
+    if (isMobile) setMobilePropsOpen(true); else if (!uiPrefs.showProperties) setUiPref("showProperties", true);
+  };
   const [toolsPanelExpanded, setToolsPanelExpanded] = useState<boolean>(true);
   const [infoPanelExpanded, setInfoPanelExpanded] = useState<boolean>(true);
   // Space Tools — hierarchical algorithm tree replacing the per-block render in the
@@ -31572,7 +31578,6 @@ User request: ${aiPrompt.trim()}`;
       </div>
 
       <div className="relative flex h-[calc(100%-64px)] gap-2 p-2">
-        {pipelineTabs.frame}
         {pipelineTabs.dialog}
         {/* Left navigation bar — the R2 Library as a foldable, resizable tree (replaces Files ▸ Inspect). */}
         {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} preferences={preferencesBody} open={navOpen} onToggle={toggleNav} planSections={navigatorPlanSections} query={navQuery} onQuery={setNavQuery} />}
@@ -40790,8 +40795,8 @@ User request: ${aiPrompt.trim()}`;
             !isRightPanelCollapsed && propertiesPanelExpanded
               ? isMobile
                 ? "absolute bottom-2 right-2 top-2 z-40 min-h-0 w-[min(22rem,calc(100vw-1rem))] rounded-xl border bg-white shadow-xl"
-                : `${propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
-              : "w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
+                : `relative ${propsSplitView || pipelineTabs.sideActive ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
+              : "relative w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
           }
         >
           {!isRightPanelCollapsed && propertiesPanelExpanded ? (
@@ -40799,7 +40804,23 @@ User request: ${aiPrompt.trim()}`;
               {/* Panel bar: title, the layout switch (tabbed / Properties and Metrics side by side), close.
                   One fixed place for the panel's own controls instead of buttons floating over the content. */}
               <div className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-3 py-1.5">
-                <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
+                {pipelineTabs.sideTabs.length ? (
+                  // A loaded pipeline's tabs (Schedule, Issues, …) sit beside Properties; the canvas stays the drawing.
+                  <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="Right panel">
+                    {[{ id: null as string | null, label: "Properties", count: 0, amber: false }, ...pipelineTabs.sideTabs].map((t) => {
+                      const on = pipelineTabs.sideActive === t.id;
+                      return (
+                        <button key={t.id ?? "props"} type="button" role="tab" aria-selected={on} onClick={() => pipelineTabs.pickSide(t.id)}
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${on ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}>
+                          {t.label}
+                          {t.count > 0 && <span className={`rounded-full px-1.5 text-[10px] font-bold text-white ${t.amber ? "bg-amber-500" : "bg-rose-500"}`}>{t.count}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
+                )}
                 {!isMobile && (
                   <button type="button" onClick={() => setPropsSplitView((v) => !v)} aria-pressed={propsSplitView}
                     title={propsSplitView ? "Tabbed: Properties / Metrics" : "Side by side: Properties and Metrics"}
@@ -40819,7 +40840,7 @@ User request: ${aiPrompt.trim()}`;
                   whole panel and pushes every value input past the column edge. Pinning it to 100% caps it
                   at the column and lets the labels wrap instead. */}
               {propertiesPanelExpanded && (
-              <ScrollArea className="props-scroll flex-1 min-h-0">
+              <ScrollArea className={`props-scroll flex-1 min-h-0 ${pipelineTabs.sideActive ? "hidden" : ""}`}>
               <div className="props-pro relative space-y-4 p-4 pb-6">
                 {/* Active workflow tool — its controls live HERE, like an attached object's parameters: no
                     floating window and no Flow panel (it evaluates and commits in the background). */}
@@ -44319,6 +44340,8 @@ User request: ${aiPrompt.trim()}`;
             )}
             </div>
           ) : null}
+          {/* The loaded pipeline's page: kept mounted (even with the panel folded) so its state survives tab switches. */}
+          {pipelineTabs.frame}
         </div>
 
         {/* Right-edge Tools column dissolved at user request: Space Tools removed entirely (Layout

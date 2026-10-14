@@ -13,7 +13,7 @@
 //   library/Pipelines/<id>/pipeline.json            the steps (panel = an app tab id, by, gate)
 //   library/Projects/<CODE>/<id>/run.json           the run: current step, approvals, history (survives a reload)
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { LayoutGrid, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { libraryPath, saveToCloudLibrary, uploadToBucket } from "./cloudLibrary";
 import { registerAgentCommand } from "./agentBridge";
@@ -189,10 +189,15 @@ async function fetchApp(app: PipelineApp, code: string): Promise<Loaded> {
 export interface PipelineTabsOptions {
   /** The app selected an element: the canvas ids it was derived from (segments / spaces / attachments). */
   onSelect?: (canvasIds: string[]) => void;
+  /** A pipeline tab should be seen (a run opened a step): the editor opens its right-hand panel. */
+  onReveal?: () => void;
 }
 
+/** The pipeline's tabs live in the editor's RIGHT-HAND panel, next to Properties ("drawings" = Properties shown);
+ *  the canvas in the middle always shows the drawing. `frame` is rendered inside that panel column. */
 export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   tabBar: ReactNode; frame: ReactNode; dialog: ReactNode; openImport: () => void; selectCanvas: (ids: string[]) => void;
+  sideTabs: PipeTab[]; sideActive: string | null; pickSide: (id: string | null) => void;
 } {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [tabs, setTabs] = useState<PipeTab[]>([]);
@@ -282,6 +287,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     const frame = loadedRef.current?.app.mode === "frame";
     // A frame page that reported its tabs shows the step's panel as that tab; otherwise the one pipeline tab.
     setActive(frame && !appTabs.current.has(st.panel) ? FRAME_TAB : st.panel);
+    optsRef.current.onReveal?.();
     if (st.panel !== FRAME_TAB) briefRef.current?.tab(st.panel);
   };
 
@@ -505,30 +511,15 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   const pick = (id: string) => { setActive(id); if (id !== "drawings" && id !== FRAME_TAB) briefRef.current?.tab(id); };
   const selectCanvas = useCallback((ids: string[]) => { briefRef.current?.selectCanvas(ids); }, []);
 
-  const tabCls = (on: boolean) =>
-    `inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm ${on ? "border-slate-900 font-semibold text-slate-900" : "border-transparent text-slate-500 hover:text-slate-900"}`;
-
-  const tabBar = (
-    <nav className="ml-4 flex items-stretch self-stretch" role="tablist" aria-label="Workspace">
-      <button type="button" role="tab" aria-selected={active === "drawings"} onClick={() => pick("drawings")} className={tabCls(active === "drawings")}>
-        <LayoutGrid className="h-4 w-4" /> Drawings
-      </button>
-      {tabs.map((t) => (
-        <button key={t.id} type="button" role="tab" aria-selected={active === t.id} onClick={() => pick(t.id)} className={tabCls(active === t.id)}>
-          {t.label}
-          {t.count > 0 && <span className={`rounded-full px-1.5 text-[10px] font-bold text-white ${t.amber ? "bg-amber-500" : "bg-rose-500"}`}>{t.count}</span>}
-        </button>
-      ))}
-      {loaded && (
-        <span className="ml-2 inline-flex items-center gap-1 self-center rounded-full bg-slate-100 py-0.5 pl-2.5 pr-1 text-[11px] text-slate-600"
-          title={`Saved to ${loaded.dataDir}state.json`}>
-          {loaded.app.title} · {loaded.code}
-          <button type="button" onClick={unload} title="Unload the pipeline" aria-label="Unload pipeline"
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-slate-300"><X className="h-3 w-3" /></button>
-        </span>
-      )}
-    </nav>
-  );
+  // Top bar: only which pipeline is loaded (its tabs are in the right-hand panel; the canvas is always the drawing).
+  const tabBar = loaded ? (
+    <span className="ml-4 inline-flex items-center gap-1 self-center rounded-full bg-slate-100 py-0.5 pl-2.5 pr-1 text-[11px] text-slate-600"
+      title={`Saved to ${loaded.dataDir}state.json — its tabs are in the right-hand panel`}>
+      {loaded.app.title} · {loaded.code}
+      <button type="button" onClick={unload} title="Unload the pipeline" aria-label="Unload pipeline"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-slate-300"><X className="h-3 w-3" /></button>
+    </span>
+  ) : null;
 
   // Kept mounted while a pipeline is loaded so switching back to Drawings keeps the app's state.
   // The step bar of a run: where it is, who is on, and — on a gated step — the user's Approve / Request changes.
@@ -577,7 +568,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   ) : null;
 
   const frame = loaded ? (
-    <div className={`absolute inset-2 z-40 flex flex-col overflow-hidden rounded-lg border bg-white ${active === "drawings" ? "hidden" : ""}`}>
+    <div className={`absolute inset-x-0 bottom-0 top-10 z-10 flex flex-col overflow-hidden bg-white ${active === "drawings" ? "hidden" : ""}`}>
       {stepBar}
       {loaded.srcdoc != null ? (
         <iframe key={`${loaded.app.id}/${loaded.code}`} ref={attachFrame} srcDoc={loaded.srcdoc} sandbox={FRAME_SANDBOX}
@@ -625,5 +616,9 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     </Dialog>
   );
 
-  return { tabBar, frame, dialog, openImport: () => { setError(""); setPickOpen(true); }, selectCanvas };
+  return {
+    tabBar, frame, dialog, openImport: () => { setError(""); setPickOpen(true); }, selectCanvas,
+    sideTabs: loaded ? tabs : [], sideActive: loaded && active !== "drawings" ? active : null,
+    pickSide: (id) => pick(id ?? "drawings"),
+  };
 }
