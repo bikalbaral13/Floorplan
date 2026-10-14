@@ -525,34 +525,21 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   // The step bar of a run: where it is, who is on, and — on a gated step — the user's Approve / Request changes.
   const steps = manifestRef.current?.steps ?? [];
   const cur = run ? steps[run.step] : undefined;
+  // The panel's tabs already name the pages, so the bar keeps only where the run is and the user's approval buttons.
   const stepBar = run && cur ? (
-    <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50 px-3 py-2 text-xs">
-      <span className="font-semibold text-slate-700">{loaded?.app.title} run</span>
-      {loaded?.app.version && (
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${loaded.app.isPreview ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-600"}`}
-          title={loaded.app.isPreview ? "Preview version: only this tab sees it until it is released" : "Released version"}>
-          v{loaded.app.version}{loaded.app.isPreview ? " · preview" : ""}
-        </span>
-      )}
-      <ol className="flex flex-wrap items-center gap-1">
-        {steps.map((s, i) => {
-          const done = run.approved.includes(s.id) || i < run.step || run.status === "done";
-          const on = i === run.step && run.status === "running";
-          return (
-            <li key={s.id} className={`rounded-full px-2 py-0.5 ${on ? "bg-sky-600 text-white" : done ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"}`}>
-              {i + 1}. {s.title}
-            </li>
-          );
-        })}
-      </ol>
-      {run.status === "done" ? <span className="ml-auto font-medium text-emerald-700">Run complete</span> : (
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-slate-500">{cur.by === "user" ? "Your turn" : cur.by === "claude" ? "Claude is working" : "You and Claude"}{cur.hint ? ` · ${cur.hint}` : ""}</span>
+    <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50 px-3 py-2 text-xs"
+      title={loaded?.app.version ? `${loaded.app.title} v${loaded.app.version}${loaded.app.isPreview ? " (preview)" : ""}` : undefined}>
+      {run.status === "done" ? <span className="font-medium text-emerald-700">Run complete</span> : (
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="min-w-0 flex-1 text-slate-500">
+            <b className="font-semibold text-slate-700">Step {run.step + 1} of {steps.length}</b>
+            {loaded?.app.isPreview && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800">preview</span>}
+            {" · "}{cur.by === "user" ? "Your turn" : cur.by === "claude" ? "Claude is working" : "You and Claude"}{cur.hint ? ` · ${cur.hint}` : ""}</span>
           {cur.gate && (run.approved.includes(cur.id) ? <span className="font-medium text-emerald-700">Approved — Claude moves on</span> : asking ? (
             <>
               <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="What should change?"
                 onKeyDown={(e) => { if (e.key === "Enter" && note.trim()) decide("changes"); }}
-                className="w-64 rounded border border-slate-300 px-2 py-1" />
+                className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1" />
               <button type="button" disabled={!note.trim()} onClick={() => decide("changes")} className="rounded bg-amber-500 px-2 py-1 font-medium text-white disabled:opacity-50">Send</button>
               <button type="button" onClick={() => { setAsking(false); setNote(""); }} className="px-1 text-slate-500">Cancel</button>
             </>

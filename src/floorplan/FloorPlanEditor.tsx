@@ -6031,6 +6031,25 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
   const propertiesPanelExpanded = isMobile ? mobilePropsOpen : uiPrefs.showProperties;
   const toggleProperties = () => (isMobile ? setMobilePropsOpen((o) => !o) : setUiPref("showProperties", !uiPrefs.showProperties));
+  /** Width of the right panel while a pipeline tab is open: dragged with the handle on its left edge, kept per browser. */
+  const [pipePanelW, setPipePanelW] = useState(() => {
+    try { const v = Number(localStorage.getItem("bp.pipePanelW")); return v >= 320 ? v : 544; } catch { return 544; }
+  });
+  const [pipePanelDrag, setPipePanelDrag] = useState(false);
+  const startPipePanelDrag = (e: { clientX: number; preventDefault(): void }) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = pipePanelW;
+    const clamp = (w: number) => Math.round(Math.max(320, Math.min(w, window.innerWidth - 420)));
+    let w = w0;
+    const move = (ev: PointerEvent) => { w = clamp(w0 + (x0 - ev.clientX)); setPipePanelW(w); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      setPipePanelDrag(false);
+      try { localStorage.setItem("bp.pipePanelW", String(w)); } catch { /* storage blocked */ }
+    };
+    setPipePanelDrag(true);
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
   pipelineRevealRef.current = () => {
     setIsRightPanelCollapsed(false);
     if (isMobile) setMobilePropsOpen(true); else if (!uiPrefs.showProperties) setUiPref("showProperties", true);
@@ -40791,11 +40810,12 @@ User request: ${aiPrompt.trim()}`;
             Folds via the canvas-edge chevron; folding does not affect the Tools
             panel's position because Properties and Tools are no longer nested. */}
         <div
+          style={!isMobile && !isRightPanelCollapsed && propertiesPanelExpanded && pipelineTabs.sideActive ? { width: pipePanelW, ...(pipePanelDrag ? { transition: "none" } : {}) } : undefined}
           className={
             !isRightPanelCollapsed && propertiesPanelExpanded
               ? isMobile
                 ? "absolute bottom-2 right-2 top-2 z-40 min-h-0 w-[min(22rem,calc(100vw-1rem))] rounded-xl border bg-white shadow-xl"
-                : `relative ${propsSplitView || pipelineTabs.sideActive ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
+                : `relative ${pipelineTabs.sideActive ? "" : propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
               : "relative w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
           }
         >
@@ -44342,6 +44362,18 @@ User request: ${aiPrompt.trim()}`;
           ) : null}
           {/* The loaded pipeline's page: kept mounted (even with the panel folded) so its state survives tab switches. */}
           {pipelineTabs.frame}
+          {/* Resize handle (↔) on the panel's left edge while a pipeline tab is open. */}
+          {!isMobile && !isRightPanelCollapsed && propertiesPanelExpanded && pipelineTabs.sideActive && (
+            <div role="separator" aria-orientation="vertical" aria-label="Resize the panel" title="Drag to resize"
+              onPointerDown={startPipePanelDrag}
+              onDoubleClick={() => { setPipePanelW(544); try { localStorage.setItem("bp.pipePanelW", "544"); } catch { /* storage blocked */ } }}
+              className="group absolute inset-y-0 -left-1.5 z-30 flex w-3 cursor-col-resize items-center justify-center">
+              <span className="h-full w-px bg-transparent group-hover:bg-sky-400" />
+              <span className="absolute flex h-7 w-4 items-center justify-center rounded-md border border-slate-200 bg-white text-[11px] leading-none text-slate-500 shadow-sm group-hover:border-sky-400 group-hover:text-sky-600">↔</span>
+            </div>
+          )}
+          {/* While dragging, a cover keeps the pipeline's iframe from swallowing the pointer. */}
+          {pipePanelDrag && <div className="fixed inset-0 z-[60] cursor-col-resize" />}
         </div>
 
         {/* Right-edge Tools column dissolved at user request: Space Tools removed entirely (Layout
