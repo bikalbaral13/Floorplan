@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { zipStore, type ZipEntry } from "../../zipStore";
 import {
   AlertTriangle,
   ChevronDown,
@@ -231,6 +232,43 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog", que
     }
   };
 
+  /** A whole folder as one .zip (paths inside are folder-relative). Files are fetched one after another from their
+   *  public URLs; a big folder asks first. */
+  const downloadFolder = async (node: CloudTreeNode) => {
+    const files: CloudTreeNode[] = [];
+    const walk = (n: CloudTreeNode) => { if (n.type === "file") { if (n.url) files.push(n); } else (n.children ?? []).forEach(walk); };
+    walk(node);
+    if (!files.length) { toast.info(`${node.name} has no downloadable files.`); return; }
+    const bytes = files.reduce((t, f) => t + (f.size ?? 0), 0);
+    if ((files.length > 300 || bytes > 300e6) && !window.confirm(`Download ${node.name} as a zip — ${files.length} files, ${formatBytes(bytes)}? This can take a while.`)) return;
+    setSaving(node.path);
+    const base = node.path.replace(/\/+$/, "") + "/";
+    const entries: ZipEntry[] = [];
+    let failed = 0;
+    const t = toast.loading(`Zipping ${node.name}: 0 / ${files.length}`);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        try {
+          const res = await fetch(f.url!);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          entries.push({ name: f.path.startsWith(base) ? f.path.slice(base.length) : f.name, data: new Uint8Array(await res.arrayBuffer()), modified: f.lastModified ? new Date(f.lastModified) : undefined });
+        } catch { failed++; }
+        if (i % 10 === 9 || i === files.length - 1) toast.loading(`Zipping ${node.name}: ${i + 1} / ${files.length}`, { id: t });
+      }
+      const blob = zipStore(entries);
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href; anchor.download = `${node.name || "library"}.zip`; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
+      toast.success(`${node.name}.zip: ${entries.length} file${entries.length === 1 ? "" : "s"}${failed ? ` (${failed} could not be fetched)` : ""}`, { id: t });
+    } catch (e) {
+      toast.error(`Could not zip ${node.name} — ${e instanceof Error ? e.message : "failed"}`, { id: t });
+    } finally {
+      setSaving(null);
+    }
+  };
+
   /** Open the picker for one folder. "" is the bucket root. */
   const pickFilesFor = (folder: string) => {
     uploadFolderRef.current = folder;
@@ -276,6 +314,32 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog", que
     setConfirmDelete(null);
     if (!r.ok) return toast.error(`Could not delete ${key}`, { description: r.error });
     toast.success(`Deleted ${key}`);
+    await load(true);
+  };
+
+  /** Delete a whole folder: every object under it, one by one (R2 has no folder object). Irreversible, so the
+   *  user types the folder name to confirm; the bucket root itself is never offered. */
+  const deleteFolder = async (node: CloudTreeNode) => {
+    if (!node.path) return;
+    const keys: string[] = [];
+    const walk = (n: CloudTreeNode) => { if (n.type === "file") keys.push(n.path); else (n.children ?? []).forEach(walk); };
+    walk(node);
+    if (!keys.length) { toast.info(`${node.name} is already empty.`); return; }
+    const typed = window.prompt(`Permanently delete ${node.path} — ${keys.length} file${keys.length === 1 ? "" : "s"}, ${formatBytes(node.bytes ?? 0)}? This cannot be undone.
+
+Type the folder name "${node.name}" to confirm:`);
+    if (typed?.trim() !== node.name) { if (typed !== null) toast.info("Folder name did not match — nothing deleted."); return; }
+    setBusyKey(node.path);
+    const t = toast.loading(`Deleting ${node.name}: 0 / ${keys.length}`);
+    let failed = 0;
+    for (let i = 0; i < keys.length; i++) {
+      const r = await deleteFromBucket(keys[i]);
+      if (!r.ok) failed++;
+      if (i % 10 === 9 || i === keys.length - 1) toast.loading(`Deleting ${node.name}: ${i + 1} / ${keys.length}`, { id: t });
+    }
+    setBusyKey(null);
+    if (failed) toast.error(`${node.name}: ${keys.length - failed} deleted, ${failed} failed`, { id: t });
+    else toast.success(`Deleted ${node.path} (${keys.length} files)`, { id: t });
     await load(true);
   };
 
@@ -342,11 +406,13 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog", que
                   }
                   onUpload={pickFilesFor}
                   onDownload={downloadFile}
+                  onDownloadFolder={downloadFolder}
                   saving={saving}
                   uploading={uploading}
                   confirmDelete={confirmDelete}
                   onRequestDelete={setConfirmDelete}
                   onConfirmDelete={(key) => void runDelete(key)}
+                  onDeleteFolder={deleteFolder}
                   busyKey={busyKey}
                   openPreview={openPreview}
                   previews={previews}
@@ -486,7 +552,7 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog", que
 
 interface TreeRowProps {
   node: CloudTreeNode;
-  /** Navigator bar: browse only — name + size, no dates, no upload / download / delete. */
+  /** Navigator bar: browse only — name + size, no dates, download and delete per row; no upload. */
   compact?: boolean;
   depth: number;
   expanded: Set<string>;
@@ -494,12 +560,14 @@ interface TreeRowProps {
   onToggle: (path: string) => void;
   onUpload: (folder: string) => void;
   onDownload: (node: CloudTreeNode) => void | Promise<void>;
+  onDownloadFolder: (node: CloudTreeNode) => void | Promise<void>;
   /** Path of the file currently being fetched, so its own button can show the spinner. */
   saving: string | null;
   uploading: string | null;
   confirmDelete: string | null;
   onRequestDelete: (key: string | null) => void;
   onConfirmDelete: (key: string) => void;
+  onDeleteFolder: (node: CloudTreeNode) => void | Promise<void>;
   busyKey: string | null;
   openPreview: string | null;
   previews: Record<string, FilePreview>;
@@ -616,7 +684,7 @@ function TreeRow(p: TreeRowProps) {
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
-            {node.url && !p.compact && (
+            {node.url && (
               <button
                 type="button"
                 onClick={() => void p.onDownload(node)}
@@ -630,7 +698,7 @@ function TreeRow(p: TreeRowProps) {
                   : <Download className="h-3 w-3" />}
               </button>
             )}
-            {!p.compact && <button
+            <button
               type="button"
               onClick={() => p.onRequestDelete(node.path)}
               title={`Delete ${node.path}`}
@@ -638,7 +706,7 @@ function TreeRow(p: TreeRowProps) {
               className="shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-600 group-hover:text-slate-400"
             >
               <Trash2 className="h-3 w-3" />
-            </button>}
+            </button>
           </>
         )}
       </div>
@@ -675,6 +743,26 @@ function TreeRow(p: TreeRowProps) {
             {p.compact ? node.files ?? 0 : `${node.files ?? 0} · ${formatBytes(node.bytes ?? 0)}`}
           </span>
         </button>
+        <button
+          type="button"
+          onClick={() => void p.onDownloadFolder(node)}
+          title={`Download ${node.path || "the bucket"} as a .zip`}
+          aria-label={`Download ${node.name} as a zip`}
+          disabled={p.saving === node.path}
+          className="ml-1.5 shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-sky-100 hover:text-sky-600 group-hover:text-slate-400 disabled:opacity-40"
+        >
+          {p.saving === node.path ? <Loader2 className="h-3 w-3 animate-spin text-sky-600" /> : <Download className="h-3 w-3" />}
+        </button>
+        {node.path && <button
+          type="button"
+          onClick={() => void p.onDeleteFolder(node)}
+          title={`Delete ${node.path} and everything in it`}
+          aria-label={`Delete folder ${node.name}`}
+          disabled={p.busyKey === node.path}
+          className="ml-1.5 shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-600 group-hover:text-slate-400 disabled:opacity-40"
+        >
+          {p.busyKey === node.path ? <Loader2 className="h-3 w-3 animate-spin text-rose-600" /> : <Trash2 className="h-3 w-3" />}
+        </button>}
         {!p.compact && <button
           type="button"
           onClick={() => p.onUpload(node.path)}

@@ -54,7 +54,7 @@ Furnishing empty rooms → **Design** (Floorplan Improver). A designed structura
 The live editor connector is slow; every call waits on a browser tab and every payload passes through the model. So:
 - **Run every stage locally** (this folder + `python tools/run_task.py`). Read standards, objects and skills from R2 directly (`tools/r2.mjs` → `getObjectText` / `listObjects` in the app repo), not through the connector.
 - **Never draw on the live canvas while tracing**, and never pass a plan JSON or an image through a connector tool argument (no inline `design`, no base64 / data-URL underlays).
-- **One editor step, last**, after S7_EXPORT: upload the source image to R2 `library/Images/<CODE>.<ext>`, set the canvas `imageUnderlay.src` to its public R2 URL, upload the canvas to `library/Designs/<CODE>.json` (`r2.mjs → putObject`), then open the editor on that design — one call, by path.
+- **One editor step, last**, after S7_EXPORT: upload the source image to R2 `Projects/<CODE>/inputs/<CODE>.<ext>`, set the canvas `imageUnderlay.src` to its public R2 URL, upload the canvas to `library/Designs/<CODE>.json` (`r2.mjs → putObject`), then open the editor on that design — one call, by path.
 - The user still answers S0, confirms S1 (and a sketch reading) and approves S8; working locally changes where the work runs, not who decides.
 - An agent with only the connector (no local files, no R2 keys) cannot run this pipeline — say so and have it run from Claude Code.
 

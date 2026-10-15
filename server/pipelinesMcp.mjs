@@ -7,7 +7,8 @@
  *    Pipelines/apps.json   { id, mode: "frame", kind: "app", templates: <stable>, preview?: <newer>, versions }
  *    Pipelines/index.json  one entry per pipeline (phase, path, version)
  *  The UI runs in the editor in a sandboxed iframe (src/floorplan/pipelineFrame.ts); it keeps its data through
- *  window.pipeline.db / window.claude.use('db') in Projects/<CODE>/<id>/state.json.
+ *  window.pipeline.db / window.claude.use('db') in Projects/<CODE>/<n-phase>/<id>/state.json — the pipeline's folder in the
+ *  project (Projects/project_creation.md; src/floorplan/projectPaths.ts).
  *
  *  RULES. Ids are new (create never replaces a pipeline); a version folder is never rewritten; update makes a
  *  PREVIEW version that only a pipeline.run { channel: "preview" } opens, and release makes it the stable one
@@ -148,7 +149,7 @@ export async function callPipelineTool(cfg, name, args = {}, user = "user") {
     await putJson(cfg, `${root}pipeline.json`, {
       schema: "pipeline/1", id, title, version, phase: phase.toLowerCase(), description,
       ui: { app: id, templates: dir.slice(cfg.prefix.length + 1), steps: `${dir.slice(cfg.prefix.length + 1)}steps.json` },
-      outputs: { keep: [`Projects/{CODE}/${id}/state.json`] }, created: { by: user, at: now, with: "pipelines.create (connector)" },
+      outputs: { keep: ["{DIR}state.json"] }, created: { by: user, at: now, with: "pipelines.create (connector)" },
     });
     await putObject(cfg, `${root}README.md`, String(args.readme ?? `# ${title}\n\n${description}\n\nUI: \`Pipelines/apps/${id}/<version>/\` (opened by the editor as a tab). Data per project: \`Projects/<CODE>/${id}/state.json\`.\n`), FILE_MIME[".md"]);
     reg.apps = [...(reg.apps ?? []), { id, title, phase: phase.toLowerCase(), version, mode: "frame", kind: "app", templates: dir, page: "index.html", description, mount: true, versions: [version] }];

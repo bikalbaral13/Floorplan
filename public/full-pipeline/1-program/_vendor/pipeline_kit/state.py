@@ -5,12 +5,14 @@ A chat's working folder is wiped when the chat ends. Each pipeline packs the SMA
 BuilderPluss connector, and every pipeline shares one registry of projects:
 
     Projects/index.json                        projects-index/1: per project code, per pipeline → link, state, next step
-    Projects/<CODE>/<pipeline id>/state.json   pipeline-project/1: the packed files + what to fetch back on restore
+    Projects/<PROJECT>/<n-phase>/<pipeline id>/[<SUB>/]state.json   pipeline-project/1: the packed files + what to
+                                               fetch back on restore (projpaths.pipeline_dir)
 
 Binary files never travel through the connector (a library read shows an image to the agent, it does not return
 bytes). A pipeline lists them under `fetch` with where they can be fetched back from (a published brief, Projects/).
 """
 import datetime, fnmatch, json, os
+from . import projpaths as PP
 
 SCHEMA = "pipeline-project/1"
 INDEX = "projects-index/1"
@@ -30,17 +32,20 @@ def collect(pdir, patterns, exclude=(), max_file=200_000):
                 out[rel] = open(full, encoding="utf-8").read()
     return dict(sorted(out.items()))
 
-def pack(pipeline, version, code, title, files, link=None, next_task=None, fetch=None, summary=None, fixture=False):
+def pack(pipeline, version, code, title, files, link=None, next_task=None, fetch=None, summary=None, fixture=False, project=None, phase=None):
     st = {"schema": SCHEMA, "pipeline": pipeline, "pipeline_version": version, "code": code, "title": title, "fixture": bool(fixture),
+          **({"project": project} if project and project != code else {}), **({"phase": PP.phase_of(pipeline, phase)} if phase else {}),
           "saved_at": now(), "link": link, "next_task": next_task, "files": files, "fetch": fetch or [], "summary": summary or {}}
     size = len(json.dumps(st, ensure_ascii=False, separators=(",", ":")).encode())
     if size > LIMIT: raise ValueError(f"state is {size / 1e3:.0f} kB > {LIMIT / 1e3:.0f} kB — leave large files out (they belong in Projects/ or the work dir)")
     return st
 
-def library_path(code, pipeline): return f"Projects/{code}/{pipeline}/state.json"
+def library_path(code, pipeline, project=None, phase=None):
+    """R2 key of a pipeline project's packed state: inside its project's pipeline folder."""
+    return PP.pipeline_dir(project or code, pipeline, code, phase) + "state.json"
 
 def entry(st):
-    return {"code": st["code"], "title": st["title"], "pipeline": st["pipeline"], "link": st.get("link"), "state": library_path(st["code"], st["pipeline"]),
+    return {"code": st["code"], "title": st["title"], "pipeline": st["pipeline"], "link": st.get("link"), "state": library_path(st["code"], st["pipeline"], st.get("project"), st.get("phase")),
             "updated": st["saved_at"], "version": st["pipeline_version"], "next_task": st.get("next_task"), "summary": st.get("summary", {}), "fixture": st.get("fixture", False)}
 
 def merge_index(current, e):
@@ -79,7 +84,7 @@ def save_steps(st, out_dir):
 1. `library read Projects/index.json` (missing on the very first save of any project: skip) → save it as `{out_dir}/index.current.json`.
 2. Merge this pipeline's entry: `python -c "import json,sys; sys.path.insert(0,'_vendor'); from pipeline_kit import state as S; cur=json.load(open('{out_dir}/index.current.json')) if __import__('os').path.exists('{out_dir}/index.current.json') else None; json.dump(S.merge_index(cur, json.load(open('{out_dir}/index-entry.json'))), open('{out_dir}/index.json','w'), indent=1, ensure_ascii=False)"`
    (or the pipeline's own `tools/project_state.py index …`).
-3. `library write {library_path(code, pl)}` with `content` = `{out_dir}/state.json`, `overwrite: true`.
+3. `library write {library_path(code, pl, st.get('project'), st.get('phase'))}` with `content` = `{out_dir}/state.json`, `overwrite: true`.
 4. `library write Projects/index.json` with `content` = `{out_dir}/index.json`, `overwrite: true`.
 5. Read `Projects/index.json` back and check {code} → {pl} shows {st.get('link') or 'its entry'}.
 """

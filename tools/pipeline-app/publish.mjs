@@ -1,6 +1,6 @@
 // Publish a pipeline's app to R2 so the editor can load the pipeline's tabs (Import ▸ Pipeline).
 //   node tools/pipeline-app/publish.mjs <built site dir> <CODE> [pipeline id, default space-brief]
-//     a run's built data (everything but the *.html pages) → library/Projects/<CODE>/<pipeline>/app/
+//     a run's built data (everything but the *.html pages) → Projects/<CODE>/<pipeline>/app/
 //   node tools/pipeline-app/publish.mjs --templates <templates/app dir> <pipeline id> <version>
 //     the app's code → library/Pipelines/apps/<id>/<version>/, then the registry tools/pipeline-app/apps.json →
 //     library/Pipelines/apps.json (point the entry at the new version there first)
@@ -39,7 +39,10 @@ if (manifests) {
 
 const TYPES = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html", ".json": "application/json", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png" };
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-const dest = templates ? `${cfg.prefix}/Pipelines/apps/${code}/${args[2]}/` : `${cfg.prefix}/Projects/${code}/${pipeline}/app/`;
+// Project data goes into the pipeline's folder in the project (Projects/project_creation.md, src/floorplan/projectPaths.ts):
+// Projects/<CODE>/<n-phase>/<pipeline>/steps/app/. Templates stay in the Library.
+const PHASE_DIR = { program: "1-program", "floorplan-tracer": "1-program", "space-brief": "2-plan", "build-from-deck": "3-build", "walkthrough-video": "4-present" };
+const dest = templates ? `${cfg.prefix}/Pipelines/apps/${code}/${args[2]}/` : `Projects/${code}/${PHASE_DIR[pipeline] ?? "1-program"}/${pipeline}/steps/app/`;
 let n = 0;
 for (const f of walk(site)) {
   const rel = path.relative(site, f).split(path.sep).join("/");

@@ -37,7 +37,7 @@ Status: **Phase 1 built** (2026-10-12) — `tools/viewer/index.html`, published 
 - Loads from `?src=` (R2 path or presigned URL); drag-and-drop a local JSON as fallback.
 - Upload via `tools/r2.mjs putObject`.
 
-**R2 setup:** public read (or presigned links) on `viewer/` and `Designs/`; CORS GET on the bucket.
+**R2 setup:** public read (or presigned links) on `Projects/` and `Designs/` (viewer sessions: `Projects/<CODE>/viewer/<id>/`, unassigned ones in `Projects/_unassigned/viewer/`); CORS GET on the bucket.
 
 **Test:** Villa 1 (improved) + one large plan for load time.
 **Done when:** both open by link, three panes agree, large plan stays interactive.

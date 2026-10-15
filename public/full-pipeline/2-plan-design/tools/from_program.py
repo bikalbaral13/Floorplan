@@ -3,7 +3,7 @@
     python tools/from_program.py <plan_trace.json> --level GF [--code <CODE>] [--title "..."] [--program-project <project.json>]
                                  [--refs <folder>] [--work-dir <dir>]
 
-<plan_trace.json> is the program pipeline's output (plan_trace.v1): `Projects/<CODE>/program/plan_trace.json` once
+<plan_trace.json> is the program pipeline's output (plan_trace.v1): `Projects/<CODE>/1-program/program/output/plan_trace.json` once
 published, or `program_pipeline/projects/<CODE>/output/plan_trace.json` locally. One brief per level (as the program's
 own hand-off): `--level GF`, `--level FF` … A single-level trace needs no --level.
 

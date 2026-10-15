@@ -1,4 +1,4 @@
 {"id": "S9_PUBLISH", "version": "0.2.0", "title": "Publish lasting outputs and the run record", "kind": "script", "gate": false,
- "summary": "Stage pipeline.json outputs.keep under Projects/<CODE>/ with run.json (run/1); upload when an R2 uploader is configured.",
+ "summary": "Stage pipeline.json outputs.keep under Projects/<PROJECT>/2-plan/space-brief/[<CODE>/] with run.json (run/1); upload when an R2 uploader is configured.",
  "inputs": ["pipeline.json", "TASKS.csv", "work: decks/*", "work: views/*"], "outputs": ["work: publish/Projects/<CODE>/**", "run.json"],
  "checks": ["run.json validates against run.v1", "every keep output exists and is hashed"]}

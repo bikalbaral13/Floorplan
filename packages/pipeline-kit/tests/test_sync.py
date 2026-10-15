@@ -60,7 +60,7 @@ try:
     check(r["status"] == "partial" and not r["run_errors"], f"first publish is partial and run.json validates {r['run_errors']}")
     check(store.get("Projects/X/demo/X.thing.json") == open(os.path.join(wd, "out", "X.thing.json"), "rb").read(), "kept file uploaded byte-identical")
     check(store.get("Projects/X/demo/final.json") is None, "the gated file is not uploaded")
-    run = json.loads(store.get("Projects/X/runs/demo/20261007T100000Z/run.json"))
+    run = json.loads(store.get("Projects/X/2-plan/demo/run.json"))
     check(run["inputs"][0]["key"] == "Projects/X/plan/handoff.json" and run["library"][0]["source"] == "local_copy" and "sha256" in run["library"][0],
           "run.json records the pulled input and the pinned standards digest")
     check(os.path.exists(os.path.join(wd, "runs", "20261007T100000Z.json")), "a local copy of run.json stays in the work dir")
@@ -71,8 +71,8 @@ try:
     n1 = len(store.puts); r = sync.publish(L, "X", store, run_id="20261007T110000Z")
     up = store.puts[n1:]
     check(r["status"] == "done" and "Projects/X/demo/final.json" in up, "after the gate the output publishes and the run is done")
-    check(set(up) == {"Projects/X/demo/final.json", "Projects/X/runs/demo/20261007T110000Z/run.json"}, f"unchanged files are skipped by digest ({len(up)} puts)")
-    run = json.loads(store.get("Projects/X/runs/demo/20261007T110000Z/run.json"))
+    check(set(up) == {"Projects/X/demo/final.json", "Projects/X/2-plan/demo/run.json", "Projects/X/archive/20261007T100000Z/2-plan/demo/run.json"}, f"unchanged files are skipped by digest; the previous run.json is archived ({len(up)} puts)")
+    run = json.loads(store.get("Projects/X/2-plan/demo/run.json"))
     check(any(o.get("skipped_unchanged") for o in run["outputs"]) and any(t.get("approved") == "FIXTURE ok" for t in run["tasks"]), "run.json marks skipped files and carries approvals")
 
     # a changed file re-uploads to the same key (latest only)

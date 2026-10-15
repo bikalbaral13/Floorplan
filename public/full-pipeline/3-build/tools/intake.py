@@ -1,4 +1,4 @@
-"""S1 intake: plan-phase deck (.pptx) -> deck.json + extracted images.
+"""S1 intake: plan-phase deck (.pptx or .pdf) -> deck.json + extracted images (+ pages/ renders for a PDF).
 
 Reads every slide with python-pptx and records text (with position), links,
 dimensions, pictures (deduplicated by md5, with crop) and drawn overlay shapes.
@@ -257,14 +257,65 @@ def overlays(rec, pic):
     return out
 
 
+def read_pdf(deck, img_dir, seen):
+    """A PDF deck: one 'slide' per page — text blocks with their boxes, embedded pictures, and a page render
+    (pages/page-NN.png) for the agent and the app to look at. No drawn overlays (a PDF has no shape objects)."""
+    import pymupdf as fitz
+    doc = fitz.open(deck)
+    (img_dir.parent / "pages").mkdir(parents=True, exist_ok=True)
+    slides, size = [], None
+    for i, page in enumerate(doc, 1):
+        W, H = page.rect.width, page.rect.height
+        size = size or [W, H]
+        rec = {"slide": i, "texts": [], "pictures": [], "shapes": [], "tables": [], "page_png": f"pages/page-{i:02d}.png"}
+        page.get_pixmap(dpi=110).save(str(img_dir.parent / rec["page_png"]))
+        for x0, y0, x1, y1, txt, *_ in page.get_text("blocks"):
+            if txt.strip():
+                rec["texts"].append({"text": txt.strip(), "box": [round(x0 / W, 4), round(y0 / H, 4), round((x1 - x0) / W, 4), round((y1 - y0) / H, 4)]})
+        for info in page.get_images(full=True):
+            try:
+                pix = fitz.Pixmap(doc, info[0])
+                if pix.n - pix.alpha >= 4: pix = fitz.Pixmap(fitz.csRGB, pix)
+                blob = pix.tobytes("png")
+            except Exception:
+                continue
+            md5 = hashlib.md5(blob).hexdigest()
+            if md5 not in seen:
+                (img_dir / f"{md5[:12]}.png").write_bytes(blob)
+                seen[md5] = {"file": f"images/{md5[:12]}.png", "px": [pix.width, pix.height]}
+            rects = page.get_image_rects(info[0]) or [page.rect]
+            r = rects[0]
+            rec["pictures"].append({"md5": md5, "file": seen[md5]["file"], "px": seen[md5]["px"],
+                                    "box": [round(r.x0 / W, 4), round(r.y0 / H, 4), round(r.width / W, 4), round(r.height / H, 4)], "crop": [0, 0, 0, 0]})
+        all_text = " \n ".join(t["text"] for t in rec["texts"])
+        rec["urls"] = sorted({u.rstrip(").,") for u in URL.findall(all_text)})
+        rec["dims_mm"] = [("DIA " if d[0] else "") + d[1] + ("000" if d[2].lower() == "m" and not d[0] else "") for d in DIM.findall(all_text)]
+        rec["levels_mm"] = [int(m[0]) for m in LEVEL.findall(all_text)]
+        slides.append(rec)
+    return slides, size
+
+
+def fallback_project(slides, name):
+    """No cover slide matched (a deck from another office, a PDF): one project named after the file, one room
+    holding every slide. The user then names the room in the Questions step."""
+    for r in slides:
+        if r.get("kind") in (None, "front"): r["kind"] = "spec" if r["texts"] else "view"
+        r.setdefault("category", category(r))
+    return [{"title": name, "cover_slide": slides[0]["slide"] if slides else 1, "room_list": [], "fallback": True,
+             "rooms": [{"name": name, "id": norm(name) or "room", "slides": [r["slide"] for r in slides]}]}]
+
+
 def main(deck, out):
     out = Path(out)
     (out / "images").mkdir(parents=True, exist_ok=True)
-    prs = Presentation(deck)
-    W, H = prs.slide_width, prs.slide_height
     seen = {}
-    slides = [read_slide(i, s, W, H, out / "images", seen) for i, s in enumerate(prs.slides, 1)]
-    projects = segment(slides)
+    if str(deck).lower().endswith(".pdf"):
+        slides, (W, H) = read_pdf(deck, out / "images", seen)
+    else:
+        prs = Presentation(deck)
+        W, H = prs.slide_width, prs.slide_height
+        slides = [read_slide(i, s, W, H, out / "images", seen) for i, s in enumerate(prs.slides, 1)]
+    projects = segment(slides) or fallback_project(slides, Path(deck).stem)
     by_slide = {r["slide"]: r for r in slides}
     plan_images(projects, by_slide)
     deck_json = {"schema": "deck/1", "source": str(Path(deck).name), "slide_size_emu": [W, H],

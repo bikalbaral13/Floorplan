@@ -10,14 +10,14 @@
   "new_project": "python tools/new_project.py {CODE} --title \"...\" --plan <canvas.json> --refs <folder>",
   "selftest": "python tools/selftest.py"
  },
- "kit": "0.3.1",
+ "kit": "0.3.2",
  "inputs": [
   {
    "id": "plan",
    "from": "project:inputs/plan.canvas.json",
    "schema": "canvas.v1",
    "required": true,
-   "note": "the drawing: editor Export JSON, the floorplan-tracer hand-off Projects/{CODE}/plan/{CODE}.canvas.json, or the program pipeline's Projects/{CODE}/program/plan_trace.json via tools/from_program.py"
+   "note": "the drawing: editor Export JSON, the floorplan-tracer output Projects/{PROJECT}/1-program/floorplan-tracer/output/{CODE}.canvas.json, or the program pipeline's Projects/{PROJECT}/1-program/program/output/plan_trace.json via tools/from_program.py"
   },
   {
    "id": "refs",
@@ -35,7 +35,7 @@
  "library_pins": [
   {
    "path": "library/Pipelines/_kit/",
-   "version": "0.3.1",
+   "version": "0.3.2",
    "local_copy": "_vendor/pipeline_kit"
   },
   {
@@ -66,58 +66,58 @@
    {
     "id": "views",
     "local": "views/*.svg",
-    "to": "Projects/{CODE}/brief/views/",
+    "to": "{OUT}views/",
     "after": "S4_VIEWS"
    },
    {
     "id": "views_png",
     "local": "views/*.png",
-    "to": "Projects/{CODE}/brief/views/",
+    "to": "{OUT}views/",
     "after": "S4_VIEWS",
     "binary": true
    },
    {
     "id": "scope",
     "local": "project:scope.json",
-    "to": "Projects/{CODE}/brief/scope.json",
+    "to": "{OUT}scope.json",
     "after": "S3_SCOPE"
    },
    {
     "id": "apps",
     "local": "project:apps.json",
-    "to": "Projects/{CODE}/brief/apps.json",
+    "to": "{OUT}apps.json",
     "after": "S7_PUBLISH_APPS"
    },
    {
     "id": "decks",
     "local": "decks/*.pptx",
-    "to": "Projects/{CODE}/brief/decks/",
+    "to": "{OUT}decks/",
     "after": "S8_ARCHIVE",
     "binary": true
    },
    {
     "id": "deck_briefs",
     "local": "decks/*.spacebrief.json",
-    "to": "Projects/{CODE}/brief/decks/",
+    "to": "{OUT}decks/",
     "schema": "spacebrief.v1",
     "after": "S8_ARCHIVE"
    },
    {
     "id": "deck_index",
     "local": "project:decks.json",
-    "to": "Projects/{CODE}/brief/decks.json",
+    "to": "{OUT}decks.json",
     "after": "S8_ARCHIVE"
    },
    {
     "id": "roombrief",
     "local": "decks/roombrief.json",
-    "to": "Projects/{CODE}/brief/roombrief.json",
+    "to": "{OUT}roombrief.json",
     "after": "S8_ARCHIVE"
    },
    {
     "id": "report",
     "local": "project:REPORT.md",
-    "to": "Projects/{CODE}/runs/space-brief/"
+    "to": "{DIR}"
    }
   ],
   "temp": [
@@ -130,8 +130,5 @@
    "archive/**",
    "publish/**"
   ]
- },
- "promotes": [
-  "library/Schemas/"
- ]
+ }
 }

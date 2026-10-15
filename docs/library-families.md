@@ -187,3 +187,87 @@ No name collisions between the two pipelines today.
 3. **[decide]** Mapping direction (§ 5): object → family mapping (recommended), or family-first generated object props.
 4. **[decide]** Where material bindings live: per project, per design, or produced by the moodboard picker.
 5. **[decide]** Who can publish: agents through the signed write with your approval per publish (recommended), or only from a dev machine.
+
+## 13. Unifying `library/Objects` and `library/Families` (PLAN, 2026-10-14 — not decided)
+
+Status: written for review; the user decides later. Nothing below has been done.
+
+### 13.1 The problem today (R2 `library/`)
+
+| Copy | Where | What |
+|---|---|---|
+| Objects | `library/Objects/` (154 files, mostly one `Architectural/` folder) | editor objects: params, Math Engine spine, 2D symbol, editor 3D preview |
+| Families | `library/Families/Interior` (182), `Exterior` (40) | Blender mesh generators (`family.json` + `build.py`) — raw copy of 2026-10-06 |
+| Pipeline copies | `library/Pipelines/Build/{interior,exterior}-mesh-pipeline/families/` | the copies the mesh pipelines actually build from |
+
+The same thing is described up to three times with different parameters (`Objects/Architectural/bed.json`,
+`bed_python.json` ↔ `Families/Interior/BED_PLATFORM` ↔ the pipeline's own copy), and nothing links them.
+
+### 13.2 Two end states
+
+**A — two folders, linked.** Both stay; each object gets `"family": "<Category>/<ID>@<ver>"`, each family
+`"objects": [...]`; the mesh pipelines read `library/Families/` (pinned) and drop their own copies. Nothing moves.
+
+**B — one folder, one item per folder (recommended).** `library/Families/` goes away:
+
+```
+library/Objects/<Category>/<id>/
+    object.json      params, Math Engine spine, 2D symbol        (was Objects/Architectural/<id>.json)
+    family/          family.json, build.py, test/                (was Families/<Interior|Exterior>/<ID>)
+    preview.png
+    versions/<x.y.z>/
+```
+
+An object with no render mesh has no `family/`; a render-only family (TERRAIN, ROAD, …) gets a thin `object.json`
+so it can be placed and listed. Categories are shared (Furniture, Lighting, Soft goods, Joinery, Finishes,
+Fixtures, Architectural, Site, Landscape, Street).
+
+### 13.3 Rules that make it one system
+
+1. **One parameter schema.** The object's params are the source of truth; `family.json` maps them (`"map"`), never
+   redefines them. Units in metres everywhere.
+2. **Parameter kinds** in `family.json`: `geometry` (in the instance key), `material` (per-instance override),
+   `placement` (the transform), each with a rounding step.
+3. **Instance key** = `<family>@<version>#hash(rounded geometry params)`. Same key → one mesh, many transforms —
+   three.js `InstancedMesh` in the editor/viewer, one mesh datablock in Blender (the instance-master standard), one
+   mesh + many nodes in GLB, ISM in Unreal; the count per key is also the BOQ quantity. Families with
+   `"geometry_input": "plan"` (walls, finishes, roads, terrain) are unique and skip the key. One `instanceKey()`
+   helper in the shared kit, used by the editor, the renderer and the mesh pipelines; built meshes cached by key.
+4. **Versions are frozen**; a key includes the version, so a changed `build.py` never alters existing instances.
+5. **Writers**: the Parametric Object Creator links/creates the family instead of a separate mesh; new families go
+   through the approval-gated publish (draft → preview → release), like pipelines.
+
+### 13.4 Existing work keeps working
+
+- **Designs** store `objectId` + `objectPath`. A generated alias index `library/Objects/index.json` (old path → new
+  folder, plus `family`, `status`, `category`) lets the loader resolve moved objects; old designs open unchanged and
+  a save writes the new path. Aliases kept for at least one release.
+- **Mesh pipelines** switch their one pinned families reference; their local `families/` folders are deleted only
+  after a test room renders identically.
+- **Skills / docs / AGENT.md** paths updated in the same pass; a check fails on any old path left.
+- `REGISTRY.json` and `index.json` are generated, never hand-edited. A check script flags: object → missing family,
+  unused family (unless `standalone`), duplicate ids, old paths.
+
+### 13.5 What "in unison" means in practice
+
+| Case | After unification |
+|---|---|
+| object + matching family (e.g. bed ↔ BED_PLATFORM) | one item: params → 2D, editor 3D, render mesh, instancing |
+| object only (most of today's objects) | unchanged (Math Engine 3D) until a `build.py` is written |
+| family only (site families, ~54 interior specs) | placeable via a thin object; renders as before |
+| spec-only families (no `build.py`) | listed, not rendered, until implemented |
+
+### 13.6 Steps (each one reversible; stop after any)
+
+1. **Back up** `library/Objects/`, `library/Families/` and the two pipeline `families/` folders to `backups/`.
+2. **Inventory** (read-only): pair objects ↔ families; list paired / object-only / family-only; flag `*.bak-*`,
+   `-materials` side files, `bed` / `bed_python` style duplicates. Output: a pairing table (xlsx). This sizes the rest.
+3. **Decide A or B** from the table.
+4. **Tag parameters** of each paired family (`geometry` / `material` / `placement`, rounding) and write the `map`.
+5. **Generate** `index.json` (with aliases) and `REGISTRY.json`; add the check script.
+6. **Move one category** (Furniture first): merge pairs, clean leftovers, keep aliases; re-render a test room and
+   compare.
+7. **Point the mesh pipelines** at the single source; delete their copies after the comparison passes.
+8. **Remaining categories**, one at a time, same check each time.
+9. **Instancing**: `instanceKey()` in the kit, mesh cache by key, instancing report in the render step.
+10. **Update writers and docs**: Parametric Object Creator skill, AGENT.md, publish flow for families.

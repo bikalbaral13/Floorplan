@@ -10,7 +10,7 @@
   "new_project": "python tools/new_project.py {CODE} --title \"...\"",
   "selftest": "python tools/selftest.py --blender"
  },
- "kit": "0.3.1",
+ "kit": "0.3.2",
  "inputs": [
   { "id": "blend", "from": "scope:blend_path", "required": true, "note": "any .blend (e.g. the exterior or interior mesh pipeline's output); opened read-only, never overwritten, kept outside public/" },
   { "id": "script", "from": "scope:script_file", "required": false, "note": "voiceover / video script (PDF, DOCX, TXT)" },
@@ -22,14 +22,14 @@
  ],
  "outputs": {
   "keep": [
-   { "id": "shots", "local": "project:shots.json", "to": "Projects/{CODE}/walkthrough/shots.json", "schema": "walkthrough-shots.v1" },
-   { "id": "prompts", "local": "project:prompts.json", "to": "Projects/{CODE}/walkthrough/prompts.json", "schema": "walkthrough-prompts.v1" },
-   { "id": "blend", "local": "output/{CODE}_walkthrough.blend", "to": "Projects/{CODE}/walkthrough/{CODE}_walkthrough.blend", "binary": true },
-   { "id": "preview", "local": "output/{CODE}_preview.mp4", "to": "Projects/{CODE}/walkthrough/{CODE}_preview.mp4", "binary": true },
-   { "id": "clips", "local": "output/ai/*.mp4", "to": "Projects/{CODE}/walkthrough/clips/", "binary": true, "after": "S10_REVIEW" },
-   { "id": "final", "local": "output/{CODE}_final.mp4", "to": "Projects/{CODE}/walkthrough/{CODE}_final.mp4", "binary": true, "after": "S10_REVIEW" },
-   { "id": "handoff", "local": "project:handoff.json", "to": "Projects/{CODE}/walkthrough/handoff.json", "after": "S10_REVIEW" },
-   { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/walkthrough-video/" }
+   { "id": "shots", "local": "project:shots.json", "to": "{OUT}shots.json", "schema": "walkthrough-shots.v1" },
+   { "id": "prompts", "local": "project:prompts.json", "to": "{OUT}prompts.json", "schema": "walkthrough-prompts.v1" },
+   { "id": "blend", "local": "output/{CODE}_walkthrough.blend", "to": "{OUT}{CODE}_walkthrough.blend", "binary": true },
+   { "id": "preview", "local": "output/{CODE}_preview.mp4", "to": "{OUT}{CODE}_preview.mp4", "binary": true },
+   { "id": "clips", "local": "output/ai/*.mp4", "to": "{OUT}clips/", "binary": true, "after": "S10_REVIEW" },
+   { "id": "final", "local": "output/{CODE}_final.mp4", "to": "{OUT}{CODE}_final.mp4", "binary": true, "after": "S10_REVIEW" },
+   { "id": "handoff", "local": "project:handoff.json", "to": "{OUT}handoff.json", "after": "S10_REVIEW" },
+   { "id": "report", "local": "project:REPORT.md", "to": "{DIR}" }
   ],
   "temp": ["jobs/**", "intake/**", "output/preview/**", "output/*.blend1"]
  },
@@ -37,6 +37,6 @@
   "mode": "local-first",
   "after": "S10_REVIEW",
   "rule": "every stage runs on the user's PC (Blender headless + Python); AI generation spends the user's credits only after the S7 gate; nothing is published before S10",
-  "steps": [ { "publish": "outputs.keep", "to": "Projects/{CODE}/walkthrough/" } ]
+  "steps": [ { "publish": "outputs.keep", "to": "{OUT}" } ]
  }
 }

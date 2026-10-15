@@ -15,8 +15,6 @@
   { "id": "base_blend", "from": "project:inputs/*.blend", "required": true, "note": "never overwritten" }
  ],
  "library_pins": [
-  { "path": "library/Schemas/" },
-  { "path": "library/Families/", "local_copy": "families/" },
   { "path": "library/Materials/" }
  ],
  "outputs": {
@@ -26,6 +24,5 @@
    { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/interior-mesh/" }
   ],
   "temp": ["**/*.blend1"]
- },
- "promotes": ["library/Families/"]
+ }
 }

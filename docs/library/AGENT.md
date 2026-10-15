@@ -1,74 +1,103 @@
-# AGENT.md — the BuilderPluss library
+# AGENT.md — the BuilderPluss bucket
 
-Read this first. `library/` in R2 is a complete, self-contained workspace: the data, the playbooks (skills),
-the engine that computes geometry, and the viewer that shows results. **No editor app is needed.**
+Read this first. The R2 bucket has two parts and nothing else matters:
 
-Public read: `https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/<path>`
+| Prefix | Holds | Rule |
+|---|---|---|
+| `library/` | **Reusable** things: objects, materials, pipelines | Never put one project's files here |
+| `Projects/` | **Everything one project uploads or produces** | Layout: `Projects/project_creation.md` |
+
+(`relay/` is the connector's own scratch queue — ignore it.)
+
+Public read: `https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/<key>` (e.g. `…/library/Objects/…`, `…/Projects/<CODE>/…`).
 Source of this file: `docs/library/AGENT.md` in the Floorplan repo (edit there, then re-upload).
 
 ---
 
-## 1. How to work (viewer-first, file-first)
+## 1. How to work
 
-1. **Open the viewer.** Connector: `viewer { op: "open", src? }` → give the user the link. The viewer
-   (`Viewer/v1/index.html`) shows any design as **JSON · 2D · 3D**.
-2. **Pick a skill** for anything beyond one small edit: `skills { op: "list" }` → `skills { op: "read" }`,
-   then follow it. Skills live in `Skills/<name>/*.md`.
-3. **Work on files, not on a canvas.** Build or change the design JSON as a whole; save it once
-   (`design { op: "load", path, design }`, or straight to R2 if you have local keys via `tools/r2.mjs`).
-4. **Show it:** `viewer { op: "show", session, src }`. **Check it:** `viewer { op: "snapshot", session }`.
-5. **Ask the user, never yourself:** `viewer { op: "form", … }`, then poll `viewer { op: "events" }`
-   for their answers (and for what they clicked).
-6. Long calls may return `{ pending: true, ticket }` → call `await_result` with the ticket.
+1. **Find the project.** `Projects/index.json` lists every project; `Projects/<CODE>/project.json` says which phase it
+   is in and who is working on it. A new project: follow `Projects/project_creation.md` §7.
+2. **Find the pipeline** for the phase in `library/Pipelines/index.json` (by `phase` and `path` — never a hard-coded
+   folder). Read its `AGENTS.md` and `pipeline.json`, then run it.
+3. **Write only where the layout says** (§3). Inputs the user gives go to `Projects/<CODE>/inputs/`; what a pipeline
+   makes goes to its own folder `Projects/<CODE>/<n-phase>/<pipeline>/`.
+4. **Ask the user, never yourself.** Questionnaires and approvals are answered by the user.
+5. Long connector calls may return `{ pending: true, ticket }` → call `await_result` with the ticket.
 
-Without the connector (local agent with R2 keys): same files, same order — write with `tools/r2.mjs`,
-show with a viewer link `Viewer/v1/index.html?src=<path>`.
+Without the connector (a local agent with R2 keys): same files, same order — read and write with `tools/r2.mjs`.
 
 ---
 
-## 2. What is where
+## 2. `library/` — what is where
 
-| Folder | What | Notes |
+| Folder | What | Read first |
 |---|---|---|
-| `Designs/` | Design JSONs (schemaVersion 2: `levels[]` of nodes/segments/spaces) | `<name>.view.json` next to one = baked object shapes for the viewer |
-| `Master Plans/` | Site plans; `*_grouped.json` = schemaVersion 3 (`groups[]`, one canvas per plot) | Viewer reads both |
-| `Objects/` | Parametric objects (six-node Math Engine spine), by discipline | Placed as `attachments` on nodes/segments/spaces |
-| `Materials/` | material/1: procedural + `pbr.baseColor` + plan2d + dxf | Referenced by `params.materialPath` |
-| `Moodboards/` | moodboard/1 picks per room | Plan key `moodboards` |
-| `Skills/` | Playbooks (md + scripts): Tracer, Improver, Renderer, Object/Material/Moodboard/Tool Creator, … | `Skills/index.json` |
-| `Pipelines/` | Runnable pipelines + `_kit` (shared code), e.g. `full-pipeline` | `Pipelines/README.md`, `index.json` |
-| `Workflows/` | Saved flows, run by path (`workflow { op: "run", path }`) | |
-| `Tools/` | Six-node tools (LIVE / COMMIT rows) | Tools never attach; objects do |
-| `Engine/` | **The engine**: `Engine/<ver>/engine.js` (evaluate + geometry), `latest.json` | Immutable versions, sha256 in `manifest.json` |
-| `Viewer/` | **The viewer**: `Viewer/v1/index.html`, `designs.json` (design list) | Open with `?src=` or `?session=&api=` |
-| `Schemas/`, `Standards/`, `Rules/`, `Fixtures/` | Shared definitions, standards, rule sets, test fixtures | |
-| `Images/`, `HDRI/`, `Glbs/`, `Video/` | Underlays, environment maps, loose models, media | Underlays reference `Images/` URLs, never data URLs |
-| `Families/` | Shared mesh families (planned, see docs/library-families.md) | |
-| `Projects/` | Project folders handed person → person | `Projects/index.json` |
-| `index.json` | Machine index of agents, designs, objects, skills, tools, workflows | |
-| `_versions/`, `_audit/` | Kept by the save path: old copies and save records | Do not write by hand |
+| `Objects/` | Parametric objects (six-node Math Engine spine), one folder per discipline. Placed on a canvas as `attachments` on nodes / segments / spaces | `Objects/README.md` |
+| `Materials/` | `material/1` materials: Blender procedural + `pbr` + `surface` + `plan2d` + `dxf`, by category. Objects point at one through `params.materialPath` | `Materials/README.md` |
+| `Pipelines/` | Runnable pipelines by phase: `Program/`, `Plan/`, `Build/`, `Present/` (`<id>-pipeline/` each, with `release.json`); `_kit/` = pipeline_kit; `apps/` + `apps.json` = the UIs the editor opens as tabs | `Pipelines/README.md`, `Pipelines/index.json` |
+| `index.json` | What is in the library: per folder → categories, file counts, bytes (`tools/library-index.mjs`) | |
+| `_versions/`, `_audit/` | Kept by the save path: old copies, save records | Do not write by hand |
+
+The evaluator for objects is built into the editor (`packages/engine` in the repo); objects carry their graph, not
+the engine.
 
 ---
 
-## 3. Rules that save hours
+## 3. `Projects/<CODE>/` — the project layout (short form)
 
-- **Coordinates:** plan x east, **y south (down the page)**, z up. Design coordinates are pixels;
+```
+project.json                       project/1: phases, members, history
+inputs/<drawings|decks|images|designs|models|shared>/   what the user gives — pipelines only read it
+1-program/  2-plan/  3-build/  4-present/
+  <pipeline>/[<SUB>/]              run.json · state.json · steps/ · output/ · answers/   (SUB = one floor, e.g. CODE_GF)
+handoff/<phase>.json               what a finished phase hands the next one (files + sha256)
+shared/canvas.json                 the ONE project canvas; shared/revisions/, shared/index.json, shared/rooms/
+media/<renders|video|drawings>/    client-facing results
+viewer/<session>/                  viewer / app sessions
+archive/<run_id>/                  superseded run.json files
+```
+
+Full rules, schemas and the creation steps: `Projects/project_creation.md`. Paths are built in one place —
+`pipeline_kit/projpaths.py` (pipelines) and `src/floorplan/projectPaths.ts` (editor) — so they never drift.
+
+---
+
+## 4. Rules that save hours
+
+- **Coordinates:** plan x east, **y south (down the page)**, z up. Canvas coordinates are pixels;
   `settings.pixelsPerMeter` (usually 100) converts. Object params are metres.
-- **renderMode:** objects saved as `"Nothing"` produce no geometry — bake with `"Full"` (the viewer bake does).
-- **Bake before showing real shapes:** `node tools/viewer/bake.mjs Designs/<name>.json --upload` writes
-  `<name>.view.json` (gzip). Without it the viewer shows boxes.
-- **Engine changes = new version:** commit, then `node tools/engine/publish.mjs <x.y.z>`. Never overwrite a
-  published version. A design may pin `settings.engineVersion`.
-- **Never** put keys or `.env` in the library — the bucket is publicly readable.
-- **Big files** (designs > a few MB): pass paths, not contents, through tool calls.
-- **Questionnaires are answered by the user**, never filled in by the agent.
+- **renderMode:** objects saved as `"Nothing"` produce no geometry; `"Basic"` is a size box; `"Full"` evaluates.
+- **Images in a canvas** reference a `Projects/<CODE>/inputs/…` (or `media/…`) URL — never a data URL, never `library/`.
+- **Never** put keys or `.env` in the bucket — it is publicly readable.
+- **Big files** (canvases > a few MB): pass paths, not contents, through tool calls.
+- **Nothing is deleted without the user.** A rerun moves the previous `run.json` to `archive/`.
 
 ---
 
-## 4. Viewer quick reference
+## 5. From "create a project" to a finished pipeline (connector only)
 
-`Viewer/v1/index.html`
-- `?src=Designs/X.json` — open a design (or a master plan); `&view=json|d2|d3|all`
-- `?session=<id>&api=<app>/__relay` — follow an agent session (what `viewer.open` returns)
-- no parameters — the list of designs (`Viewer/v1/designs.json`; ● = baked)
-- Click an object → its parameters; edit one → live re-evaluation with the R2 engine (preview, not saved).
+The user talks to you in claude.ai; everything they SEE and DO happens in the live editor link. You never answer
+their questions and never approve a step yourself.
+
+| Step | You call | The user |
+|---|---|---|
+| 1. Name it | `chat.ask` (or plain chat) for the **code** (A–Z 0–9 _) and **title** | answers |
+| 2. Create | `project { op: "create", code, title, phase }` — `phase: "build"` when they start from a deck | — |
+| 3. Offer the pipeline | "Run the Build pipeline?" — wait for yes | yes / no |
+| 4. Open the link | `session { op: "open" }` → give the link; `pipeline { op: "run", pipeline: "build-from-deck", code }` | opens it; the Build tabs appear |
+| 5. Upload | tell them to use the **Deck** tab (PPTX or PDF; saved to `inputs/decks/`); `pipeline.events { wait: true }` until `deck_uploaded` | uploads |
+| 6. Read the deck | `project { op: "job", code, pipeline: "build-from-deck", stage: "S1_INTAKE", args: { deck: "inputs/decks/<file>" } }`, then `project.jobs` until `done` (or they press **Run**) | — |
+| 7. Questions | point them to the **Questions** tab; `pipeline.events { wait: true }` until `answers`; read them with `pipeline.state { keys: ["answers"] }` | answers + approves |
+| 8. Draft brief | `project.job S2_DRAFT { project, room }` (from `questions.json` `room_ids[answers.room]`) | — |
+| 9. Curate | read `steps/S2_BRIEF/roombrief.draft.json` + the slide images (`library.read Projects/<CODE>/3-build/build-from-deck/steps/S1_INTAKE/…`); write `steps/S2_BRIEF/roombrief.curated.json` (`library.write`); `project.job S2_FINALIZE` | approves **Brief** |
+| 10. Geometry | read the plan image; write `steps/S3_GEOMETRY/trace.px.json`; `project.job S3_GEOMETRY` | approves **Plan** (geometry_check.png) |
+| 11. Objects | `project.job S4_CATALOG`; read `catalog.json`; write `steps/S4_RESOLVE/resolve.json`; `project.job S4_CHECK` | approves **Objects** |
+| 12. Room | `project.job S5_COMPOSE`; load `output/<CODE>.room.canvas.json` in the editor for them | approves **Room** |
+| 13. Drawings | `project.job S6_DRAWINGS` → `output/drawings/` (+ `media/drawings/`) | approves **Drawings** |
+| 14. Close | `pipeline.advance` after each approval; `project.status` to report | — |
+
+The file formats for steps 9–11 are in the pipeline's `AGENTS.md` (`library/Pipelines/Build/build-from-deck-pipeline/`).
+Script stages run on **the runner** — `node tools/runner/worker.mjs` on a machine with the repo and Python. A job
+`queued` for over a minute means no runner is online: tell the user to start it; do not try to run the stage yourself.
+Render (S7) and QA (S8) are not in the runner yet.

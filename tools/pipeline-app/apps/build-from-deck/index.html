@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build from Deck</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header id="top">
+  <div class="title"><b>Build from Deck</b> <span id="code" class="muted"></span></div>
+  <div id="runner-pill" class="pill">runner: …</div>
+</header>
+<main id="panels">
+  <section data-panel="deck">
+    <h2>1 · The deck</h2>
+    <p class="muted">Upload the plan-phase deck — PowerPoint (.pptx) or PDF. It is saved in the project's <code>inputs/decks/</code>.</p>
+    <label id="drop" class="drop">
+      <input id="file" type="file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
+      <span>Drop the deck here, or <u>choose a file</u></span>
+      <span id="upload-state" class="muted"></span>
+    </label>
+    <div id="decks" class="list"></div>
+    <div class="stage" data-stage="S1_INTAKE"></div>
+    <div id="pages" class="thumbs"></div>
+  </section>
+
+  <section data-panel="questions">
+    <h2>2 · Questions</h2>
+    <p class="muted">What the deck cannot settle by itself. Your answers go to Claude and to the next stages.</p>
+    <form id="qform" class="form"></form>
+    <div class="row"><button id="qsave" class="primary" type="button">Save answers</button><span id="qstate" class="muted"></span></div>
+  </section>
+
+  <section data-panel="brief">
+    <h2>3 · Room brief</h2>
+    <p class="muted">The draft collects everything the deck says about the room; Claude types each item's params (curated); finalize checks every slide is covered.</p>
+    <div class="stage" data-stage="S2_DRAFT"></div>
+    <div class="stage" data-stage="S2_FINALIZE"></div>
+    <div id="brief" class="table"></div>
+  </section>
+
+  <section data-panel="plan">
+    <h2>4 · Plan geometry</h2>
+    <p class="muted">Claude traces walls and openings on the deck's plan (trace.px.json); the script scales and checks them against the zone outlines.</p>
+    <div class="stage" data-stage="S3_GEOMETRY"></div>
+    <div id="plan" class="thumbs big"></div>
+  </section>
+
+  <section data-panel="objects">
+    <h2>5 · Objects &amp; materials</h2>
+    <p class="muted">Each brief item bound to a library object with its real parameters and a material.</p>
+    <div class="stage" data-stage="S4_CATALOG"></div>
+    <div class="stage" data-stage="S4_CHECK"></div>
+    <div id="objects" class="table"></div>
+  </section>
+
+  <section data-panel="room">
+    <h2>6 · Room canvas</h2>
+    <p class="muted">Every object placed on the canvas with the deck's spec values. Open it in the editor to check.</p>
+    <div class="stage" data-stage="S5_COMPOSE"></div>
+    <div id="room"></div>
+  </section>
+
+  <section data-panel="drawings">
+    <h2>7 · Drawings</h2>
+    <p class="muted">Plan, RCP, elevations and schedules drawn from the baked 3D model (DXF + PDF + PNG).</p>
+    <div class="stage" data-stage="S6_DRAWINGS"></div>
+    <div id="drawings" class="thumbs big"></div>
+  </section>
+
+  <section data-panel="runner">
+    <h2>Runner</h2>
+    <p class="muted">Script stages run on a machine with Python: <code>node tools/runner/worker.mjs</code> in the Floorplan repo. Jobs wait here until it picks them up.</p>
+    <div id="jobs" class="table"></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

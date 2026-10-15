@@ -4,12 +4,13 @@
  *  Stored on the space's Room object as two params (library/Objects/Architectural/room.json):
  *    referenceImage  library-relative path ("Images/References/x.jpg") or a full URL
  *    referenceNote   caption, or a source link (a URL is shown as a link)
- *  Upload puts the file in library/Images/References/. Library takes the image ticked in the Library tree.
+ *  Upload puts the file in the open project's Projects/<CODE>/inputs/images/references/ and keeps its public URL. Library takes the image ticked in the Library tree.
  *  Generate is shown but not wired yet. */
 import { useRef, useState } from "react";
 import { ExternalLink, ImagePlus, Library, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { uploadToBucket } from "../cloudLibrary";
+import { activeProject, inputsDir, stampedName } from "../projectPaths";
 import { useLibrarySelection } from "../librarySelection";
 
 const isUrl = (s: string) => /^https?:\/\//i.test(s);
@@ -30,13 +31,13 @@ export function SpaceReferences({ image, note, libraryBase, hasRoomObject, onCha
 
   const upload = async (f: File) => {
     setBusy(true);
-    const safe = f.name.replace(/[^\w.-]+/g, "_");
-    const key = `library/Images/References/${Date.now().toString(36)}_${safe}`;
+    // a project input, never the library: Projects/<CODE>/inputs/images/references/
+    const key = `${inputsDir(activeProject(), "images")}references/${stampedName(f.name)}`;
     const r = await uploadToBucket(key, f);
     setBusy(false);
     if (!r.ok) { toast.error(`Upload failed${r.error ? `: ${r.error}` : ""}`); return; }
-    onChange({ referenceImage: toPath(r.key ?? key) });
-    toast.success("Reference image uploaded");
+    onChange({ referenceImage: r.url || toPath(r.key ?? key) });
+    toast.success(`Reference image saved to ${key.slice(0, key.lastIndexOf("/") + 1)}`);
   };
 
   const fromLibrary = () => {

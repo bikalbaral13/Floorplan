@@ -6,7 +6,7 @@
   python tools/project_state.py check <CODE>                       → every file to fetch is in place
   python tools/project_state.py list --current <index.json>         → every project, every pipeline, link, next step
 
-Library: `Projects/<CODE>/space-brief/state.json` (this project's small files) and `Projects/index.json` (all projects,
+Library: `Projects/<PROJECT>/2-plan/space-brief/[<CODE>/]state.json` (this project's small files) and `Projects/index.json` (all projects,
 all pipelines). References and the library catalog come back from the published brief (`Artifact read url=<brief>
 paths=[…]`), never through the connector; their original ids are pinned in inputs/refs/refs.ids.json so a rerun keeps
 every element's links.

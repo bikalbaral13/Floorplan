@@ -1,13 +1,16 @@
 /** Viewer-first sessions for the hosted connector — the agent drives the R2 HTML viewer (JSON · 2D · 3D) instead
  *  of an editor tab. No pairing, no app: `viewer.open` returns a link, the page polls this relay for what to show.
  *
- *    viewer/<id>/state.json      written by the agent's tools: src, view, level, select, camera, form, snapshot ask
- *    viewer/<id>/events.json     written by the page: the user's selections and form answers
- *    viewer/<id>/snapshot.json   written by the page when asked: { req, data: base64 PNG }
+ *    Projects/<CODE>/viewer/<hex>/state.json      written by the agent's tools: src, view, level, select, camera, form, snapshot ask
+ *    Projects/<CODE>/viewer/<hex>/events.json     written by the page: the user's selections and form answers
+ *    Projects/<CODE>/viewer/<hex>/snapshot.json   written by the page when asked: { req, data: base64 PNG }
+ *  Everything a session creates belongs to its project (bucket-root Projects/, 2026-10-15). The session id is
+ *  "<CODE>.<16 hex>" when viewer.open was given a project, or just "<16 hex>" — then it lives under
+ *  Projects/_unassigned/viewer/<hex>/. Nothing is written at the bucket root.
  *
  *  Stored in the RELAY bucket (relayConfig), like the rest of the relay's short-lived traffic. The page talks to
- *  `<app>/__relay/viewer/<id>` (GET state · POST /events · PUT /snapshot) — see handleViewerRoute. A session id
- *  is 16 random hex characters and is the only key; it carries no access to the library.
+ *  `<app>/__relay/viewer/<id>` (GET state · POST /events · PUT /snapshot) — see handleViewerRoute. The session id
+ *  is the only key; it carries no access to the library.
  *
  *  The viewer itself lives in R2 (library/Viewer/v1/index.html, tools/viewer/), opened with
  *  ?session=<id>&api=<app>/__relay — so the page and this relay need only agree on these three routes. */
@@ -17,8 +20,12 @@ import { putObject, getObjectText } from "../tools/r2.mjs";
 
 const VIEWER_URL = (process.env.VIEWER_URL || "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Viewer/v1/index.html").trim();
 const SNAPSHOT_WAIT_MS = Number(process.env.VIEWER_SNAPSHOT_WAIT_MS || 40_000);  // inside Vercel's 60 s
-const K = (id, f) => `viewer/${id}/${f}`;
-const validId = (id) => typeof id === "string" && /^[a-f0-9]{16}$/.test(id);
+const SESSION_ID = /^(?:([A-Z0-9][A-Z0-9_]{0,39})\.)?([a-f0-9]{16})$/;
+const PROJECT_CODE = /^[A-Z0-9][A-Z0-9_]{0,39}$/;
+const UNASSIGNED = "_unassigned";
+/** Session file → its key inside the project's folder. */
+const K = (id, f) => { const m = SESSION_ID.exec(id); return `Projects/${m[1] || UNASSIGNED}/viewer/${m[2]}/${f}`; };
+const validId = (id) => typeof id === "string" && SESSION_ID.test(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(cfg, key) {
@@ -49,6 +56,7 @@ export const VIEWER_TOOLS = [
     description: "START HERE for any visual work: opens the HTML viewer (JSON · 2D · 3D, in R2 — no editor app, no pairing) and returns its link and a session id. Give the user the link (open it in a browser pane if you can). Then build designs as files (design.load by path / library.write) and show them with viewer.show; check with viewer.snapshot.",
     inputSchema: { type: "object", properties: {
       src: { type: "string", description: "optional library path to show first, e.g. Designs/Ramanadhapuram_Villa1_improved.json" },
+      project: { type: "string", description: "project code (e.g. AD_VL01): the session's files are kept in Projects/<CODE>/viewer/. Without it they go to Projects/_unassigned/viewer/." },
       view: { type: "string", enum: ["all", "json", "d2", "d3"], description: "panes (default all)" },
     } },
   },
@@ -89,7 +97,9 @@ export async function runViewerTool(cfg, name, args, apiBase) {
   try {
     if (name !== "viewer_open" && !validId(args.session)) return errText("session must be the id viewer.open returned");
     if (name === "viewer_open") {
-      const id = crypto.randomBytes(8).toString("hex");
+      const project = args.project ? String(args.project).trim().toUpperCase() : "";
+      if (project && !PROJECT_CODE.test(project)) return errText("project must be a project code like AD_VL01 (letters, digits, _)");
+      const id = (project ? `${project}.` : "") + crypto.randomBytes(8).toString("hex");
       const src = args.src ? cleanSrc(args.src) : null;
       await putJson(cfg, K(id, "state.json"), { rev: 1, src, view: args.view || "all", createdAt: new Date().toISOString() });
       const link = `${VIEWER_URL}?session=${id}&api=${encodeURIComponent(apiBase)}${src ? `&src=${encodeURIComponent(src)}` : ""}`;

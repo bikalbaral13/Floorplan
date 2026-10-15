@@ -211,12 +211,12 @@ export interface CloudSaveResult {
 
 /** Write one file into the cloud Library. `relPath` is Library-relative — "Designs/plan.json",
  *  "Objects/Site/site.json" — the prefix is added server-side so the client cannot escape it. */
-export async function saveToCloudLibrary(relPath: string, content: string): Promise<CloudSaveResult> {
+export async function saveToCloudLibrary(relPath: string, content: string, area: "library" | "projects" = "library"): Promise<CloudSaveResult> {
   try {
     const res = await r2Fetch("/__r2/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: relPath, content }),
+      body: JSON.stringify({ path: relPath, content, area }),
     });
     const body = (await res.json().catch(() => null)) as (CloudSaveResult & { ok?: unknown }) | null;
     return res.ok && body?.ok === true
@@ -366,6 +366,21 @@ export interface CloudWriteResult {
  *  GLBs, and base64 would inflate every one of them by a third. Dev server only, like every other
  *  write here — the signing keys are not in this bundle.
  */
+/** Upload a (possibly large) project file: straight from the browser to R2 through a pre-signed URL (no ~4.5 MB
+ *  server-function limit), falling back to /__r2/upload when presigning or the direct PUT is refused (e.g. the
+ *  bucket has no CORS rule for this origin yet — docs/r2-cors.json). Projects/<CODE>/… keys only. */
+export async function uploadDirect(key: string, file: Blob, type = file.type): Promise<CloudWriteResult> {
+  try {
+    const res = await r2Fetch("/__r2/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
+    const body = (await res.json().catch(() => null)) as { url?: string; publicUrl?: string; key?: string } | null;
+    if (res.ok && body?.url) {
+      const put = await fetch(body.url, { method: "PUT", body: file, headers: type ? { "Content-Type": type } : undefined });
+      if (put.ok) return { ok: true, key: body.key ?? key, url: body.publicUrl ?? "", size: file.size };
+    }
+  } catch { /* fall back below */ }
+  return uploadToBucket(key, file);
+}
+
 export async function uploadToBucket(key: string, file: Blob): Promise<CloudWriteResult> {
   try {
     const res = await r2Fetch(`/__r2/upload?key=${encodeURIComponent(key)}`, {

@@ -12,23 +12,22 @@
  },
  "kit": "0.2.0",
  "inputs": [
-  { "id": "source", "from": "project:inputs/*", "required": true, "note": "drawing image / PDF, or a hand-sketch photo; or project.json underlay_src (R2 library/Images)" }
+  { "id": "source", "from": "project:inputs/*", "required": true, "note": "drawing image / PDF, or a hand-sketch photo; or project.json underlay_src (R2 Projects/<CODE>/inputs/)" }
  ],
  "library_pins": [
   { "path": "library/Standards/DEFAULT.json", "local_copy": "standards/DEFAULT.json" },
-  { "path": "library/Schemas/" },
-  { "path": "library/Pipelines/_kit/", "version": "0.2.0", "local_copy": "_vendor/pipeline_kit" }
+    { "path": "library/Pipelines/_kit/", "version": "0.2.0", "local_copy": "_vendor/pipeline_kit" }
  ],
  "outputs": {
   "keep": [
-   { "id": "plan", "local": "project:plan.json", "to": "Projects/{CODE}/plan/plan.json", "schema": "tracer-plan.v1", "after": "S8_REVIEW" },
-   { "id": "layout", "local": "project:layout.json", "to": "Projects/{CODE}/plan/layout.json", "schema": "tracer-layout.v1", "after": "S8_REVIEW" },
-   { "id": "canvas", "local": "out/{CODE}.canvas.json", "to": "Projects/{CODE}/plan/{CODE}.canvas.json", "schema": "canvas.v1", "after": "S8_REVIEW" },
-   { "id": "plan_trace", "local": "out/plan_trace.json", "to": "Projects/{CODE}/plan/plan_trace.json", "schema": "plan_trace-tracer.v0", "after": "S8_REVIEW" },
-   { "id": "svg", "local": "out/*.svg", "to": "Projects/{CODE}/plan/", "after": "S8_REVIEW" },
-   { "id": "overlay", "local": "out/*_overlay.png", "to": "Projects/{CODE}/plan/", "after": "S8_REVIEW", "binary": true },
-   { "id": "handoff", "local": "project:handoff.json", "to": "Projects/{CODE}/plan/handoff.json", "after": "S8_REVIEW" },
-   { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/floorplan-tracer/" }
+   { "id": "plan", "local": "project:plan.json", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/plan.json", "schema": "tracer-plan.v1", "after": "S8_REVIEW" },
+   { "id": "layout", "local": "project:layout.json", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/layout.json", "schema": "tracer-layout.v1", "after": "S8_REVIEW" },
+   { "id": "canvas", "local": "out/{CODE}.canvas.json", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/{CODE}.canvas.json", "schema": "canvas.v1", "after": "S8_REVIEW" },
+   { "id": "plan_trace", "local": "out/plan_trace.json", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/plan_trace.json", "schema": "plan_trace-tracer.v0", "after": "S8_REVIEW" },
+   { "id": "svg", "local": "out/*.svg", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/", "after": "S8_REVIEW" },
+   { "id": "overlay", "local": "out/*_overlay.png", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/", "after": "S8_REVIEW", "binary": true },
+   { "id": "handoff", "local": "project:handoff.json", "to": "Projects/{CODE}/1-program/floorplan-tracer/output/handoff.json", "after": "S8_REVIEW" },
+   { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/1-program/floorplan-tracer/" }
   ],
   "temp": ["pages/**", "measure/**", "calib.json", "dims.resolved.json", "manifest.json", "contact.png", "qc.*", "out/report.md"]
  },

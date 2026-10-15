@@ -2,15 +2,17 @@
 library/Skills/Shared/pipeline-rules.md).
 
     pull     inputs whose `from` is an R2 key → <work_dir>/cache/<key> (skipped when the digest matches); cache/pulled.json
-    publish  outputs.keep → Projects/<CODE>/… : waits for each item's `after` task, validates `schema` against
-             library/Schemas, skips files whose x-amz-meta-sha256 already matches, then writes run.json (run/1)
-             to Projects/<CODE>/runs/<pipeline>/<run_id>/run.json and a copy in <work_dir>/runs/.
+    publish  outputs.keep → Projects/<PROJECT>/<n-phase>/<pipeline>/[<SUB>/]… (projpaths; `to` may use {DIR} {OUT}
+             {STEPS} {PROJECT} {CODE}): waits for each item's `after` task, validates `schema` against the pipeline's
+             OWN schemas/ (library/Schemas only as a fallback), skips files whose x-amz-meta-sha256 already matches,
+             then writes run.json (run/1) to <pipeline dir>/run.json — the previous one moves to archive/<its run_id>/ —
+             and a copy in <work_dir>/runs/.
              Nothing outside `keep` is uploaded; nothing is ever written to library/ (that is a promote, with approval).
     dry_run  plans everything (reads R2, validates) and uploads nothing.
 
 Schema validation needs the `jsonschema` package; without it files are published unvalidated and the report says so."""
 import csv, datetime, glob, json, os
-from . import paths as P, tasks as T, r2
+from . import paths as P, tasks as T, r2, projpaths as PP
 
 SCHEMAS = "library/Schemas/"
 
@@ -40,8 +42,10 @@ def _glob(layout, code, local):
 def _now(): return datetime.datetime.now(datetime.timezone.utc)
 
 class _Schemas:
-    def __init__(self, store, cache_dir):
+    def __init__(self, store, cache_dir, root=None):
         self.store, self.cache_dir, self.v = store, cache_dir, {}
+        # a pipeline carries its schemas (schemas/library/ = copies of shared ones, schemas/ = its own); R2 is the fallback
+        self.local = [os.path.join(root, "schemas", "library"), os.path.join(root, "schemas")] if root else []
         try:
             import jsonschema; self.js = jsonschema
         except ImportError: self.js = None
@@ -50,7 +54,8 @@ class _Schemas:
         if not self.js: return None
         if sid not in self.v:
             key = f"{SCHEMAS}{sid}.schema.json"; cp = os.path.join(self.cache_dir, *key.split("/"))
-            raw = self.store.get(key)
+            own = next((os.path.join(d, f"{sid}.schema.json") for d in self.local if os.path.isfile(os.path.join(d, f"{sid}.schema.json"))), None)
+            raw = open(own, "rb").read() if own else self.store.get(key)
             if raw is not None:
                 os.makedirs(os.path.dirname(cp), exist_ok=True); open(cp, "wb").write(raw)
             elif os.path.exists(cp): raw = open(cp, "rb").read()
@@ -58,10 +63,11 @@ class _Schemas:
         if not self.v[sid]: return [f"schema {sid} not found in {SCHEMAS}"]
         return [f"{'/'.join(map(str, e.path)) or '(root)'}: {e.message}"[:200] for e in self.v[sid].iter_errors(doc)][:5]
 
-def pull(layout, code, store, dry_run=False):
+def pull(layout, code, store, dry_run=False, project=None):
     man = load_contract(layout.root); wd = layout.work_dir(code); lines, rec, blocked = [], [], False
+    proj = project_of(layout, code, project)
     for inp in man["inputs"]:
-        src = _sub(inp["from"], code)
+        src = PP.expand(inp["from"], proj, man["id"], code, man.get("phase"))
         if src.startswith("project:"):
             hits = _glob(layout, code, src)
             lines.append(f"  {'ok  ' if hits or not inp['required'] else 'MISS'} {inp['id']}: {len(hits)} project file(s) {src[8:]}")
@@ -87,14 +93,18 @@ def pull(layout, code, store, dry_run=False):
 def _digest(p):
     b = open(p, "rb").read(); return {"sha256": r2.sha256(b), "bytes": len(b)}
 
-def plan(layout, code, store, man=None):
+def project_of(layout, code, project=None):
+    """The project a pipeline project belongs to: given, else its project.json `project`, else itself."""
+    return project or (layout.project(code) or {}).get("project") or code
+
+def plan(layout, code, store, man=None, project=None):
     """Every kept file with its fate: upload | same | wait | missing | invalid."""
-    man = man or load_contract(layout.root); pdir = layout.project_dir(code)
+    man = man or load_contract(layout.root); pdir = layout.project_dir(code); proj = project_of(layout, code, project)
     rows = {r["task_id"]: r for r in T.load(pdir)} if os.path.exists(os.path.join(pdir, "TASKS.csv")) else {}
-    sch = _Schemas(store, os.path.join(layout.work_dir(code), "cache")); items, keys = [], {}
+    sch = _Schemas(store, os.path.join(layout.work_dir(code), "cache"), layout.root); items, keys = [], {}
     for k in man["outputs"]["keep"]:
         after = k.get("after"); ready = not after or rows.get(after, {}).get("status") == "done"
-        hits = _glob(layout, code, k["local"]); to = _sub(k["to"], code)
+        hits = _glob(layout, code, k["local"]); to = PP.expand(k["to"], proj, man["id"], code, man.get("phase"))
         if not hits:
             items.append({"id": k["id"], "fate": "wait" if not ready else "missing", "local": _sub(k["local"], code), "key": to,
                           "why": f"waits for {after}" if not ready else "no file matches"}); continue
@@ -105,7 +115,7 @@ def plan(layout, code, store, man=None):
             data = open(h, "rb").read(); it = {"id": k["id"], "local": h, "key": key, "sha256": r2.sha256(data), "bytes": len(data)}
             if k.get("schema"): it["schema"] = k["schema"]
             if k.get("binary"): it["binary"] = True
-            if not key.startswith(f"Projects/{code}/"): it.update(fate="invalid", why="keep must write under Projects/<CODE>/")
+            if not key.startswith(PP.root(proj)): it.update(fate="invalid", why=f"keep must write under {PP.root(proj)}")
             elif key in keys: it.update(fate="invalid", why=f"same key as {keys[key]}")
             else:
                 errs = None                                   # validated even while waiting: problems show before the review
@@ -122,9 +132,10 @@ def plan(layout, code, store, man=None):
             keys.setdefault(key, k["id"]); items.append(it)
     return items
 
-def publish(layout, code, store, dry_run=False, agent="agent", run_id=None, started=None):
+def publish(layout, code, store, dry_run=False, agent="agent", run_id=None, started=None, project=None):
     man = load_contract(layout.root); pdir = layout.project_dir(code); wd = layout.work_dir(code)
-    t0 = started or _now(); items = plan(layout, code, store, man)
+    proj = project_of(layout, code, project)
+    t0 = started or _now(); items = plan(layout, code, store, man, proj)
     for it in items:
         if it["fate"] == "upload" and not dry_run:
             store.put(it["key"], open(it["local"], "rb").read(), r2.content_type(it["key"]))
@@ -145,11 +156,17 @@ def publish(layout, code, store, dry_run=False, agent="agent", run_id=None, star
            "tasks": [{"task_id": r["task_id"], "status": _st(r.get("status", "")), **({"approved": r["approved"]} if r.get("approved") else {})} for r in rows]}
     waiting = [f"{i['id']} ({i['why']})" for i in items if i["fate"] == "wait"]
     if waiting: run["notes"] = "not published yet: " + ", ".join(dict.fromkeys(waiting))
-    rerr = _Schemas(store, os.path.join(wd, "cache")).errors("run.v1", run)
-    run_key = f"Projects/{code}/runs/{man['id']}/{rid}/run.json"
+    rerr = _Schemas(store, os.path.join(wd, "cache"), layout.root).errors("run.v1", run)
+    run_key = PP.pipeline_dir(proj, man["id"], code, man.get("phase")) + "run.json"
     if not dry_run:
         P.save_json(os.path.join(wd, "runs", f"{rid}.json"), run)
-        if not rerr: store.put(run_key, json.dumps(run, ensure_ascii=False, indent=1).encode("utf-8"), "application/json")
+        if not rerr:
+            prev = store.get(run_key)                     # one current run per pipeline; the previous goes to archive/
+            if prev:
+                try: old_id = json.loads(prev).get("run_id") or "previous"
+                except ValueError: old_id = "previous"
+                if old_id != rid: store.put(PP.archive(proj, old_id) + run_key[len(PP.root(proj)):], prev, "application/json")
+            store.put(run_key, json.dumps(run, ensure_ascii=False, indent=1).encode("utf-8"), "application/json")
     lines = [f"[{code}] publish{' (DRY RUN — nothing uploaded)' if dry_run else ''} → {store!r}: {status.upper()}  "
              + ", ".join(f"{n} {f}" for f, n in fates.items() if n)]
     for i in items:

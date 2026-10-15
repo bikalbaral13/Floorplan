@@ -1,4 +1,4 @@
-﻿import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, useRef, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
+﻿import { forwardRef, Suspense, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Edges, Environment, Html, OrbitControls, useTexture } from "@react-three/drei";
@@ -1086,6 +1086,15 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
   const inheritedLook = useLook();
   const look: SurfaceLook = lookProp ?? (contentOnly ? inheritedLook : "basic");
   const realistic = look === "realistic";
+  // DEV only: how long each top-level 3D render takes to commit (render start → layout effect), for profiling
+  // rebuild cost per edit (window.__fp3dStats). Stripped from production builds.
+  const renderStart = import.meta.env.DEV && !contentOnly ? performance.now() : 0;
+  useLayoutEffect(() => {
+    if (!renderStart) return;
+    const w = window as unknown as { __fp3dStats?: { renders: number; lastMs: number; totalMs: number } };
+    const st = (w.__fp3dStats ??= { renders: 0, lastMs: 0, totalMs: 0 });
+    st.renders++; st.lastMs = performance.now() - renderStart; st.totalMs += st.lastMs;
+  });
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).

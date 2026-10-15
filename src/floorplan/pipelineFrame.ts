@@ -4,7 +4,10 @@
 //
 // Inside the frame (FRAME_SHIM, injected first into every pipeline page):
 //   window.claude.use('db' | 'assets' | 'downloads')   the artifact-runtime API space-brief >= 0.7 already speaks
-//   window.pipeline = { db, assets, downloads, emit(type, data), project }   the same, for new pipeline UIs
+//   window.pipeline = { db, assets, downloads, emit(type, data), project }   the same, for new pipeline UIs, plus
+//     read(path) / list(path) / url(path)  the project's files in R2 (paths relative to Projects/<CODE>/),
+//     job(stage, args)                     queue a runner stage (jobs/<STAGE>.json in the pipeline's folder),
+//     assets.upload(blob, { name, target: 'inputs/decks' })  a user file into the project's inputs/
 //   localStorage                                        kept per project in R2 (storage.json), not the browser
 // Host → frame messages: { key, value } a store snapshot, { tab } show a panel (window.PIPELINE_UI.tab or space-brief).
 
@@ -33,11 +36,13 @@ var db={
       delete:function(){return call('del',{path:p});}};},
   collection:function(c){return {onSnapshot:function(cb){return sub(c,function(v){v=v||{};cb({docs:Object.keys(v).map(function(id){return {id:id,data:function(){return clone(v[id]);}};})});});}};}
 };
-var assets={upload:function(b,o){return call('upload',{blob:b,type:(o&&o.type)||b.type||''});}};
+var assets={upload:function(b,o){return call('upload',{blob:b,type:(o&&o.type)||b.type||'',name:(o&&o.name)||b.name||'',target:(o&&o.target)||''});}};
 var downloads={save:function(o){return call('download',{filename:o.filename,data:o.data});}};
 var ctx=window.__PIPE_CTX__||{};
 window.claude={use:function(n){return Promise.resolve(n==='db'?db:n==='assets'?assets:n==='downloads'?downloads:null);}};
-window.pipeline={db:db,assets:assets,downloads:downloads,project:ctx.code,id:ctx.id,emit:function(t,d){return call('emit',{type:t,data:d});},
+window.pipeline={db:db,assets:assets,downloads:downloads,project:ctx.code,id:ctx.id,dir:ctx.dir||'',emit:function(t,d){return call('emit',{type:t,data:d});},
+  read:function(p){return call('read',{path:p});},list:function(p){return call('list',{path:p||''});},
+  job:function(s,a){return call('job',{stage:s,args:a||{}});},url:function(p){return (ctx.projectUrl||'')+String(p).split('/').map(encodeURIComponent).join('/');},
   setTabs:function(tabs,active){var j=JSON.stringify([tabs,active]);if(j===lastTabs)return;lastTabs=j;call('tabs',{tabs:tabs,active:active});}};
 // The page's own tabs go to the editor's top bar (beside its Drawings tab): a page calls pipeline.setTabs, or —
 // space-brief — its tab buttons ([data-act=tab][data-id] in #top) are read here, and hidden in the page.
@@ -61,7 +66,7 @@ try{Object.defineProperty(window,'localStorage',{value:mem,configurable:true});}
 export const FRAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads";
 
 /** <head> preamble: absolute <base> (the frame's origin is opaque), the context, then the shim — before the page's own scripts. */
-export function framePreamble(base: string, ctx: { id: string; code: string; kv: Record<string, string>; hostTabs?: boolean }) {
+export function framePreamble(base: string, ctx: { id: string; code: string; kv: Record<string, string>; hostTabs?: boolean; projectUrl?: string; dir?: string }) {
   const json = JSON.stringify(ctx).replace(/</g, "\\u003c");
   return `<base href="${base}"><script>window.__PIPE_CTX__=${json};</script><script>${FRAME_SHIM}</script>`;
 }
@@ -77,7 +82,13 @@ export interface FrameHostOptions {
   /** localStorage changed. */
   onKv: (kv: Record<string, string>) => void;
   kv: Record<string, string>;
-  upload: (blob: Blob, type: string) => Promise<{ id: string }>;
+  /** `target` "inputs/<kind>": a user file into the project's inputs (keeps its name); else the app's own uploads. */
+  upload: (blob: Blob, type: string, name?: string, target?: string) => Promise<{ id: string; key?: string; url?: string }>;
+  /** The project's files (paths relative to Projects/<CODE>/). */
+  read?: (path: string) => Promise<string>;
+  list?: (path: string) => Promise<string[]>;
+  /** Queue a runner stage of this pipeline. */
+  job?: (stage: string, args: Record<string, unknown>) => Promise<{ key: string }>;
   onEmit: (type: string, data: unknown) => void;
   /** The page's own tabs (shown in the editor's top bar) and which one it has open. */
   onTabs?: (tabs: { id: string; label: string; count: number; amber: boolean }[], active: string | null) => void;
@@ -109,7 +120,10 @@ export function connectFrame(frame: HTMLIFrameElement, o: FrameHostOptions) {
     set: (a) => write(String(a.path), a.data as Doc, "set"),
     update: (a) => write(String(a.path), a.data as Doc, "update"),
     del: (a) => write(String(a.path), null, "del"),
-    upload: (a) => o.upload(a.blob as Blob, String(a.type ?? "")),
+    upload: (a) => o.upload(a.blob as Blob, String(a.type ?? ""), String(a.name ?? ""), String(a.target ?? "")),
+    read: (a) => { if (!o.read) throw new Error("this host cannot read project files"); return o.read(String(a.path ?? "")); },
+    list: (a) => { if (!o.list) throw new Error("this host cannot list project files"); return o.list(String(a.path ?? "")); },
+    job: (a) => { if (!o.job) throw new Error("this host cannot queue runner jobs"); return o.job(String(a.stage ?? ""), (a.args as Record<string, unknown>) ?? {}); },
     download: (a) => {
       const data = a.data as Blob | string;
       const u = URL.createObjectURL(typeof data === "string" ? new Blob([data]) : data);

@@ -4,7 +4,7 @@
  *  BOQ & rates, programme, verification, and Appendix A: drawings generated from the model + the DWG replica,
  *  all inline SVG). This adds one part the engine cannot make by itself because it needs the live 3D view:
  *    · per room, a top view (plan cut above the floor) and a perspective, embedded as JPEG data URLs
- *    · the walkthrough film, embedded by its Library URL (R2 library/Video/…)
+ *    · the walkthrough film, embedded by its Library URL (R2 Projects/<CODE>/video/…)
  *  A plan with no design data (no `structure` block) still exports: it gets just the plan summary, the room
  *  views and the walkthrough. */
 import { toEngineJson, isCompleteProject } from "./adapter";

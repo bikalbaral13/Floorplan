@@ -1,10 +1,10 @@
 """The project canvas: ONE file per project, the single source of truth every phase improves.
 
-    Projects/<CODE>/canvas/current.json     the latest revision (editor packed multi-level format: opens as-is)
-    Projects/<CODE>/canvas/revs/rNNNN.json  immutable revisions
-    Projects/<CODE>/canvas/index.json       canvasrevs/1: every revision — phase, person, parent, sources, sha256,
+    Projects/<CODE>/shared/canvas.json      the latest revision (editor packed multi-level format: opens as-is)
+    Projects/<CODE>/shared/revisions/rNNNN.json  immutable revisions
+    Projects/<CODE>/shared/index.json       canvasrevs/1: every revision — phase, person, parent, sources, sha256,
                                             per-level element counts and the change against the parent
-    Projects/<CODE>/canvas/rooms/<SUB>.room.canvas.json   Build's furnished room canvases (linked from the index)
+    Projects/<CODE>/shared/rooms/<SUB>.room.canvas.json   Build's furnished room canvases (linked from the index)
 
 Packed format (src/floorplan/levels.ts): the active level's model at the top level, plus `levels` = every level's
 metadata, the inactive ones carrying their own `model`. Levels are named by floor code (GF, FF …; "L1" for a
@@ -94,7 +94,7 @@ class Canvas:
     """Read and commit the project canvas through a store (R2Store or LocalStore)."""
     def __init__(self, store, code):
         self.store, self.code = store, code
-        self.base = f"Projects/{code}/canvas/"
+        self.base = f"Projects/{code}/shared/"
 
     def index(self):
         b = self.store.get(self.base + "index.json")
@@ -104,7 +104,7 @@ class Canvas:
         idx = self.index()
         if not idx["revs"]: return None, idx
         r = rev or idx["current"]
-        b = self.store.get(self.base + f"revs/r{r:04d}.json")
+        b = self.store.get(self.base + f"revisions/r{r:04d}.json")
         return (json.loads(b) if b else None), idx
 
     def commit(self, contributions, phase, by, sources, note="", dry=False, metas=None):
@@ -124,13 +124,13 @@ class Canvas:
         r = idx["current"] + 1
         before = idx["revs"][-1]["levels"] if idx["revs"] else {}
         after = level_counts(packed)
-        entry = {"rev": r, "key": self.base + f"revs/r{r:04d}.json", "parent": idx["current"] or None, "phase": phase, "by": by, "at": now(),
+        entry = {"rev": r, "key": self.base + f"revisions/r{r:04d}.json", "parent": idx["current"] or None, "phase": phase, "by": by, "at": now(),
                  "levels_changed": sorted(contributions), "sources": sources, "sha256": h, "bytes": len(data), "levels": after,
                  "change": change(before, after), "note": note}
         idx["revs"].append(entry); idx["current"] = r
         if not dry:
             self.store.put(entry["key"], data, "application/json")
-            self.store.put(self.base + "current.json", data, "application/json")
+            self.store.put(self.base + "canvas.json", data, "application/json")
             self.store.put(self.base + "index.json", json.dumps(idx, ensure_ascii=False, indent=1).encode("utf-8"), "application/json")
         return entry
 

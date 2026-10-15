@@ -93,6 +93,26 @@ export async function signedRequest(cfg, method, key, body = "", extraHeaders = 
   return response;
 }
 
+/** A pre-signed URL (SigV4 query auth, UNSIGNED-PAYLOAD): lets a browser PUT one object straight to R2 without the
+ *  keys and without passing the bytes through a server function (Vercel caps a request body at ~4.5 MB). The
+ *  bucket's CORS must allow PUT from the app's origin (tools/r2-cors.mjs). `expires` in seconds (max 7 days). */
+export function presignUrl(cfg, method, key, expires = 900) {
+  const url = new URL(cfg.endpoint.replace(/\/+$/, ""));
+  const canonicalUri = `/${[cfg.bucket, ...key.split("/")].map(encodeSegment).join("/")}`;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`;
+  const q = {
+    "X-Amz-Algorithm": ALGORITHM, "X-Amz-Credential": `${cfg.accessKeyId}/${scope}`, "X-Amz-Date": amzDate,
+    "X-Amz-Expires": String(Math.min(604800, Math.max(1, expires))), "X-Amz-SignedHeaders": "host",
+  };
+  const cq = Object.keys(q).sort().map((k) => `${encodeSegment(k)}=${encodeSegment(q[k])}`).join("&");
+  const canonicalRequest = [method, canonicalUri, cq, `host:${url.host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
+  const stringToSign = [ALGORITHM, amzDate, scope, sha256hex(canonicalRequest)].join("\n");
+  const signature = hmac(signingKey(cfg.secretAccessKey, dateStamp), stringToSign).toString("hex");
+  return `${url.origin}${canonicalUri}?${cq}&X-Amz-Signature=${signature}`;
+}
+
 /** Store `body` at `key`, recording its sha256 in object metadata.
  *
  *  The digest is what makes a publish incremental — new_app's `publish_library.py` reads it

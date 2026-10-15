@@ -1,0 +1,14 @@
+{
+ "schema": "pipeline-steps/1",
+ "id": "build-from-deck",
+ "note": "Steps of a Build-from-Deck run in the editor. by: who fills the step in; gate: the USER approves it in the step bar. Script stages run on the runner (jobs/<STAGE>.json); Claude writes the curated brief, trace.px.json and resolve.json into steps/ (library/AGENT.md section 5).",
+ "steps": [
+  { "id": "deck", "title": "Deck", "panel": "deck", "by": "user", "gate": false, "hint": "upload the .pptx or .pdf, then Run S1" },
+  { "id": "questions", "title": "Questions", "panel": "questions", "by": "user", "gate": true, "hint": "answer and save, then approve" },
+  { "id": "brief", "title": "Brief", "panel": "brief", "by": "claude", "gate": true, "hint": "check the room brief items" },
+  { "id": "plan", "title": "Plan", "panel": "plan", "by": "claude", "gate": true, "hint": "check geometry_check.png" },
+  { "id": "objects", "title": "Objects", "panel": "objects", "by": "claude", "gate": true, "hint": "check each item's object and material" },
+  { "id": "room", "title": "Room", "panel": "room", "by": "claude", "gate": true, "hint": "open the room canvas and check it" },
+  { "id": "drawings", "title": "Drawings", "panel": "drawings", "by": "claude", "gate": true, "hint": "check the drawing set" }
+ ]
+}

@@ -15,7 +15,7 @@ and the pipeline only moves past a checkpoint when the user approves it. No more
 
 - `library/Pipelines/apps.json` lists apps; templates (page.html, core.js, …) load from R2.
 - The app mounts in a ShadowRoot via `window.__BRIEF_MOUNT__` (space-brief >= 0.6.0).
-- State: `library/Projects/<CODE>/space-brief/app/state.json`, saved by the R2 backend 800 ms after each change.
+- State: `Projects/<CODE>/space-brief/app/state.json` (bucket root, outside the Library since 2026-10-15), saved by the R2 backend 800 ms after each change.
 - Host → app: `BRIEF.tab(id)`, `BRIEF.selectCanvas(ids)`. App → host: `onTabs`, `onSelect`.
 - Gaps: opened by hand (Import ▸ Pipeline), Claude can't drive it, the user's actions don't reach Claude, and the
   pipeline has no steps or checkpoints.

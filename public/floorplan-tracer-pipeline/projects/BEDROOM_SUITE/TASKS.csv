@@ -1,10 +1,10 @@
 task_id,stage,title,depends_on,status,approved,started,finished,output,notes
-S0_SCOPE,S0_SCOPE,Scope the trace (the user answers),,todo,,,,,
-S1_INTAKE,S1_INTAKE,Intake: pages and document kind,S0_SCOPE,todo,,,,,
-S2_READ,S2_READ,Read the source (agent),S1_INTAKE,todo,,,,,
-S3_DIMENSIONS,S3_DIMENSIONS,Close the dimensions,S2_READ,todo,,,,,
-S4_LAYOUT,S4_LAYOUT,Author the layout (agent),S3_DIMENSIONS,todo,,,,,
-S5_BUILD,S5_BUILD,Build the plan model,S4_LAYOUT,todo,,,,,
-S6_VERIFY,S6_VERIFY,Verify,S5_BUILD,todo,,,,,
-S7_EXPORT,S7_EXPORT,Export,S6_VERIFY,todo,,,,,
+S0_SCOPE,S0_SCOPE,Scope the trace (the user answers),,done,"User 2026-10-07: scale Agent, objects All, single drawing, outputs both svg and canvas json loaded in live canvas",2026-10-07T11:39:02,2026-10-07T11:39:02,scope.json,"scope: drawing · single · scale by agent · objects all · emit ['canvas', 'svg']"
+S1_INTAKE,S1_INTAKE,Intake: pages and document kind,S0_SCOPE,done,User 2026-10-07: Confirm,2026-10-07T11:39:26,2026-10-07T11:39:26,..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\manifest.json,"manifest confirmed: 1 page(s), document kind single"
+S2_READ,S2_READ,Read the source (agent),S1_INTAKE,done,,2026-10-07T11:42:03,2026-10-07T11:42:03,reading.json;..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\calib.json,reading ok (drawing)
+S3_DIMENSIONS,S3_DIMENSIONS,Close the dimensions,S2_READ,done,,2026-10-07T11:42:04,2026-10-07T11:42:04,..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\dims.resolved.json,no dims.json — the layout uses measured centrelines
+S4_LAYOUT,S4_LAYOUT,Author the layout (agent),S3_DIMENSIONS,done,,2026-10-07T11:42:04,2026-10-07T11:42:05,layout.json,"Ground floor: 13 walls, 4 openings, 2 spaces, 15 fixtures"
+S5_BUILD,S5_BUILD,Build the plan model,S4_LAYOUT,done,,2026-10-07T11:42:06,2026-10-07T11:42:06,plan.json,"plan.json: 1 level(s), 13 wall pieces, 2 spaces"
+S6_VERIFY,S6_VERIFY,Verify,S5_BUILD,done,,2026-10-07T11:42:07,2026-10-07T11:42:08,..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\qc.md,"QC: 0 fail, 1 warn"
+S7_EXPORT,S7_EXPORT,Export,S6_VERIFY,done,,2026-10-07T11:42:14,2026-10-07T11:42:15,..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\out\BEDROOM_SUITE.canvas.json;..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\out\BEDROOM_SUITE_L0.svg;..\..\..\..\pipeline-work\tracer\BEDROOM_SUITE\out\report.md,3 files
 S8_REVIEW,S8_REVIEW,Review and hand off (the user approves),S7_EXPORT,todo,,,,,

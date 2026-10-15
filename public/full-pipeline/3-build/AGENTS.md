@@ -4,6 +4,14 @@ Turns a **plan-phase deck (.pptx)** into Build-phase outputs for **one room the 
 canvas JSON, 2D drawings, a realistic .blend and low-quality preview stills.
 Pilot: INFRA (Competition) 2024 → RECEPTION (`projects/INFRA_RECEPTION`).
 
+## Run from a chat (connector + runner)
+A project can be driven end to end from claude.ai: the user uploads the deck in the Build app (the editor tab
+`pipeline.run { pipeline: "build-from-deck", code }`, source `tools/pipeline-app/apps/build-from-deck/`), the script
+stages run on the runner (`node tools/runner/worker.mjs`, recipe `runner.json`), and the agent writes the judgement
+files (`roombrief.curated.json`, `trace.px.json`, `resolve.json`) to `Projects/<CODE>/3-build/build-from-deck/steps/`.
+The full journey: R2 `library/AGENT.md` §5. S1 also reads a **PDF** deck (pages rendered to `pages/`) and writes
+`questions.json` (tools/questions.py) for the user — project, room, ceiling height, a scale dimension.
+
 ## Contract: `roombrief/1`
 Everything downstream reads only `projects/<CODE>/roombrief.json`. A future Plan-phase pipeline
 (floor plan + references → deck) writes the same file, so Build does not care where it came from.
@@ -46,7 +54,7 @@ New objects declare these params in their definition so the editor shows them.
   arcs unreliably — verify swings in the live editor.
 - Wall segments get `specIds` (a wall can carry several finishes); doors and zone spaces get the full spec +
   provenance params now; finish objects get theirs in S5.
-- `tools/publish.mjs` uploads images to `library/Images/Decks/<CODE>/` and the canvas to `library/Designs/Decks/<CODE>.json`.
+- `tools/publish.mjs` uploads images to `Projects/<CODE>/3-build/build-from-deck/output/images/` and the canvas to `Projects/<CODE>/3-build/build-from-deck/output/<CODE>.json` — project data never goes into `library/`.
 
 ## S4 resolve (done for INFRA_RECEPTION)
 - `tools/catalog.mjs` snapshots every R2 object (host kind + input-props params with options) and material.

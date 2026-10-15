@@ -1,0 +1,11 @@
+- 2026-10-07T11:39:02 S0_SCOPE done: scope: drawing · single · scale by agent · objects all · emit ['canvas', 'svg']
+- 2026-10-07T11:39:02 [decision] scope answered by the user: User 2026-10-07: scale Agent, objects All, single drawing, outputs both svg and canvas json loaded in live canvas
+- 2026-10-07T11:39:04 S1_INTAKE blocked: 1 page(s) → manifest (single). Show work/contact.png and the manifest to the user; rerun with their confirmation.
+- 2026-10-07T11:39:26 S1_INTAKE done: manifest confirmed: 1 page(s), document kind single
+- 2026-10-07T11:39:26 [decision] manifest confirmed: User 2026-10-07: Confirm
+- 2026-10-07T11:42:03 S2_READ done: reading ok (drawing) [0 fail, 0 warn]
+- 2026-10-07T11:42:04 S3_DIMENSIONS done: no dims.json — the layout uses measured centrelines
+- 2026-10-07T11:42:05 S4_LAYOUT done: Ground floor: 13 walls, 4 openings, 2 spaces, 15 fixtures
+- 2026-10-07T11:42:06 S5_BUILD done: plan.json: 1 level(s), 13 wall pieces, 2 spaces
+- 2026-10-07T11:42:08 S6_VERIFY done: QC: 0 fail, 1 warn [0 fail, 1 warn]
+- 2026-10-07T11:42:15 S7_EXPORT done: 3 files [0 fail, 0 warn]

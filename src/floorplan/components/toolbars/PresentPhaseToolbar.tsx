@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { FileUp, Camera, Clapperboard } from "lucide-react";
 import { ToolButton } from "@/components/toolbutton";
 import { uploadToBucket } from "../../cloudLibrary";
+import { activeProject, mediaDir, stampedName } from "../../projectPaths";
 
 interface PresentPhaseToolbarProps {
   /** Library-relative path of the uploaded brief, if any. */
@@ -26,14 +27,14 @@ export const PresentPhaseToolbar = ({ walkthroughPath, onWalkthroughUploaded }: 
   const [busy, setBusy] = useState(false);
 
   const upload = async (file: File) => {
-    const safe = file.name.replace(/[^\w.\- ]+/g, "_");
-    const rel = `Walkthroughs/${safe}`;
+    // a project output, never the library: Projects/<CODE>/media/video/
+    const rel = mediaDir(activeProject(), "video") + stampedName(file.name);
     setBusy(true);
-    const res = await uploadToBucket(`library/${rel}`, file);
+    const res = await uploadToBucket(rel, file);
     setBusy(false);
     if (!res.ok) { toast.error(`Upload failed: ${res.error}. Check Preferences ▸ Cloudflare R2.`); return; }
     onWalkthroughUploaded(rel);
-    toast.success(`Saved ${safe} to the library (${rel}). It is recorded on this design.`);
+    toast.success(`Saved to ${rel}. It is recorded on this design.`);
   };
 
   return (

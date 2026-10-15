@@ -12,7 +12,7 @@
 
 import path from "node:path";
 import crypto from "node:crypto";
-import { r2ConfigFrom, putObject, getObjectText, signedRequest, listObjects, listObjectsDetailed, deleteObject } from "../tools/r2.mjs";
+import { r2ConfigFrom, putObject, getObjectText, signedRequest, listObjects, listObjectsDetailed, deleteObject, presignUrl } from "../tools/r2.mjs";
 
 
 /** Content types for what the Library holds; /save accepts only these. */
@@ -85,6 +85,10 @@ const cleanLibraryKey = (rel) => {
   if (!clean || clean.split("/").some((part) => !part || part === "." || part === "..")) return null;
   return LIBRARY_MIME[path.extname(clean).toLowerCase()] ? clean : null;
 };
+
+/** The top-level areas /save and /list may address: the Library (reusable, default) and Projects (one folder per
+ *  project, outside the Library since 2026-10-15). Nothing else in the bucket is reachable through these routes. */
+const areaRoot = (cfg, area) => (area === "projects" ? "Projects" : cfg.prefix);
 
 const publicUrlOf = (cfg, key) =>
   cfg.publicUrl ? `${cfg.publicUrl}/${key.split("/").map(encodeURIComponent).join("/")}` : "";
@@ -201,22 +205,23 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
     }
     if (!cfg) return sendJson(res, 401, { error: envCfg ? "writing needs a library token — enter it in Preferences ▸ Cloud Library" : "the server has no R2 keys (set R2_* in the Vercel env)" });
 
-    // POST /save { path, content } → one object under the library prefix.
+    // POST /save { path, content, area? } → one object under the library prefix, or under Projects/ (area "projects").
     if (req.method === "POST" && route === "/save") {
       const body = await readJson(req);
       const rel = cleanLibraryKey(body.path);
       if (!rel || typeof body.content !== "string")
         return sendJson(res, 400, { error: "need path (*.json or *.md) + content" });
       if (rel.toLowerCase().endsWith(".json")) JSON.parse(body.content); // only well-formed JSON lands in the bucket
-      const key = `${cfg.prefix}/${rel}`;
+      const key = `${areaRoot(cfg, body.area)}/${rel}`;
       await putObject(cfg, key, body.content, LIBRARY_MIME[path.extname(rel).toLowerCase()]);
       return sendJson(res, 200, { ok: true, key, url: publicUrlOf(cfg, key) });
     }
 
-    // GET /list?dir=Objects → every key under that library folder, folder-relative.
+    // GET /list?dir=Objects[&area=projects] → every key under that folder of the Library (or of Projects/), folder-relative.
     if (req.method === "GET" && route === "/list") {
       const dir = (url.searchParams.get("dir") ?? "").replace(/^\/+|\/+$/g, "");
-      const prefix = dir ? `${cfg.prefix}/${dir}/` : `${cfg.prefix}/`;
+      const root = areaRoot(cfg, url.searchParams.get("area"));
+      const prefix = dir ? `${root}/${dir}/` : `${root}/`;
       const keys = await listObjects(cfg, prefix);
       return sendJson(res, 200, { ok: true, files: keys.map((k) => k.slice(prefix.length)).filter(Boolean) });
     }
@@ -271,6 +276,15 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
       const mime = UPLOAD_MIME[path.extname(key).toLowerCase()] ?? "application/octet-stream";
       await putObject(cfg, key, body, mime);
       return sendJson(res, 200, { ok: true, key, size: body.length, contentType: mime, url: publicUrlOf(cfg, key) });
+    }
+
+    // POST /presign { key } → a 15-minute URL the browser PUTs one file to, straight to R2 (no body through here, so
+    // no ~4.5 MB Vercel limit). Project files only: Projects/<CODE>/…. Needs the bucket's CORS (tools/r2-cors.mjs).
+    if (req.method === "POST" && route === "/presign") {
+      const { key: raw } = await readJson(req);
+      const key = cleanBucketKey(raw);
+      if (!key || !/^Projects\/[A-Z0-9_]+\//.test(key)) return sendJson(res, 400, { error: "presign is for Projects/<CODE>/… keys" });
+      return sendJson(res, 200, { ok: true, key, url: presignUrl(cfg, "PUT", key, 900), publicUrl: publicUrlOf(cfg, key) });
     }
 
     // POST /delete { key } → remove ONE object. Irreversible (no versioning); the UI confirms first.

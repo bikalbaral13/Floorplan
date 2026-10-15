@@ -46,17 +46,20 @@ try:
     rc, out = P(B, "handover", "ZZ_E", "--by", "Kiran"); check(rc != 0 and "Program is for" in out, "a modeler cannot hand over Program")
     rc, out = P(B, "resume", "ZZ_E", "--by", "Mallory"); check(rc != 0 and "not a member" in out, "a non-member cannot resume")
     rc, out = P(A, "handover", "ZZ_E", "--by", "Asha", "--note", "client approved"); check(rc == 0 and "DONE" in out, "Asha: program handed over (outputs published)")
-    check(os.path.exists(os.path.join(R2, "Projects", "ZZ_E", "program", "plan_trace.json")), "plan_trace.json is shared in Projects/ZZ_E/program/")
-    ci = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "canvas", "index.json"), encoding="utf-8"))
-    cur = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "canvas", "current.json"), encoding="utf-8"))
+    check(os.path.exists(os.path.join(R2, "Projects", "ZZ_E", "1-program", "program", "output", "plan_trace.json")), "plan_trace.json is shared in Projects/ZZ_E/1-program/program/output/")
+    ho = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "handoff", "program.json"), encoding="utf-8"))
+    check(ho["from"] == "program" and ho["to"] == "plan" and any(f["path"].endswith("output/plan_trace.json") and len(f["sha256"]) == 64 for f in ho["files"]),
+          "handoff/program.json lists the published files with sha256")
+    ci = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "shared", "index.json"), encoding="utf-8"))
+    cur = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "shared", "canvas.json"), encoding="utf-8"))
     check(ci["current"] == 1 and sorted(ci["revs"][0]["levels"]) == ["FF", "GF"] and [l["name"] for l in cur["levels"]] == ["GF", "FF"]
           and "model" in cur["levels"][1] and cur.get("segments"), "canvas r1: ONE packed canvas, GF active + FF level, from plan_trace")
     used = {g.get("layer", "0") for g in cur["segments"]} | {g.get("layer", "0") for g in cur["levels"][1]["model"]["segments"]}
     check(used <= {l["id"] for l in cur["layers"]} and all(l.get("visible") is True for l in cur["layers"]),
           "the project canvas declares every layer visible (else the editor imports it empty)")
-    check(any(k.endswith("qa/program/ZZ_E/brief.json") for k in json.load(open(os.path.join(R2, "Projects", "ZZ_E", "project.json"), encoding="utf-8"))["phases"]["program"].get("answers", [])),
-          "the program's answers (brief.json) are kept in qa/program/")
-    st = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "program", "state.json"), encoding="utf-8"))
+    check(any(k.endswith("1-program/program/answers/brief.json") for k in json.load(open(os.path.join(R2, "Projects", "ZZ_E", "project.json"), encoding="utf-8"))["phases"]["program"].get("answers", [])),
+          "the program's answers (brief.json) are kept in 1-program/program/answers/")
+    st = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "1-program", "program", "state.json"), encoding="utf-8"))
     check(not any(k.startswith(("inputs/", "work/")) for k in st["files"]), "private inputs/ and work/ are not in the shared state")
 
     rc, out = P(B, "resume", "ZZ_E", "--by", "Ravi")
@@ -74,7 +77,7 @@ try:
     rc, out = sh(os.path.join(A, "2-plan-design"), "tools/run_task.py", "ZZ_E_GF"); check("S3_SCOPE" in out, "the next task on machine A is S3_SCOPE")
 
     for c in ("ZZ_E_GF", "ZZ_E_FF"):          # stand-in for space-brief S8: the roombrief it would publish
-        d = os.path.join(R2, "Projects", c, "brief"); os.makedirs(d, exist_ok=True)
+        d = os.path.join(R2, "Projects", "ZZ_E", "2-plan", "space-brief", c, "output"); os.makedirs(d, exist_ok=True)
         shutil.copy(os.path.join(FULL, "3-build", "projects", "INFRA_RECEPTION", "roombrief.json"), os.path.join(d, "roombrief.json"))
     rc, out = P(A, "handover", "ZZ_E", "--by", "Meera", "--force", "test: no scope answers"); check(rc == 0, "Meera: forced handover is allowed and recorded")
     m = json.load(open(os.path.join(R2, "Projects", "ZZ_E", "project.json"), encoding="utf-8"))
@@ -91,7 +94,7 @@ try:
     check("S1_INTAKE,S1_INTAKE" in rows and rows.count("skipped") == 2, "deck intake S1–S2 marked skipped")
 
     for c in ("ZZ_E_GF", "ZZ_E_FF"):
-        d = os.path.join(R2, "Projects", c, "build"); os.makedirs(d, exist_ok=True)
+        d = os.path.join(R2, "Projects", "ZZ_E", "3-build", "build-from-deck", c, "output"); os.makedirs(d, exist_ok=True)
         open(os.path.join(d, f"{c}.blend"), "wb").write(b"BLENDER-v405 stand-in")
     rc, out = P(B, "handover", "ZZ_E", "--by", "Kiran", "--force", "test: no modelling"); check(rc == 0, "Kiran: Build handed over")
     rc, out = P(A, "resume", "ZZ_E", "--by", "Dev")

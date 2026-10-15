@@ -219,6 +219,7 @@ import { DesignPlacementPanel } from "./components/DesignPlacementPanel";
 import { shellSheet } from "./shell3d";
 import { groupedToMerged, groupToSite, isGroupedPlan, siteToGroup, type PlanGroup } from "./planGroups";
 import { applyInstanceTransform, designLevelFor, loadDesignPaths, uniqueInstances, type DesignPaths } from "./designInstances";
+import { activeProject, mediaDir } from "./projectPaths";
 import { getPythonResult, getPythonError, onPythonResult, objIsPython, pythonRotation } from "./python/pythonObjects";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
 import { MESH3D_FORMATS } from "./export/flowMesh3dFormats";
@@ -28478,9 +28479,10 @@ User request: ${aiPrompt.trim()}`;
           const t0 = performance.now();
           const blob = await api.recordWalkthrough();
           const seconds = (performance.now() - t0) / 1000;
-          step("uploading the video to R2 library/Video…");
+          step("uploading the video to the project folder in R2…");
           const slug = String(plan.project?.name ?? plan.settings?.keywords ?? "plan").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "plan";
-          const up = await uploadToBucket(`library/Video/${slug}_walkthrough_${new Date().toISOString().replace(/[:.]/g, "-")}.webm`, blob);
+          // a project output: Projects/<CODE>/media/video/, never library/
+          const up = await uploadToBucket(`${mediaDir(activeProject((plan.project as { code?: unknown } | undefined)?.code), "video")}${slug}_walkthrough_${new Date().toISOString().replace(/[:.]/g, "-")}.webm`, blob);
           if (up.ok && up.url) video = { url: up.url, seconds };
           else {
             // no R2 write access here — keep the film by inlining it, so the report still plays it

@@ -5,7 +5,7 @@
   python tools/project_state.py unpack <state.json>         → projects/<CODE>/ (+ RESTORE.md: inputs to re-attach)
   python tools/project_state.py list --current <index.json>
 
-Library: `Projects/<CODE>/program/state.json` and the shared `Projects/index.json` (every project, every pipeline).
+Library: `Projects/<CODE>/1-program/program/state.json` and the shared `Projects/index.json` (every project, every pipeline).
 Everything the pipeline wrote is text and travels in the bundle. The read-only inputs/ (site sketches, surveys) are
 images: the bundle records their sha256; on restore the user re-attaches them (the connector cannot return image bytes),
 and P1's inputs check confirms they are the same files.

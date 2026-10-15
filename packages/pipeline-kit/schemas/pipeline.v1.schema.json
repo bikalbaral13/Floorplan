@@ -68,7 +68,7 @@
       "properties": {
        "id": { "type": "string" },
        "local": { "type": "string", "description": "glob in the work dir, or project:<file>" },
-       "to": { "type": "string", "pattern": "^Projects/\\{CODE\\}/", "description": "R2 key prefix or full key" },
+       "to": { "type": "string", "pattern": "^(Projects/\\{(CODE|PROJECT)\\}/|\\{(DIR|OUT|STEPS)\\})", "description": "R2 key prefix or full key; {DIR} {OUT} {STEPS} = this pipeline's folder in the project (pipeline_kit.projpaths)" },
        "schema": { "type": "string" },
        "after": { "type": "string", "description": "task id that must be done (and approved, if it is a gate) before this is published" },
        "binary": { "type": "boolean", "description": "large file: R2 keeps only the latest copy, run.json keeps the hash" }

@@ -3,7 +3,7 @@
  *
  * Read-only by design: the agent orchestrates (save / handover / resume run on someone's machine); the app shows
  * where the project stands, who did what, and opens the project canvas — the single source of truth every
- * phase improves (`Projects/<CODE>/canvas/current.json`, one packed multi-level canvas).
+ * phase improves (`Projects/<CODE>/shared/canvas.json`, one packed multi-level canvas).
  */
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, FolderKanban, RefreshCw } from "lucide-react";
@@ -40,7 +40,7 @@ export function ProjectStatusPanel() {
     setBusy(true); setErr("");
     try {
       try { localStorage.setItem(KEY, k); } catch { /* not remembered */ }
-      const [man, idx] = await Promise.all([getJson<Manifest>(`Projects/${k}/project.json`), getJson<CanvasIndex>(`Projects/${k}/canvas/index.json`)]);
+      const [man, idx] = await Promise.all([getJson<Manifest>(`Projects/${k}/project.json`), getJson<CanvasIndex>(`Projects/${k}/shared/index.json`)]);
       if (!man) { setM(null); setCv(null); setErr(`No project ${k} in R2 yet — start it with: python tools/project.py new ${k}`); return; }
       setM(man); setCv(idx);
     } catch (e) { setErr(String(e)); } finally { setBusy(false); }
@@ -49,7 +49,7 @@ export function ProjectStatusPanel() {
 
   const openCanvas = async () => {
     if (!m) return;
-    const r = await fetch(`${BUCKET}/Projects/${m.code}/canvas/current.json`, { cache: "no-store" });
+    const r = await fetch(`${BUCKET}/Projects/${m.code}/shared/canvas.json`, { cache: "no-store" });
     if (!r.ok) { setErr("No canvas revision yet — the first handover makes one."); return; }
     window.dispatchEvent(new CustomEvent("bp:import-plan", { detail: { json: await r.text(), path: undefined } }));
   };

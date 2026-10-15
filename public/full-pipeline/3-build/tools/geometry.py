@@ -15,7 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TRACER = HERE.parent.parent / "floorplan-tracer-pipeline"
 TOL_PX = 3.0
-R2_IMAGES = "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks"
+R2_PROJECTS = "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/Projects"  # images: Projects/<CODE>/3-build/build-from-deck/output/images/
 
 
 def load_tracer_canvas():
@@ -68,7 +68,7 @@ def snap_zones(rings, walls, tol=0.25):
 
 def provenance(item, code):
     """The flat param group every placed object carries (attachment params are primitives only)."""
-    imgs = [f"{R2_IMAGES}/{code}/{Path(f).name}" for f in item.get("refImages", [])]
+    imgs = [f"{R2_PROJECTS}/{code}/3-build/build-from-deck/output/images/{Path(f).name}" for f in item.get("refImages", [])]
     p = {"specId": item["id"], "specCategory": item["category"], "specNote": item.get("note", ""),
          "deckSlides": ",".join(map(str, item["slides"])), "refImages": ",".join(imgs),
          "productUrl": (item.get("productUrls") or [""])[0]}
@@ -144,7 +144,7 @@ def main(project_dir, deck_dir):
     # canvas via the tracer's exporter; underlay = the deck plan picture at its native pixels
     canvas = load_tracer_canvas()
     plan_file = brief["plan"]["file"]
-    und = {"id": f"img-{code}", "src": f"{R2_IMAGES}/{code}/{Path(plan_file).name}", "x": -ox, "y": -oy,
+    und = {"id": f"img-{code}", "src": f"{R2_PROJECTS}/{code}/3-build/build-from-deck/output/images/{Path(plan_file).name}", "x": -ox, "y": -oy,
            "width": brief["plan"]["px"][0], "height": brief["plan"]["px"][1], "opacity": 0.55, "scale": 1, "locked": True, "layerId": "image"}
     doc = canvas.export(plan, {"fixture_backs": {}}, und)
 
@@ -172,7 +172,7 @@ def main(project_dir, deck_dir):
             sp["attachments"][0]["params"].update(provenance(zone_items[z["id"]], code))
             by_label[zone_items[z["id"]]["id"]] = 1
     doc["settings"]["keywords"] = f"{brief['project']} - {brief['room']} (build-from-deck S3 shell)"
-    doc["settings"]["deckBrief"] = f"Projects/{code}/roombrief.json"
+    doc["settings"]["deckBrief"] = f"Projects/{code}/3-build/build-from-deck/output/roombrief.json"
     out = P / f"{code}.canvas.json"
     out.write_text(json.dumps(doc, indent=1), encoding="utf-8")
     findings.append(f"spec params attached: {sorted(by_label)}")

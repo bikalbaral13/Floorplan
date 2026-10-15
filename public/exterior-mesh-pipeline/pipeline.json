@@ -14,12 +14,10 @@
   { "id": "masterplan", "from": "project:inputs/masterplan/master_plan.json", "schema": "masterplan.v1", "required": true },
   { "id": "site", "from": "project:inputs/masterplan/*_site.json", "schema": "canvas.v1", "required": true },
   { "id": "envelopes", "from": "project:inputs/masterplan/envelopes/*.json", "required": true },
-  { "id": "designs", "from": "library/Designs/*.json", "schema": "canvas.v1", "required": false, "note": "fetched into work_dir/cache by the adapter" }
+  { "id": "designs", "from": "project:inputs/designs/*.json", "schema": "canvas.v1", "required": false, "note": "per-building canvases, copied into the project (no library/Designs)" }
  ],
  "library_pins": [
   { "path": "library/Standards/DEFAULT.json" },
-  { "path": "library/Schemas/" },
-  { "path": "library/Families/", "local_copy": "families/" },
   { "path": "library/Materials/" }
  ],
  "outputs": {
@@ -32,6 +30,5 @@
    { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/exterior-mesh/" }
   ],
   "temp": ["cache/**", "output/blend/*.blend1", "output/qc.json"]
- },
- "promotes": ["library/Families/"]
+ }
 }

@@ -3,11 +3,11 @@
  "name": "Ramanadhapuram",
  "units": "m",
  "pixelsPerMeter": 100,
- "site": "Designs/Ramanadhapuram_Site.json",
+ "site": "designs/Ramanadhapuram_Site.json",
  "placements": "on the site's level-G PLOT spaces, field `designInstance` (design, path, rotation, mirror, position = site metres of the design's (0,0), levelMap)",
  "designs": {
   "villa-1": {
-   "path": "Designs/Ramanadhapuram_Villa1_improved.json",
+   "path": "designs/Ramanadhapuram_Villa1_improved.json",
    "sha256": "c4cc7e1ff4e35fc94d9f7afd04b1d0e3a6785fbb9e702c77ed526beab68981a2",
    "bytes": 812255,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-1.json",
@@ -24,7 +24,7 @@
    ]
   },
   "villa-2": {
-   "path": "Designs/Ramanadhapuram_Villa2_improved.json",
+   "path": "designs/Ramanadhapuram_Villa2_improved.json",
    "sha256": "3c63d9c16d1ebb4b4f8ccddbb88823336eafda946fb76c974d5e9c56e7c3d3d2",
    "bytes": 561445,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-2.json",
@@ -40,7 +40,7 @@
    ]
   },
   "villa-3": {
-   "path": "Designs/Ramanadhapuram_Villa3_improved.json",
+   "path": "designs/Ramanadhapuram_Villa3_improved.json",
    "sha256": "95e80ea87550d58692b28025e54668c581462b503e0cec2fc610e3348b6c3d08",
    "bytes": 470241,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-3.json",
@@ -54,7 +54,7 @@
    ]
   },
   "villa-4": {
-   "path": "Designs/Ramanadhapuram_Villa4_improved.json",
+   "path": "designs/Ramanadhapuram_Villa4_improved.json",
    "sha256": "58f33683cf52d45f39c4f82607a61844191e310c82fc65ca1d167af818249957",
    "bytes": 584783,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-4.json",
@@ -71,7 +71,7 @@
    ]
   },
   "villa-5": {
-   "path": "Designs/Ramanadhapuram_Villa5_improved.json",
+   "path": "designs/Ramanadhapuram_Villa5_improved.json",
    "sha256": "857f9d3858a70206124f7bfc7702ac405c366bfded9be05f5d06ab36250a838c",
    "bytes": 516983,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-5.json",
@@ -89,7 +89,7 @@
    ]
   },
   "villament": {
-   "path": "Designs/Ramanadhapuram_Villament_improved.json",
+   "path": "designs/Ramanadhapuram_Villament_improved.json",
    "sha256": "09ba25248b4c546421c7d905da2f1577673c1ae6abc35bdf2820f2beac90be3b",
    "bytes": 2081676,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/villament.json",
@@ -105,7 +105,7 @@
    ]
   },
   "apartment": {
-   "path": "Designs/Ramanadhapuram_Apartment_improved.json",
+   "path": "designs/Ramanadhapuram_Apartment_improved.json",
    "sha256": "44b6cf969dfbe3e6bb4f928a0e7124d9177d476ff4a0af3ff8aca14e59a84f72",
    "bytes": 18540144,
    "envelope": "Master Plans/Ramanadhapuram/envelopes/apartment.json",

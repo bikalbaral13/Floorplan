@@ -1,8 +1,8 @@
 {
  "schema": "full-pipeline/1",
  "version": "0.1.0",
- "kit": "0.3.1",
- "manifest": "Projects/{CODE}/project.json",
+ "kit": "0.3.2",
+ "manifest": "Projects/{CODE}/project.json (project/1)",
  "phases": [
   {
    "id": "program",
@@ -41,7 +41,7 @@
    "new": "from_program",
    "bridge": [
     {
-     "from": "Projects/{UP}/program/plan_trace.json",
+     "from": "{OUT}plan_trace.json",
      "to": "@phase/upstream/{UP}/plan_trace.json",
      "required": true
     }
@@ -68,7 +68,7 @@
    "new": "template",
    "bridge": [
     {
-     "from": "Projects/{UP}/brief/roombrief.json",
+     "from": "{OUT}roombrief.json",
      "to": "@project/roombrief.json",
      "required": true
     }
@@ -102,7 +102,7 @@
    ],
    "bridge": [
     {
-     "from": "Projects/{UP}/build/{UP}.blend",
+     "from": "{OUT}{UP}.blend",
      "to": "@work/input/{UP}.blend",
      "required": true,
      "binary": true
@@ -120,7 +120,7 @@
   }
  ],
  "rules": [
-  "Shared = R2 Projects/{CODE}/ (outputs.keep of each phase + the manifest + each phase's packed state). Private = local projects/{CODE}/inputs/ and the work dir; they never leave the machine unless `project.py share` is run for a file.",
+  "Shared = R2 Projects/{CODE}/ (Projects/project_creation.md): each phase's pipeline folder <n-phase>/<pipeline>/[<SUB>/] (output/ = its outputs.keep, run.json, state.json, answers/), handoff/<phase>.json, shared/ (canvas), the manifest. Private = local projects/{CODE}/inputs/ and the work dir; they never leave the machine unless `project.py share` is run for a file (→ inputs/shared/<phase>/<by>/).",
   "share_inputs: generated inputs a phase cannot run without (e.g. Plan/Design's inputs/plan.canvas.json, made from the program's plan_trace) travel in the packed state; user uploads under inputs/ stay private.",
   "A phase can be handed over only when every task in its TASKS.csv is done or skipped (or --force with a reason, which is recorded).",
   "The next person runs `project.py resume {CODE}`: it pulls the manifest, then either restores the phase they continue (state.json) or creates it from the previous phase's published outputs (bridge).",
@@ -132,13 +132,14 @@
   "@phase/": "the phase folder",
   "@work/": "the phase project's work dir (outside public/)"
  },
- "canvas": "Projects/{CODE}/canvas/current.json — ONE packed multi-level canvas per project (tools/canvas_store.py); revisions in canvas/revs/, log in canvas/index.json",
- "qa": "Projects/{CODE}/qa/<phase>/<SUB>/ — the files holding the user's answers, copied at every save/handover",
+ "canvas": "Projects/{CODE}/shared/canvas.json — ONE packed multi-level canvas per project (tools/canvas_store.py); revisions in shared/revisions/, log in shared/index.json",
+ "qa": "<pipeline folder>/answers/ — the files holding the user's answers, copied at every save/handover",
  "roles": {
   "owner": "every phase; adds and removes members",
   "client": "Program; comments and accepts Present",
   "architect": "Plan/Design",
   "modeler": "Build",
   "presenter": "Present"
- }
+ },
+ "handoff": "Projects/{CODE}/handoff/<phase>.json (handoff/1) — written at every handover: the published files with sha256; the next phase's bridge reads {OUT} of the previous phase"
 }

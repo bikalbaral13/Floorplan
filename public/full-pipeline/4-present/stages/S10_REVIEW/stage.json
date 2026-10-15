@@ -4,7 +4,7 @@
  "title": "The user approves the final video",
  "kind": "script",
  "gate": true,
- "summary": "The user watches the final video and approves; the hand-off is recorded and outputs may be published to Projects/{CODE}/walkthrough/.",
+ "summary": "The user watches the final video and approves; the hand-off is recorded and outputs may be published to Projects/{CODE}/4-present/walkthrough-video/output/.",
  "inputs": [
   "final.json"
  ],

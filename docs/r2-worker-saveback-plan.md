@@ -143,7 +143,7 @@ connector already hold the keys, tokens and save path. The Worker built for Part
 git history at 02745ae).
 
 - `server/viewerSessions.mjs` — tool group **`viewer`** (listed first): `open`, `show`, `snapshot`, `events`,
-  `form`. Sessions in the relay bucket under `viewer/<id>/` (state / events / snapshot). Runs inside
+  `form`. Sessions under `Projects/<CODE>/viewer/<id>/` (state / events / snapshot; `Projects/_unassigned/` when opened without a project). Runs inside
   `callTool` in `server/relayCore.mjs`, so both the relay (`/mcp`) and the library connector (`/api/mcp`)
   have it; no tab and no step gate needed.
 - Page routes `/__relay/viewer/<id>` (GET state · POST /events · PUT /snapshot); the R2 viewer origin is

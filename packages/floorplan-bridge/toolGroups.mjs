@@ -82,6 +82,10 @@ export const GROUPS = {
     summary: "Pipeline runs with their OWN UI: op:run opens the pipeline's app (e.g. space-brief) as a full tab in the editor; fill 'claude' steps with op:patch (live, small patches), wait for the user with op:events { wait: true }, op:advance once they approved. The user approves gates in the app — never approve for them.",
     ops: { run: "pipeline_run", status: "pipeline_status", state: "pipeline_state", patch: "pipeline_patch", events: "pipeline_events", advance: "pipeline_advance" },
   },
+  project: {
+    summary: "Projects from start to finish: op:create a project (ask the USER for code + title first), op:status where it stands (inputs, phases, runner jobs), op:list all projects, op:job queues one script stage of a pipeline for the runner, op:jobs polls it. With pipeline.run the user uploads and answers in the pipeline's app; read library/AGENT.md §5 for the whole journey.",
+    ops: { create: "project_create", status: "project_status", list: "project_list", job: "project_job", jobs: "project_jobs" },
+  },
   pipelines: {
     summary: "Make NEW pipelines with their own UI in the R2 library, no app rebuild: op:create writes the pipeline folder, its UI (index.html + files) and run steps and registers it — the editor then opens the UI as a tab (pipeline.run). op:update makes a preview version, op:release (only after the user approves) makes it stable, op:rollback goes back. Read Skills/Pipeline Creator first.",
     ops: { list: "pipeline_list", create: "pipeline_create", update: "pipeline_update", release: "pipeline_release", rollback: "pipeline_rollback" },

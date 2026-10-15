@@ -11,7 +11,7 @@
  *  Polling pauses while the tab is hidden and backs off after errors, so an idle background tab does
  *  not keep hitting the bucket. */
 
-import { cloudLibraryUrl } from "./cloudLibrary";
+import { cloudLibraryStatus, cloudLibraryUrl } from "./cloudLibrary";
 
 const POLL_MS = 3000;
 const MAX_BACKOFF_MS = 60_000;
@@ -30,9 +30,15 @@ export async function designVersion(relPath: string): Promise<string | null> {
   }
 }
 
+async function bucketRootUrl(key: string): Promise<string> {
+  const { publicUrl } = await cloudLibraryStatus();
+  return publicUrl ? `${publicUrl.replace(/\/+$/, "")}/${key.split("/").map(encodeURIComponent).join("/")}` : "";
+}
+
 /** The file's current text, revalidated. Null when unreachable. */
 export async function fetchDesignText(relPath: string): Promise<string | null> {
-  const url = await cloudLibraryUrl(relPath);
+  // "Projects/<CODE>/…" is project data at the bucket ROOT (not under library/); anything else is library-relative.
+  const url = relPath.startsWith("Projects/") ? await bucketRootUrl(relPath) : await cloudLibraryUrl(relPath);
   if (!url) return null;
   try {
     const res = await fetch(url, { cache: "no-store" });

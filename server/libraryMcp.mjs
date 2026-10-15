@@ -21,6 +21,7 @@ import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
 import { PIPELINE_TOOLS, PIPELINE_TOOL_NAMES, callPipelineTool } from "./pipelinesMcp.mjs";
+import { PROJECT_TOOLS, PROJECT_TOOL_NAMES, callProjectTool } from "./projectsMcp.mjs";
 import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
 import { relayConfig, setRelayBaseFrom, CONNECTOR_RELAY_TOOLS, linkConnector, openEditor, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
 
@@ -84,9 +85,13 @@ function keyFor(cfg, rel, { dir = false } = {}) {
   if (!clean && !dir) throw new Error("path is required");
   // Accept a path that already starts with the prefix ("library/Designs/x.json") as well as "Designs/x.json".
   const inside = clean === cfg.prefix || clean.startsWith(`${cfg.prefix}/`) ? clean.slice(cfg.prefix.length).replace(/^\/+/, "") : clean;
+  // Project folders live at the bucket root, outside the Library (2026-10-15): "Projects/…" (also the old
+  // "library/Projects/…") addresses Projects/… so agents keep using the same path.
+  if (inside === PROJECTS || inside.startsWith(`${PROJECTS}/`)) return inside;
   return inside ? `${cfg.prefix}/${inside}` : cfg.prefix;
 }
-const relOf = (cfg, key) => key.slice(cfg.prefix.length + 1);
+const PROJECTS = "Projects";
+const relOf = (cfg, key) => (key === PROJECTS || key.startsWith(`${PROJECTS}/`) ? key : key.slice(cfg.prefix.length + 1));
 const publicUrl = (cfg, key) => (cfg.publicUrl ? `${cfg.publicUrl}/${key.split("/").map(encodeURIComponent).join("/")}` : undefined);
 
 async function exists(cfg, key) {
@@ -161,9 +166,9 @@ const CONNECTOR_TOOLS = [
 /** Built on first use: relayCore imports this module back (through relayHeadless), so its tool list may not
  *  exist yet while this module is evaluating. Our own tools win a name clash (list_objects). */
 let toolList = null;
-const OWN_NAMES = new Set([...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...PIPELINE_TOOLS, ...CONNECTOR_TOOLS].map((t) => t.name));
+const OWN_NAMES = new Set([...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...PIPELINE_TOOLS, ...PROJECT_TOOLS, ...CONNECTOR_TOOLS].map((t) => t.name));
 function allTools() {
-  if (!toolList) toolList = [...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...PIPELINE_TOOLS, ...CONNECTOR_TOOLS, ...CONNECTOR_RELAY_TOOLS.filter((t) => !OWN_NAMES.has(t.name))];
+  if (!toolList) toolList = [...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...PIPELINE_TOOLS, ...PROJECT_TOOLS, ...CONNECTOR_TOOLS, ...CONNECTOR_RELAY_TOOLS.filter((t) => !OWN_NAMES.has(t.name))];
   return toolList;
 }
 
@@ -351,6 +356,7 @@ async function callTool(cfg, name, args, user) {
     return text(r);
   }
   if (PIPELINE_TOOL_NAMES.has(name)) return text(await callPipelineTool(cfg, name, args, user));
+  if (PROJECT_TOOL_NAMES.has(name)) return text(await callProjectTool(cfg, name, args, user));
   if (name === "list_library") return text(await listLibrary(cfg, args));
   if (name === "search_library") return text(await searchLibrary(cfg, args));
   if (name === "read_file") {

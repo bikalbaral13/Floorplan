@@ -4,7 +4,7 @@
  "name_prefix": "SM_",
  "collection_root": "EXT",
  "work_dir": "../../../../pipeline-work/exterior/RMD_EXT",
- "library_url": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library",
+ "library_url": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/Projects/RMD_EXT/inputs",
  "source": {
   "masterplan": "inputs/masterplan/master_plan.json",
   "site": "inputs/masterplan/Ramanadhapuram_MasterPlan_site.json",

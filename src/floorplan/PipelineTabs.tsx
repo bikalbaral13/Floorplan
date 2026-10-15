@@ -2,8 +2,9 @@
 // top bar next to the built-in Drawings tab. Everything comes from the R2 library:
 //   library/Pipelines/apps.json             which pipelines ship an app, and where its template folder is
 //   <templates>/page.html, base.css, core.js, deck.js, <role>.js     the app's code (tools/pipeline-app/publish.mjs)
-//   library/Projects/<CODE>/<id>/app/       the project's built data (data/local.json, sheets/, refs/ …)
-//   library/Projects/<CODE>/<id>/app/state.json    the brief as edited here (written by the R2 backend below)
+//   Projects/<CODE>/<n-phase>/<id>/steps/app/   the project's built data (data/local.json, sheets/, refs/ …) and
+//                                    state.json, the brief as edited here — the pipeline's folder (./projectPaths;
+//                                    apps.json `data` "{DIR}steps/app/"; older apps.json paths are still read as given)
 // The app runs in this document inside a ShadowRoot (its CSS stays scoped) through the window.__BRIEF_MOUNT__ contract
 // (space-brief >= 0.6.0, templates/app/core.js): the host supplies the root, the data base URL and a backend, and gets
 // the tab list (onTabs) and the selected element's canvas ids (onSelect). The page's own header is hidden.
@@ -11,12 +12,13 @@
 // Pipeline RUNS (docs/pipeline-ui-spec.md): Claude starts a run with the pipeline_* agent commands; the app opens as a
 // full tab by itself, Claude patches its state live, and the user approves each gated step in the step bar above it.
 //   library/Pipelines/<id>/pipeline.json            the steps (panel = an app tab id, by, gate)
-//   library/Projects/<CODE>/<id>/run.json           the run: current step, approvals, history (survives a reload)
+//   Projects/<CODE>/<n-phase>/<id>/run.json     the run: current step, approvals, history (survives a reload)
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { libraryPath, saveToCloudLibrary, uploadToBucket } from "./cloudLibrary";
+import { libraryPath, saveToCloudLibrary, uploadDirect, uploadToBucket } from "./cloudLibrary";
 import { registerAgentCommand } from "./agentBridge";
+import { inputsDir, pipelineDir, rememberPhase, stampedName, type InputKind } from "./projectPaths";
 import { connectFrame, FRAME_SANDBOX, framePreamble, type Store } from "./pipelineFrame";
 
 interface PipelineApp {
@@ -58,8 +60,39 @@ interface Live { api: BackendApi | null; save: () => void; claudeWriting: boolea
 type Win = Window & { __BRIEF_MOUNT__?: unknown; BRIEF?: BriefApi; BRIEF_DECK?: unknown };
 
 const LIB = "library";
-/** A library key ("library/Projects/…") → its public URL (the bucket's r2.dev address). */
-const pubUrl = (key: string) => `${libraryPath().replace(/\/+$/, "")}/${key.replace(new RegExp(`^${LIB}/`), "").split("/").map(encodeURIComponent).join("/")}`;
+/** Project data lives at the bucket root (Projects/<CODE>/…), not in the Library. */
+const PROJ = "Projects";
+const enc = (key: string) => key.split("/").map(encodeURIComponent).join("/");
+/** A bucket key → its public URL (the bucket's r2.dev address): "library/…" under the Library path, anything else
+ *  ("Projects/…") under the bucket root, which is the Library path without its trailing "/library". */
+const pubUrl = (key: string) => {
+  const libBase = libraryPath().replace(/\/+$/, "");
+  if (key.startsWith(`${LIB}/`)) return `${libBase}/${enc(key.slice(LIB.length + 1))}`;
+  return `${libBase.replace(new RegExp(`/${LIB}$`), "")}/${enc(key)}`;
+};
+/** A project file's key from a path relative to Projects/<CODE>/ (no "..", no leading slash). */
+const projectKey = (code: string, rel: string) => {
+  const r = String(rel ?? "").replace(/^\/+/, "");
+  if (/(^|\/)\.\.(\/|$)/.test(r)) throw new Error(`bad path "${rel}"`);
+  return `${PROJ}/${code}/${r}`;
+};
+/** List an uploaded file in project.json inputs[] (path, sha256, bytes, added, by). */
+async function addProjectInput(code: string, key: string, blob: Blob) {
+  const mk = `${PROJ}/${code}/project.json`;
+  const m = JSON.parse(await text(mk, true)) as { inputs?: { path: string }[]; history?: unknown[] };
+  const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const rel = key.slice(`${PROJ}/${code}/`.length);
+  m.inputs = [...(m.inputs ?? []).filter((i) => i.path !== rel), { path: rel, sha256: hash, bytes: blob.size, added: new Date().toISOString(), by: "editor" } as { path: string }];
+  await saveKey(mk, JSON.stringify(m, null, 1));
+}
+/** Save a JSON / text file by bucket key, into the Library or into Projects/ (the bridge allows only those two). */
+const saveKey = (key: string, content: string) =>
+  key.startsWith(`${PROJ}/`) ? saveToCloudLibrary(key.slice(PROJ.length + 1), content, "projects")
+    : saveToCloudLibrary(key.replace(new RegExp(`^${LIB}/`), ""), content);
+/** An app's data folder for a project: `data` "{DIR}steps/app/" = inside the pipeline's folder; apps.json files written
+ *  before that still say Projects/{CODE}/<id>/app/ (or library/Projects/…). */
+const dataDirOf = (app: { id: string; phase?: string; data?: string }, code: string) =>
+  app.data!.replace("{DIR}", pipelineDir(code, app.id, app.phase)).replace("{CODE}", code).replace(new RegExp(`^${LIB}/${PROJ}/`), `${PROJ}/`);
 
 type Pt = [number, number];
 type Shape = { sheet?: string; type?: string; pts?: Pt[] };
@@ -113,14 +146,14 @@ const shadowCss = (css: string) =>
 
 /** The R2 backend: the whole brief kept as one JSON next to the project's data, saved shortly after each change. */
 function r2Backend(dataDir: string, local: string, live: Live, onUserEdit: () => void) {
-  const relState = dataDir.replace(new RegExp(`^${LIB}/`), "") + "state.json";
+  const stateKey = dataDir + "state.json";
   return (api: BackendApi) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const snapshot = () => JSON.stringify(Object.fromEntries([["meta", api.S.meta], ...api.COLS.map((k) => [k, api.S[k]])]));
     const save = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
-        const r = await saveToCloudLibrary(relState, snapshot());
+        const r = await saveKey(stateKey, snapshot());
         if (!r.ok) api.toast(`Not saved to the Library: ${r.error}`);
       }, SAVE_DELAY);
     };
@@ -166,11 +199,12 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
   // own /__r2 route on a local dev host, and version folders never change, so the public cache is safe.
   const pub = pubUrl;
   const json = async (key: string) => { try { return JSON.parse(await text(key, true)); } catch { return null; } };
-  const projDir = `${LIB}/Projects/${code}/${app.id}/`;
+  const projDir = pipelineDir(code, app.id, app.phase);
   const kv = ((await json(projDir + "storage.json")) ?? {}) as Record<string, string>;
   const inject = (html: string, base: string) => {
     // space-brief's own tab row moves to the editor's top bar (beside Drawings); its Drawings tab is dropped.
-    const pre = framePreamble(pub(base), { id: app.id, code, kv, hostTabs: app.kind === "brief" });
+    const pre = framePreamble(pub(base), { id: app.id, code, kv, hostTabs: app.kind === "brief",
+      projectUrl: pub(`${PROJ}/${code}/`), dir: pipelineDir(code, app.id, app.phase).slice(`${PROJ}/${code}/`.length) });
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + pre) : pre + html;
   };
   const out = { app, code, page: "", css: "", scripts: [], fonts: [], local: "{}", kv, kvKey: projDir + "storage.json" };
@@ -190,7 +224,7 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
     const seed = (await json(projDir + "state.json")) ?? (await json(t + "seed.json")) ?? { meta: null };
     return { ...out, dataDir: projDir, srcdoc: inject(html, t), seed, storeKey: projDir + "state.json" };
   }
-  const dataDir = app.data!.replace("{CODE}", code);
+  const dataDir = dataDirOf(app, code);
   const p = app.parts!;
   const [page, css, core, deck, editor, local] = await Promise.all([
     text(t + app.page), text(t + p.css), text(t + p.core), text(t + p.deck), text(t + (p.editor ?? "editor.js")), text(dataDir + "data/local.json"),
@@ -211,7 +245,7 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
 
 async function fetchApp(app: PipelineApp, code: string): Promise<Loaded> {
   if (app.mode === "frame") return fetchFrame(app, code);
-  const dataDir = app.data!.replace("{CODE}", code);
+  const dataDir = dataDirOf(app, code);
   const p = app.parts!;
   const t = app.templates;
   const [page, css, core, deck, role, local] = await Promise.all([
@@ -258,7 +292,8 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     (async () => {
       try {
         const list: PipelineApp[] = (JSON.parse(await text(`${LIB}/Pipelines/apps.json`, true)).apps ?? []).filter((a: PipelineApp) => a.mount);
-        const r = await fetch("/__r2/list?dir=Projects");
+        list.forEach((a) => rememberPhase(a.id, a.phase));
+        const r = await fetch("/__r2/list?area=projects");
         const files: string[] = r.ok ? (await r.json()).files ?? [] : [];
         const by: Record<string, string[]> = {};
         for (const a of list) {
@@ -267,9 +302,9 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
             const fs2: string[] = r2.ok ? (await r2.json()).files ?? [] : [];
             by[a.id] = [...new Set(fs2.filter((f) => f.endsWith("/project.json") && !f.startsWith("_")).map((f) => f.split("/")[0]))].sort();
           } else if (a.kind === "app") {
-            // Projects that have used this pipeline (any file under Projects/<CODE>/<id>/); a new code starts one.
-            by[a.id] = [...new Set(files.filter((f) => f.split("/")[1] === a.id).map((f) => f.split("/")[0]))].sort();
-          } else by[a.id] = files.filter((f) => f.endsWith(`/${a.id}/app/data/local.json`)).map((f) => f.split("/")[0]).sort();
+            // Projects that have used this pipeline (any file under Projects/<CODE>/<n-phase>/<id>/); a new code starts one.
+            by[a.id] = [...new Set(files.filter((f) => f.split("/")[2] === a.id).map((f) => f.split("/")[0]))].sort();
+          } else by[a.id] = [...new Set(files.filter((f) => f.split("/")[2] === a.id && f.endsWith("/app/data/local.json")).map((f) => f.split("/")[0]))].sort();
         }
         setApps(list); setProjects(by);
       } catch (e) { setError(`Could not read the Library: ${(e as Error).message}`); setApps([]); }
@@ -304,10 +339,10 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   const [asking, setAsking] = useState(false);
   const loadedRef = useRef(loaded); loadedRef.current = loaded;
 
-  const runKey = (r: PipeRun) => `Projects/${r.code}/${r.pipeline}/run.json`;
+  const runKey = (r: PipeRun) => pipelineDir(r.code, r.pipeline) + "run.json";
   const commitRun = (r: PipeRun) => {
     runRef.current = r; setRun(r);
-    void saveToCloudLibrary(runKey(r), JSON.stringify(r, null, 1));
+    void saveKey(runKey(r), JSON.stringify(r, null, 1));
     waiters.current.splice(0).forEach((w) => w());
   };
   const pushEvent = (e: Omit<PipeEvent, "n" | "at" | "step">) => {
@@ -353,6 +388,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       const pipeline = String(a.pipeline ?? "space-brief"), code = String(a.code ?? "").trim();
       if (!code) throw new Error("pipeline_run needs `code` (the project code)");
       const list: PipelineApp[] = JSON.parse(await text(`${LIB}/Pipelines/apps.json`, true)).apps ?? [];
+      list.forEach((x) => rememberPhase(x.id, x.phase));
       const listed = list.find((x) => x.id === pipeline && x.mount);
       if (!listed) throw new Error(`no app for pipeline "${pipeline}" in Pipelines/apps.json (have: ${list.map((x) => x.id).join(", ")})`);
       // channel "preview": the version being tried out (pipelines.update), only in this tab until it is released.
@@ -366,7 +402,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       const l = await fetchApp(app, code);   // throws when the project has no published data
       manifestRef.current = manifest;
       let prior: PipeRun | null = null;
-      if (a.restart !== true) { try { prior = JSON.parse(await text(`${LIB}/Projects/${code}/${pipeline}/run.json`, true)); } catch { /* new run */ } }
+      if (a.restart !== true) { try { prior = JSON.parse(await text(pipelineDir(code, pipeline) + "run.json", true)); } catch { /* new run */ } }
       if (!loadedRef.current || loadedRef.current.app.id !== pipeline || loadedRef.current.code !== code || loadedRef.current.app.templates !== app.templates) {
         teardown(); live.api = null; setTabs([]); loadedRef.current = l; setLoaded(l);
       }
@@ -483,12 +519,11 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     appTabs.current = new Set();
     if (!el || !loaded || loaded.app.mode !== "frame") return;
     setTabs([{ id: FRAME_TAB, label: loaded.app.title, count: 0, amber: false }]);
-    const lib = (key: string) => key.replace(new RegExp(`^${LIB}/`), "");
     const debounced = (key: string, body: () => string) => {
       let timer: ReturnType<typeof setTimeout> | null = null;
       return () => {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(async () => { const r = await saveToCloudLibrary(lib(key), body()); if (!r.ok) setError(`Not saved to the Library: ${r.error}`); }, SAVE_DELAY);
+        timer = setTimeout(async () => { const r = await saveKey(key, body()); if (!r.ok) setError(`Not saved to the Library: ${r.error}`); }, SAVE_DELAY);
       };
     };
     let store: Store | null = null;
@@ -504,7 +539,16 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       store, kv,
       onWrite: () => { save(); setStoreRev((v) => v + 1); if (!live.claudeWriting) onUserEdit(); },
       onKv: () => saveKv(),
-      upload: async (blob, type) => {
+      upload: async (blob, type, name, target) => {
+        const kind = /^inputs\/(drawings|decks|images|designs|models)\/?$/.exec(target ?? "")?.[1] as InputKind | undefined;
+        if (kind) {
+          // a user file → the project's inputs/<kind>/ with its own name (stamped), listed in project.json inputs[]
+          const key = inputsDir(loaded.code, kind) + stampedName(name || `upload.${type.split("/")[1] ?? "bin"}`);
+          const r = await uploadDirect(key, blob, type);
+          if (!r.ok) throw new Error(r.error);
+          void addProjectInput(loaded.code, key, blob).catch(() => { /* the file is in R2 either way */ });
+          return { id: `../${key}`, key, url: r.url };
+        }
         const ext = /json/.test(type) ? "json" : /png/.test(type) ? "png" : /svg/.test(type) ? "svg" : "jpg";
         const key = `${loaded.dataDir}uploads/${Math.random().toString(36).slice(2, 10)}.${ext}`;
         const r = await uploadToBucket(key, blob);
@@ -512,6 +556,22 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         // Pages show an asset as '/_blob/<id>' (artifact runtime), resolved against the frame's public base: this id
         // walks back out of /_blob/ to the object's public path.
         return { id: `../${key}` };
+      },
+      read: (rel) => text(projectKey(loaded.code, rel), true),
+      list: async (rel) => {
+        const r = await fetch(`/__r2/list?area=projects&dir=${encodeURIComponent(projectKey(loaded.code, rel).slice(PROJ.length + 1).replace(/\/+$/, ""))}`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`list ${rel}: ${r.status}`);
+        return ((await r.json()).files ?? []) as string[];
+      },
+      job: async (stage, args) => {
+        const st = String(stage).toUpperCase();
+        if (!/^[A-Z0-9][A-Z0-9_]{1,40}$/.test(st)) throw new Error(`bad stage "${stage}"`);
+        const key = `${pipelineDir(loaded.code, loaded.app.id, loaded.app.phase)}jobs/${st}.json`;
+        const job = { schema: "runner-job/1", code: loaded.code, pipeline: loaded.app.id, stage: st, args, status: "queued", queued: new Date().toISOString(), by: "editor" };
+        const r = await saveKey(key, JSON.stringify(job, null, 1));
+        if (!r.ok) throw new Error(r.error ?? "could not queue the job");
+        pushEvent({ type: "ui", note: "job", data: { stage: st, args } });
+        return { key };
       },
       onEmit: (type, data) => pushEvent({ type: "ui", note: type, data }),
       // The page's tabs replace the single pipeline tab; its own "drawings" is the editor's Drawings tab.
@@ -655,7 +715,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     const image = (r: string): { url: string; title?: string } | null => {
       if (!r) return null;
       if (/^(data:|https?:)/.test(r)) return { url: r };
-      if (r.startsWith("asset:")) return { url: pubUrl(r.slice(6).replace(/^(\.\.\/)+/, "")) };   // uploads: "../library/Projects/…"
+      if (r.startsWith("asset:")) return { url: pubUrl(r.slice(6).replace(/^(\.\.\/)+/, "").replace(new RegExp(`^${LIB}/${PROJ}/`), `${PROJ}/`)) };   // uploads: "../Projects/…" (older: "../library/Projects/…")
       if (r.startsWith(`${LIB}/`)) return { url: pubUrl(r) };
       const m = refs.get(r);
       if (m?.asset) return { url: pubUrl(`${loaded.dataDir}refs/${m.asset}`), title: m.title };

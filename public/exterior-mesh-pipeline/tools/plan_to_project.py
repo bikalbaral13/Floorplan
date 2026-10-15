@@ -7,7 +7,7 @@ Writes
     items/<CODE>/item.json          one per site element, building prototype (LOD2 / LOD1), plant / light prototype
     instances.json                  buildings, trees, shrubs, lights (prototype + world transform)
     TASKS.csv                       selftest → family_verify → site items → prototypes → instances → qc → export → report
-Designs are fetched from the shared library's public URL into cache/ (not shipped, see .gitignore).
+Designs are fetched from the project folder in R2 (Projects/<CODE>/inputs/designs/) into cache/ (not shipped, see .gitignore).
 Re-running keeps the status of task rows whose target still exists (new rows are todo).
 """
 import json, os, sys, glob

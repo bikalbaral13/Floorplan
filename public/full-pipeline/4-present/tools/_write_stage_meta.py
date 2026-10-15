@@ -42,7 +42,7 @@ STAGES = [
   ["jobs.json", "work/output/ai/*.mp4"], ["work/output/<CODE>_final.mp4", "final.json"],
   ["every shot present", "duration within 10 % of the shot list"]),
  ("S10_REVIEW", "The user approves the final video", "script", True,
-  "The user watches the final video and approves; the hand-off is recorded and outputs may be published to Projects/{CODE}/walkthrough/.",
+  "The user watches the final video and approves; the hand-off is recorded and outputs may be published to Projects/{CODE}/4-present/walkthrough-video/output/.",
   ["final.json"], ["handoff.json"], ["the user's words"]),
 ]
 

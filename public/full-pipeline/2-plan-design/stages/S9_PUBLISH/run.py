@@ -1,7 +1,8 @@
 import datetime, glob, json, os, shutil, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))); sys.path[:0] = [ROOT, os.path.join(ROOT, "_vendor")]
 from pipeline_kit.findings import result, F, status_from
-from pipeline_kit import tasks as T
+from pipeline_kit import tasks as T, projpaths as PP
+from pipeline_kit.sync import project_of
 from core.ctx import sha256, validate, VERSION
 
 SELF = "S9_PUBLISH"
@@ -9,6 +10,7 @@ SELF = "S9_PUBLISH"
 def run(ctx):
     pj = json.load(open(os.path.join(ROOT, "pipeline.json"), encoding="utf-8")); rid = ctx.run_id(); fs = []
     stage = ctx.w("publish"); shutil.rmtree(stage, ignore_errors=True)
+    proj = project_of(ctx.layout, ctx.code)                      # a floor (CODE_GF) publishes inside its project
     rows = {r["task_id"]: r for r in T.load(ctx.pdir)}
     outputs = []
     for k in pj["outputs"]["keep"]:
@@ -18,7 +20,7 @@ def run(ctx):
         srcs = glob.glob(ctx.p(pat[8:])) if pat.startswith("project:") else glob.glob(os.path.join(ctx.layout.work_dir(ctx.code), pat))
         if not srcs: fs.append(F("fail", "keep", k["id"], f"nothing matches {pat}")); continue
         for sp in srcs:
-            to = k["to"].replace("{CODE}", ctx.code)
+            to = PP.expand(k["to"], proj, pj["id"], ctx.code, pj.get("phase"))
             key = to + os.path.basename(sp) if to.endswith("/") else to
             dst = os.path.join(stage, key); os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copy(sp, dst)
             o = {"id": k["id"], "key": key, "local": os.path.relpath(sp, ctx.pdir), "sha256": sha256(sp), "bytes": os.path.getsize(sp)}
@@ -46,7 +48,7 @@ def run(ctx):
             "notes": f"apps: {ctx.load('apps.json', default={}).get('url', 'not published')}; decks: " + (", ".join(f"v{d['k']} I{d['issue']}" for d in decks) or "none")}
     ok, msg = validate(runj, "run.v1"); fs.append(F("info" if ok else "fail", "run.v1", "run.json", msg))
     ctx.save("run.json", runj)
-    rk = f"Projects/{ctx.code}/runs/space-brief/{rid}/run.json"; dst = os.path.join(stage, rk); os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copy(ctx.p("run.json"), dst)
+    rk = PP.pipeline_dir(proj, pj["id"], ctx.code, pj.get("phase")) + "run.json"; dst = os.path.join(stage, rk); os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copy(ctx.p("run.json"), dst)
     up = os.environ.get("BP_R2_UPLOAD")   # e.g.  node ../../tools/r2.mjs put {src} {key}
     if up:
         for dp, _, fl in os.walk(stage):
@@ -57,4 +59,4 @@ def run(ctx):
         how = "uploaded to R2"
     else:
         fs.append(F("warn", "upload", "R2", "BP_R2_UPLOAD not set — outputs staged in work/publish/, not uploaded")); how = "staged (not uploaded)"
-    return result(status_from(fs), f"{len(outputs)} outputs + run.json {how} under Projects/{ctx.code}/", ["publish/", "run.json"], fs)
+    return result(status_from(fs), f"{len(outputs)} outputs + run.json {how} under {PP.pipeline_dir(proj, pj['id'], ctx.code, pj.get('phase'))}", ["publish/", "run.json"], fs)

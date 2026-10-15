@@ -14,15 +14,16 @@
 
 Every command takes --store local:<folder> (tests, offline) and --dry-run; default store = R2 from env / .env.
 
-Shared (R2 Projects/<CODE>/): project.json (fullproject/1 manifest), every phase's outputs.keep (its pipeline.json),
-each phase project's packed text state (Projects/<SUB>/<pipeline>/state.json) and run.json.
+Shared (R2 Projects/<CODE>/, layout in Projects/project_creation.md and pipeline_kit.projpaths): project.json (project/1),
+each phase's pipeline folder <n-phase>/<pipeline>/[<SUB>/] with output/ (its outputs.keep), run.json, state.json and
+answers/; handoff/<phase>.json for every handover; shared/ the project canvas; inputs/shared/ files made shared.
 Private (this machine only): projects/<SUB>/inputs/, the work dirs, anything not in outputs.keep — unless `share`.
 """
 import argparse, datetime, getpass, glob, json, os, shutil, subprocess, sys
 
 FULL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(FULL, "_vendor"))
-from pipeline_kit import paths as P, sync, state, r2, tasks as T, interop   # noqa: E402
+from pipeline_kit import paths as P, sync, state, r2, tasks as T, interop, projpaths as PP   # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from canvas_store import Canvas   # noqa: E402
 
@@ -32,7 +33,7 @@ for _s in (sys.stdout, sys.stderr):
 
 CFG = P.load_json(os.path.join(FULL, "full.json"))
 PHASES = CFG["phases"]; IDS = [p["id"] for p in PHASES]
-SCHEMA = "fullproject/1"
+SCHEMA = "project/1"
 PACK = ["*.json", "*.md", "*.csv", "*.txt", "*/*.json", "*/*.md", "*/*.csv", "**/*.json", "**/*.md"]
 PRIVATE = ["inputs/*", "inputs/**", "work/*", "work/**", "output/*", "output/**"]
 
@@ -41,7 +42,8 @@ def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat(timespe
 def phase(pid): return PHASES[IDS.index(pid)]
 def proot(ph): return os.path.join(FULL, ph["dir"])
 def layout(ph): return P.Layout(proot(ph))
-def mkey(code): return f"Projects/{code}/project.json"
+def mkey(code): return PP.manifest(code)
+def out_of(code, ph, sub): return PP.pipeline_dir(code, ph["pipeline"], sub, ph["id"]) + "output/"
 def sub(s, **kw):
     for k, v in kw.items(): s = s.replace("{" + k + "}", v)
     return s
@@ -111,7 +113,7 @@ def contributions(a, ph, codes):
             for L in lv:
                 cv, _ = interop.plan_trace_to_canvas(trace, L, wall_mm=pj.get("wall_mm"), door_head_m=std.get("openings", {}).get("door_head", 2.1))
                 levels[L or "L1"] = cv
-            sources.append(f"Projects/{c}/program/plan_trace.json")
+            sources.append(out_of(a.code, ph, c) + "plan_trace.json")
         elif ph["id"] == "plan":
             cp = os.path.join(pdir, "inputs", "plan.canvas.json")
             if os.path.exists(cp): levels[level_of(a.code, c)] = P.load_json(cp); sources.append(f"{ph['dir']}/projects/{c}/inputs/plan.canvas.json")
@@ -122,14 +124,14 @@ def contributions(a, ph, codes):
 
 
 def capture_answers(a, store, ph, codes):
-    """The files the user's answers live in → Projects/<CODE>/qa/<phase>/<SUB>/ (reproducible runs)."""
+    """The files the user's answers live in → <pipeline folder>/answers/ (reproducible runs)."""
     keys = []
     for c in codes:
         pdir = layout(ph).project_dir(c)
         for pat in ph.get("answers", []):
             for f in sorted(glob.glob(os.path.join(pdir, pat))):
                 if not os.path.isfile(f): continue
-                key = f"Projects/{a.code}/qa/{ph['id']}/{c}/{os.path.relpath(f, pdir).replace(os.sep, '/')}"
+                key = PP.pipeline_dir(a.code, ph["pipeline"], c, ph["id"]) + "answers/" + os.path.relpath(f, pdir).replace(os.sep, "/")
                 if not a.dry_run: store.put(key, open(f, "rb").read(), r2.content_type(key))
                 keys.append(key)
     return keys
@@ -145,12 +147,12 @@ def check_release(store):
     for ph in CFG.get("phases", []):
         try:
             mine = json.load(open(os.path.join(FULL, ph["dir"], "pipeline.json"), encoding="utf-8")).get("version")
-            latest = get_json(store, f"library/Pipelines/{ph['pipeline']}-pipeline/release.json")
+            latest = get_json(store, f"library/Pipelines/{ph['id'].capitalize()}/{ph['pipeline']}-pipeline/release.json")
         except Exception: continue
         if not latest: continue
         theirs = latest.get("version")
         if vtuple(theirs) > vtuple(mine):
-            print(f"  ! {ph['pipeline']} {theirs} is published (this copy of {ph['dir']} is {mine}). Update from library/Pipelines/{ph['pipeline']}-pipeline/ before working.")
+            print(f"  ! {ph['pipeline']} {theirs} is published (this copy of {ph['dir']} is {mine}). Update from library/Pipelines/{ph['id'].capitalize()}/{ph['pipeline']}-pipeline/ before working.")
         elif vtuple(mine) > vtuple(theirs):
             print(f"  ({ph['dir']} is {mine}, newer than the published {theirs}: publish it with tools/publish_library.py --only {ph['id']} when tested)")
 
@@ -171,8 +173,8 @@ def cmd_new(a, store):
     ph = phase("program")
     if not os.path.exists(layout(ph).project_dir(a.code)):
         run([sub(x, CODE=a.code, SUB=a.code, TITLE=a.title or a.code) for x in ph["new"]], proot(ph))
-    m = {"schema": SCHEMA, "code": a.code, "title": a.title or a.code, "created": now(), "created_by": a.by,
-         "current": "program", "kit": CFG["kit"], "full_pipeline": CFG["version"],
+    m = {"schema": SCHEMA, "code": a.code, "title": a.title or a.code, "created": now(), "created_by": a.by, "owner": a.by,
+         "current": "program", "inputs": [], "kit": CFG["kit"], "full_pipeline": CFG["version"],
          "phases": {p: {"status": "open" if p == "program" else "waiting", "codes": [a.code] if p == "program" else []} for p in IDS},
          "members": {a.by: "owner"},
          "history": [{"at": now(), "by": a.by, "event": "new", "phase": "program"}]}
@@ -217,19 +219,21 @@ def cmd_handover(a, store):
     if blocked and not a.force and not saving:
         sys.exit(f"{ph['label']} is not finished: " + "; ".join(f"{c}: {', '.join(o)}" for c, o in blocked.items())
                  + "\nFinish the tasks, or hand over anyway with --force \"<reason>\" (recorded in the manifest).")
-    lay = layout(ph); published = []
+    lay = layout(ph); published = []; handed = []
     for c in codes:
-        res = sync.publish(lay, c, store, a.dry_run, agent=a.by)
+        res = sync.publish(lay, c, store, a.dry_run, agent=a.by, project=a.code)
         print(res["text"]); published += [i["key"] for i in res["items"] if i["fate"] in ("upload", "same")]
+        handed += [{"path": i["key"], "sha256": i["sha256"], "role": i["id"], "code": c} for i in res["items"] if i["fate"] in ("upload", "same")]
         if res["status"] == "failed" and not saving: sys.exit(f"publish failed for {c} — fix the invalid/missing outputs above")
         pdir = lay.project_dir(c); proj = lay.project(c)
         files = state.collect(pdir, PACK, exclude=PRIVATE)
         files.update(state.collect(pdir, ph.get("share_inputs", []), max_file=state.LIMIT))
         st = state.pack(ph["pipeline"], P.load_json(os.path.join(proot(ph), "pipeline.json"))["version"], c, proj.get("title", c), files,
-                        next_task=(blocked.get(c) or [None])[0], summary={"phase": pid, ("saved_by" if saving else "handed_over_by"): a.by}, fixture=bool(proj.get("fixture")))
-        put_json(store, state.library_path(c, ph["pipeline"]), st, a.dry_run)
+                        next_task=(blocked.get(c) or [None])[0], summary={"phase": pid, ("saved_by" if saving else "handed_over_by"): a.by}, fixture=bool(proj.get("fixture")),
+                        project=a.code, phase=pid)
+        put_json(store, state.library_path(c, ph["pipeline"], a.code, pid), st, a.dry_run)
         idx = state.merge_index(get_json(store, "Projects/index.json"), state.entry(st)); put_json(store, "Projects/index.json", idx, a.dry_run)
-        print(f"  state → {state.library_path(c, ph['pipeline'])} ({len(files)} text files; inputs/ and work dir stay private)")
+        print(f"  state → {state.library_path(c, ph['pipeline'], a.code, pid)} ({len(files)} text files; inputs/ and work dir stay private)")
     cv = Canvas(store, a.code)
     lv, sources, rooms = contributions(a, ph, codes)
     rev = cv.commit(lv, pid, a.by, sources, note=a.note or "", dry=a.dry_run) if lv else None
@@ -238,7 +242,7 @@ def cmd_handover(a, store):
     elif lv: print("  canvas unchanged (same as the current revision)")
     if rooms: print(f"  room canvases linked: {', '.join(rooms)}")
     answers = capture_answers(a, store, ph, codes)
-    if answers: print(f"  answers → Projects/{a.code}/qa/{pid}/ ({len(answers)} files)")
+    if answers: print(f"  answers → {len(answers)} files, e.g. {answers[0]}")
     s = m["phases"][pid]
     s["canvas_rev"] = cv.index()["current"] if not a.dry_run else s.get("canvas_rev")
     if answers: s["answers"] = answers
@@ -252,6 +256,10 @@ def cmd_handover(a, store):
     nxt = IDS[IDS.index(pid) + 1] if pid != IDS[-1] else None
     s.update(status="handed_over", codes=codes, handed_over_by=a.by, handed_over=now(), note=a.note or "", outputs=published)
     if a.force: s["forced"] = {"reason": a.force, "open_tasks": blocked}
+    ho = {"schema": "handoff/1", "from": pid, "to": nxt, "by": a.by, "at": now(), "codes": codes, "files": handed, "notes": a.note or "",
+          **({"forced": a.force} if a.force else {})}
+    put_json(store, PP.handoff(a.code, pid), ho, a.dry_run); s["handoff"] = PP.handoff(a.code, pid)
+    print(f"  handoff → {PP.handoff(a.code, pid)} ({len(handed)} files)")
     if nxt:
         m["phases"][nxt]["status"] = "ready"; m["current"] = nxt
     else:
@@ -286,12 +294,12 @@ def cmd_resume(a, store):
     # 1. someone already worked on this phase → restore their packed state
     if s.get("codes"):
         for c in s.get("codes", []):
-            st = get_json(store, state.library_path(c, ph["pipeline"]))
+            st = get_json(store, state.library_path(c, ph["pipeline"], a.code, pid))
             pdir = layout(ph).project_dir(c)
             if os.path.exists(os.path.join(pdir, "project.json")): print(f"  {c}: already on this machine"); continue
             if not st: print(f"  {c}: no saved state in {store!r} yet (the previous person has not handed over or saved)"); continue
             if not a.dry_run: state.unpack(st, pdir)
-            print(f"  {c}: restored {len(st['files'])} files from {state.library_path(c, ph['pipeline'])}")
+            print(f"  {c}: restored {len(st['files'])} files from {state.library_path(c, ph['pipeline'], a.code, pid)}")
         print(f"[{a.code}] {ph['label']} restored. Private inputs were not shared; ask the previous person or `share` them.")
         return _mark(a, store, m, pid, s["codes"])
     # 2. a fresh phase → build it from the previous phase's published outputs
@@ -301,14 +309,14 @@ def cmd_resume(a, store):
     made = []
     for up in ups:
         for b in ph["bridge"]:
-            key = sub(b["from"], UP=up, CODE=a.code)
+            key = PP.expand(sub(b["from"], UP=up), a.code, phase(prev)["pipeline"], up, prev)   # {OUT} = the previous phase's output/
             if ph["new"] == "from_program":
                 dst = place(ph, up, sub(b["to"], UP=up))
                 if not fetch(store, key, dst, a.dry_run):
                     if b["required"]: sys.exit(f"missing {key} — the {phase(prev)['label']} phase did not publish it")
                     continue
                 pj = os.path.join(os.path.dirname(dst), "program.project.json")
-                have_pj = fetch(store, f"Projects/{up}/program/project.json", pj, a.dry_run)
+                have_pj = fetch(store, out_of(a.code, phase(prev), up) + "project.json", pj, a.dry_run)
                 trace = P.load_json(dst) if not a.dry_run else {"rooms": []}
                 levels = sorted({r.get("level") for r in trace.get("rooms", []) if r.get("level")}) or [None]
                 for lv in levels:
@@ -360,7 +368,7 @@ def cmd_share(a, store):
     allowed(m, phase(pid), a.by)
     src = os.path.abspath(a.file)
     if not os.path.isfile(src): sys.exit(f"{a.file} is not a file")
-    key = f"Projects/{a.code}/inbox/{pid}/{a.by}/{os.path.basename(src)}"
+    key = PP.inputs(a.code, f"shared/{pid}/{a.by}") + os.path.basename(src)
     data = open(src, "rb").read()
     if not a.dry_run: store.put(key, data, r2.content_type(key))
     m.setdefault("shared", []).append({"at": now(), "by": a.by, "phase": pid, "key": key, "sha256": r2.sha256(data), "bytes": len(data)})

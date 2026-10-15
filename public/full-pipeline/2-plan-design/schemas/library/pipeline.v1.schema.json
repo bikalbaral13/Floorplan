@@ -2,181 +2,89 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://builderpluss.dev/library/Schemas/pipeline.v1.schema.json",
  "title": "pipeline/1 — what a pipeline reads, pins, keeps and throws away",
- "description": "Local copy of library/Schemas/pipeline.v1.schema.json. Never edit — re-copy from the library.",
+ "description": "One pipeline.json at the root of every pipeline (next to AGENTS.md; NOT the web app's file-tree manifest.json). Three places: library/ (reusable, publish with approval), Projects/<CODE>/ (lasting for one project, published by the run), work_dir (temporary, outside public/). Paths in inputs/outputs may use {CODE}; R2 keys are relative to the bucket root; local paths are relative to the work dir unless they start with project:.",
  "type": "object",
- "required": [
-  "schema",
-  "id",
-  "title",
-  "version",
-  "phase",
-  "entry",
-  "inputs",
-  "library_pins",
-  "outputs"
- ],
+ "required": ["schema", "id", "title", "version", "phase", "entry", "inputs", "library_pins", "outputs"],
  "additionalProperties": false,
  "properties": {
-  "schema": {
-   "const": "pipeline/1"
-  },
-  "id": {
-   "type": "string",
-   "pattern": "^[a-z][a-z0-9-]*$"
-  },
-  "title": {
-   "type": "string",
-   "minLength": 1
-  },
-  "version": {
-   "$ref": "#/$defs/semver"
-  },
-  "phase": {
-   "enum": [
-    "program",
-    "plan",
-    "design",
-    "build",
-    "present"
-   ]
-  },
+  "schema": { "const": "pipeline/1" },
+  "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+  "title": { "type": "string", "minLength": 1 },
+  "version": { "$ref": "#/$defs/semver" },
+  "phase": { "enum": ["program", "plan", "design", "build", "present"] },
   "entry": {
    "type": "object",
-   "required": [
-    "agents",
-    "run"
-   ],
+   "required": ["agents", "run"],
    "additionalProperties": false,
    "properties": {
-    "agents": {
-     "type": "string"
-    },
-    "run": {
-     "type": "string"
-    },
-    "new_project": {
-     "type": "string"
-    },
-    "selftest": {
-     "type": "string"
-    }
+    "agents": { "type": "string", "description": "file the agent reads first, e.g. AGENTS.md" },
+    "run": { "type": "string", "description": "command that runs the task sheet; {CODE} substituted" },
+    "new_project": { "type": "string" },
+    "selftest": { "type": "string" }
    }
   },
-  "kit": {
-   "$ref": "#/$defs/semver"
-  },
+  "kit": { "$ref": "#/$defs/semver", "description": "pipeline_kit version vendored; absent = not on the kit yet" },
   "inputs": {
    "type": "array",
    "items": {
     "type": "object",
-    "required": [
-     "id",
-     "from",
-     "required"
-    ],
+    "required": ["id", "from", "required"],
     "additionalProperties": false,
     "properties": {
-     "id": {
-      "type": "string"
-     },
-     "from": {
-      "type": "string"
-     },
-     "schema": {
-      "type": "string"
-     },
-     "required": {
-      "type": "boolean"
-     },
-     "note": {
-      "type": "string"
-     }
+     "id": { "type": "string" },
+     "from": { "type": "string", "description": "R2 key pattern (Projects/{CODE}/plan/handoff.json) or project:<file> for files the user puts in the project folder" },
+     "schema": { "type": "string", "description": "library/Schemas id it must validate against, e.g. canvas.v1" },
+     "required": { "type": "boolean" },
+     "note": { "type": "string" }
     }
    }
   },
   "library_pins": {
    "type": "array",
+   "description": "shared library items this pipeline reads; a run records the exact version/hash used",
    "items": {
     "type": "object",
-    "required": [
-     "path"
-    ],
+    "required": ["path"],
     "additionalProperties": false,
     "properties": {
-     "path": {
-      "type": "string",
-      "pattern": "^library/"
-     },
-     "version": {
-      "type": "string"
-     },
-     "local_copy": {
-      "type": "string"
-     }
+     "path": { "type": "string", "pattern": "^library/" },
+     "version": { "type": "string", "description": "semver or 'latest'; absent = latest" },
+     "local_copy": { "type": "string", "description": "pipeline-local copy still in use until phase F removes it" }
     }
    }
   },
   "outputs": {
    "type": "object",
-   "required": [
-    "keep",
-    "temp"
-   ],
+   "required": ["keep", "temp"],
    "additionalProperties": false,
    "properties": {
     "keep": {
      "type": "array",
+     "description": "published to R2 by the publish stage; everything else stays in the work dir",
      "items": {
       "type": "object",
-      "required": [
-       "id",
-       "local",
-       "to"
-      ],
+      "required": ["id", "local", "to"],
       "additionalProperties": false,
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "local": {
-        "type": "string"
-       },
-       "to": {
-        "type": "string",
-        "pattern": "^Projects/\\{CODE\\}/"
-       },
-       "schema": {
-        "type": "string"
-       },
-       "after": {
-        "type": "string"
-       },
-       "binary": {
-        "type": "boolean"
-       }
+       "id": { "type": "string" },
+       "local": { "type": "string", "description": "glob in the work dir, or project:<file>" },
+       "to": { "type": "string", "pattern": "^(Projects/\\{(CODE|PROJECT)\\}/|\\{(DIR|OUT|STEPS)\\})", "description": "R2 key prefix or full key; {DIR} {OUT} {STEPS} = this pipeline's folder in the project (pipeline_kit.projpaths)" },
+       "schema": { "type": "string" },
+       "after": { "type": "string", "description": "task id that must be done (and approved, if it is a gate) before this is published" },
+       "binary": { "type": "boolean", "description": "large file: R2 keeps only the latest copy, run.json keeps the hash" }
       }
      }
     },
-    "temp": {
-     "type": "array",
-     "items": {
-      "type": "string"
-     }
-    }
+    "temp": { "type": "array", "items": { "type": "string" }, "description": "globs in the work dir that are scratch (documentation; anything not in keep is temp anyway)" }
    }
   },
   "promotes": {
    "type": "array",
-   "items": {
-    "type": "string",
-    "pattern": "^library/"
-   }
+   "description": "kinds of reusable items a run may create; reaching library/ needs the user's approval each time",
+   "items": { "type": "string", "pattern": "^library/" }
   }
  },
  "$defs": {
-  "semver": {
-   "type": "string",
-   "pattern": "^\\d+\\.\\d+\\.\\d+$"
-  }
+  "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
  }
 }

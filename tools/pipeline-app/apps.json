@@ -5,7 +5,7 @@
   {
    "id": "space-brief",
    "title": "Space Brief",
-   "phase": "design",
+   "phase": "plan",
    "version": "0.7.7",
    "mode": "frame",
    "kind": "brief",
@@ -17,7 +17,7 @@
     "deck": "deck.js",
     "editor": "editor.js"
    },
-   "data": "library/Projects/{CODE}/space-brief/app/",
+   "data": "{DIR}steps/app/",
    "description": "The architect's app as tabs of the editor's right panel: Schedule, Issues, Brief deck",
    "mount": true
   },
