@@ -94,16 +94,35 @@
 
   // ── deck tab ──
   var drop = $("#drop"), fileIn = $("#file");
+  // Host v1 editors upload any size straight to R2; an older editor only takes ~4 MB through its server.
+  var ANY_SIZE = ((P.host && P.host.capabilities) || []).indexOf("upload-any-size") >= 0;
+  var OLD_MAX = 4 * 1024 * 1024;
+  var WHY = {
+    cors: "the storage bucket does not accept uploads from this site yet (its CORS rule). Claude can check with session.doctor and give you an upload link meanwhile.",
+    token: "this browser has no library token (Preferences ▸ Cloud Library). Or ask Claude for an upload link.",
+    expired: "the upload permission expired — ask Claude for a new upload link.",
+  };
   function upload(f) {
     if (!/\.(pptx|pdf)$/i.test(f.name)) { $("#upload-state").textContent = "Only .pptx or .pdf"; return; }
-    $("#upload-state").textContent = "Uploading " + f.name + " (" + (f.size / 1e6).toFixed(1) + " MB)…";
-    P.assets.upload(f, { name: f.name, target: "inputs/decks", type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : "application/vnd.openxmlformats-officedocument.presentationml.presentation") })
+    if (!ANY_SIZE && f.size > OLD_MAX) {
+      $("#upload-state").textContent = f.name + " is " + (f.size / 1e6).toFixed(1) + " MB — this editor version takes 4 MB at most. Ask Claude for an upload link (project.upload_link).";
+      try { P.emit("deck_too_large", { name: f.name, bytes: f.size, limit: OLD_MAX }); } catch (e) {}
+      return;
+    }
+    var mb = (f.size / 1e6).toFixed(1);
+    $("#upload-state").textContent = "Uploading " + f.name + " (" + mb + " MB)…";
+    P.assets.upload(f, { name: f.name, target: "inputs/decks", type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+      onProgress: function (n, t) { $("#upload-state").textContent = "Uploading " + f.name + " — " + Math.round(n / (t || 1) * 100) + "% of " + mb + " MB"; } })
       .then(function (r) {
         $("#upload-state").textContent = "Saved to " + (r.key || "inputs/decks/");
         chosenDeck = String(r.key || "").split("/").pop() || chosenDeck;
         P.emit("deck_uploaded", { key: r.key, name: f.name, bytes: f.size });
         return loadDecks().then(refresh);
-      }, function (err) { $("#upload-state").textContent = "Upload failed: " + (err && err.message || err); });
+      }, function (err) {
+        var code = err && err.code, msg = String(err && err.message || err);
+        $("#upload-state").textContent = "Upload failed: " + (WHY[code] || msg);
+        try { P.emit("deck_upload_failed", { name: f.name, bytes: f.size, reason: code || "", error: msg }); } catch (e) {}
+      });
   }
   fileIn.addEventListener("change", function () { if (fileIn.files[0]) upload(fileIn.files[0]); });
   ["dragover", "dragenter"].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); }); });

@@ -20,7 +20,7 @@ export const GROUPS = {
   },
   session: {
     summary: "START HERE. op:open → a one-time link to the live BuilderPluss editor, already connected to you (no code to type): give it to the user; everything they see and do happens there. op:status / state / selection / snapshot read it.",
-    ops: { open: "open_editor", connect: "connect_editor", status: "editor_status", state: "get_state", selection: "get_selection", snapshot: "snapshot_canvas" },
+    ops: { open: "open_editor", connect: "connect_editor", status: "editor_status", state: "get_state", selection: "get_selection", snapshot: "snapshot_canvas", doctor: "session_doctor" },
   },
   step: {
     summary: "Stepwise runs: open a step, then hand it to the user with a checkpoint (blocks until they answer).",
@@ -84,7 +84,11 @@ export const GROUPS = {
   },
   project: {
     summary: "Projects from start to finish: op:create a project (ask the USER for code + title first), op:status where it stands (inputs, phases, runner jobs), op:list all projects, op:job queues one script stage of a pipeline for the runner, op:jobs polls it. With pipeline.run the user uploads and answers in the pipeline's app; read library/AGENT.md §5 for the whole journey.",
-    ops: { create: "project_create", status: "project_status", list: "project_list", job: "project_job", jobs: "project_jobs" },
+    ops: { create: "project_create", status: "project_status", list: "project_list", job: "project_job", jobs: "project_jobs", upload_link: "project_upload_link" },
+  },
+  app: {
+    summary: "When something needs the EDITOR APP's code (not R2 files): op:request writes the problem, evidence and proposal to library/Requests/ for the developer; op:requests lists the open ones. Run session.doctor first — most problems are setup (CORS, token, runner), fixed without code.",
+    ops: { request: "app_request", requests: "app_requests" },
   },
   pipelines: {
     summary: "Make NEW pipelines with their own UI in the R2 library, no app rebuild: op:create writes the pipeline folder, its UI (index.html + files) and run steps and registers it — the editor then opens the UI as a tab (pipeline.run). op:update makes a preview version, op:release (only after the user approves) makes it stable, op:rollback goes back. The UI talks to the editor through window.pipeline (db, assets.upload, read, list, job, emit — docs/pipeline-ui-spec.md); a run keeps its files in Projects/<CODE>/<n-phase>/<id>/.",
@@ -105,7 +109,7 @@ export const GROUPS = {
  *  still callable so an old prompt gets a clear answer. MCP_FULL_TOOLS=1 lists them again. */
 export const HIDDEN_GROUPS = new Set(["viewer", "skills", "workflow"]);
 /** Listing order: what a chat needs first. Groups not named here follow in GROUPS order. */
-const ORDER = ["session", "project", "pipeline", "design", "objects", "library", "chat", "step", "underlay", "moodboard", "pipelines"];
+const ORDER = ["session", "project", "pipeline", "design", "objects", "library", "chat", "step", "underlay", "moodboard", "pipelines", "app"];
 
 export const HIDDEN_OPS = {
   draw: ["segment", "wall", "freehand", "opening", "style", "delete", "tools"],   // tools = the ~360 KB schema dump; objects.list { object } gives one object's params

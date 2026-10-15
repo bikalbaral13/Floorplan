@@ -140,6 +140,17 @@ export function setLibraryToken(value: string): void {
   statusPromise = null;
 }
 
+/** The headers every `/__r2/*` call carries: the library token when set, and any legacy R2 keys still stored. */
+export function r2Headers(): Record<string, string> {
+  const c = r2Credentials();
+  const keys: Record<string, string> = c.endpoint && c.accessKeyId && c.secretAccessKey && c.bucket
+    ? { "x-r2-endpoint": c.endpoint, "x-r2-access-key-id": c.accessKeyId, "x-r2-secret-access-key": c.secretAccessKey, "x-r2-bucket": c.bucket }
+    : {};
+  const token = libraryToken();
+  if (token) keys["x-library-token"] = token;
+  return keys;
+}
+
 /** `fetch` for the `/__r2/*` bridge: the library token when set, and any legacy R2 keys still stored. */
 function r2Fetch(url: string, init: RequestInit = {}): Promise<Response> {
   const c = r2Credentials();
@@ -370,19 +381,26 @@ export interface CloudWriteResult {
  *  GLBs, and base64 would inflate every one of them by a third. Dev server only, like every other
  *  write here — the signing keys are not in this bundle.
  */
-/** Upload a (possibly large) project file: straight from the browser to R2 through a pre-signed URL (no ~4.5 MB
- *  server-function limit), falling back to /__r2/upload when presigning or the direct PUT is refused (e.g. the
- *  bucket has no CORS rule for this origin yet — docs/r2-cors.json). Projects/<CODE>/… keys only. */
-export async function uploadDirect(key: string, file: Blob, type = file.type): Promise<CloudWriteResult> {
+/** Upload a project file of ANY size straight from the browser to R2 (host v1, ./hostUpload): the server only signs,
+ *  so Vercel's ~4.5 MB body limit does not apply; above 64 MB it goes up in parts. A failure says why (`reason`:
+ *  cors | token | expired | network | server) instead of silently retrying through the size-limited route — only a
+ *  small file (< 4 MB) falls back to /__r2/upload. Projects/<CODE>/… keys only. */
+export async function uploadDirect(key: string, file: Blob, type = file.type,
+  onProgress?: (loaded: number, total: number) => void): Promise<CloudWriteResult & { reason?: string }> {
   try {
-    const res = await r2Fetch("/__r2/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
-    const body = (await res.json().catch(() => null)) as { url?: string; publicUrl?: string; key?: string } | null;
-    if (res.ok && body?.url) {
-      const put = await fetch(body.url, { method: "PUT", body: file, headers: type ? { "Content-Type": type } : undefined });
-      if (put.ok) return { ok: true, key: body.key ?? key, url: body.publicUrl ?? "", size: file.size };
+    const { uploadToR2 } = await import("./hostUpload");
+    const r = await uploadToR2(key, file, { contentType: type, onProgress, headers: r2Headers() });
+    return { ok: true, key: r.key, url: r.url, size: r.size };
+  } catch (e) {
+    const reason = (e as { reason?: string }).reason ?? "network";
+    const message = e instanceof Error ? e.message : String(e);
+    if (file.size < 4_000_000 && reason !== "token") {
+      const r = await uploadToBucket(key, file);
+      if (r.ok) return r;
     }
-  } catch { /* fall back below */ }
-  return uploadToBucket(key, file);
+    void import("./clientLog").then((m) => m.reportClientError("upload", message, { reason, key, bytes: file.size }));
+    return { ok: false, error: message, reason };
+  }
 }
 
 export async function uploadToBucket(key: string, file: Blob): Promise<CloudWriteResult> {

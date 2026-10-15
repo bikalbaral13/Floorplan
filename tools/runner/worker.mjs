@@ -130,7 +130,13 @@ async function runJob(key, job) {
 }
 
 const seen = new Map();
+let lastBeat = 0;
 async function tick() {
+  // heartbeat for the connector's session.doctor ("is a runner online?")
+  if (Date.now() - lastBeat > 30_000) {
+    lastBeat = Date.now();
+    await putJson(`relay/runner/${WORKER.replace(/[^A-Za-z0-9_.-]/g, "_")}.json`, { worker: WORKER, at: new Date().toISOString(), pipelines: Object.keys(PIPELINES), only: onlyCode }).catch(() => {});
+  }
   const objs = await listObjectsDetailed(cfg, onlyCode ? `Projects/${onlyCode}/` : "Projects/");
   for (const o of objs) {
     if (!JOB_RE.test(o.key) || seen.get(o.key) === o.lastModified) continue;

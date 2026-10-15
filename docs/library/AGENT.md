@@ -103,3 +103,22 @@ The file formats for steps 9–11 are in the pipeline's `AGENTS.md` (`library/Pi
 Script stages run on **the runner** — `node tools/runner/worker.mjs` on a machine with the repo and Python. A job
 `queued` for over a minute means no runner is online: tell the user to start it; do not try to run the stage yourself.
 Render (S7) and QA (S8) are not in the runner yet.
+
+---
+
+## 6. When something fails — find the cause without the repo
+
+1. **`session { op: "doctor" }` first.** It checks R2, the bucket's CORS (can a browser upload straight to R2), whether
+   a runner is online, the editor's own recent errors (refused uploads, missing token, crashes) and the versions, and
+   says what to fix. Most failures are setup, fixed without code.
+2. **Big files:** the editor uploads any size straight to R2 (multipart above 64 MB) once the bucket's CORS rule is in
+   place (Cloudflare ▸ R2 ▸ bucket ▸ Settings ▸ CORS; rule in the repo's `docs/r2-cors.json`). For a user without the
+   editor, or until CORS is set: `project { op: "upload_link", code, kind: "decks" }` → a link they open to upload.
+3. **Change behaviour from R2:** `library/Config/app.json` (read by the editor at start-up; pipeline UIs get it as
+   `window.pipeline.host.config`), the pipeline's app files (`pipelines.update` → preview → `release` after the user
+   approves), its `runner.json` and docs.
+4. **Only when the editor's CODE must change:** `app { op: "request", title, problem, evidence, proposal }` writes it to
+   `library/Requests/` for the developer; `app.requests` lists the open ones. Do not try to work around app bugs.
+
+A pipeline UI checks `window.pipeline.host.capabilities` before using a call — host v1: db, upload-any-size,
+upload-progress, read, list, write, delete, url, job, cancel-job, open-canvas, notify, emit, tabs, downloads.

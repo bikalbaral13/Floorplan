@@ -47,11 +47,13 @@ const signingKey = (secret, dateStamp) =>
  * @param {string} key    object key inside the bucket (no leading slash)
  * @param {Buffer|string} body
  */
-export async function signedRequest(cfg, method, key, body = "", extraHeaders = {}) {
+export async function signedRequest(cfg, method, key, body = "", extraHeaders = {}, query = {}) {
   const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, "utf8");
   const url = new URL(cfg.endpoint.replace(/\/+$/, ""));
   // Path-style addressing (bucket in the path, not the hostname). R2's S3 endpoint requires it.
   const canonicalUri = `/${[cfg.bucket, ...key.split("/")].map(encodeSegment).join("/")}`;
+  // Sub-resource queries (?uploads, ?uploadId=…&partNumber=…): sorted, encoded, "k=" for a bare flag.
+  const cq = canonicalQuery(query);
 
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
   const dateStamp = amzDate.slice(0, 8);
@@ -69,7 +71,7 @@ export async function signedRequest(cfg, method, key, body = "", extraHeaders = 
   const canonicalHeaders = names.map((n) => `${n}:${headers[n].trim()}\n`).join("");
   const signedHeaders = names.join(";");
 
-  const canonicalRequest = [method, canonicalUri, "", canonicalHeaders, signedHeaders, payloadHash].join("\n");
+  const canonicalRequest = [method, canonicalUri, cq, canonicalHeaders, signedHeaders, payloadHash].join("\n");
   const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`;
   const stringToSign = [ALGORITHM, amzDate, scope, sha256hex(canonicalRequest)].join("\n");
   const signature = hmac(signingKey(cfg.secretAccessKey, dateStamp), stringToSign).toString("hex");
@@ -77,7 +79,7 @@ export async function signedRequest(cfg, method, key, body = "", extraHeaders = 
   const authorization =
     `${ALGORITHM} Credential=${cfg.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-  const response = await fetch(`${url.origin}${canonicalUri}`, {
+  const response = await fetch(`${url.origin}${canonicalUri}${cq ? `?${cq}` : ""}`, {
     method,
     headers: { ...headers, Authorization: authorization },
     body: method === "GET" || method === "HEAD" ? undefined : payload,
@@ -96,21 +98,45 @@ export async function signedRequest(cfg, method, key, body = "", extraHeaders = 
 /** A pre-signed URL (SigV4 query auth, UNSIGNED-PAYLOAD): lets a browser PUT one object straight to R2 without the
  *  keys and without passing the bytes through a server function (Vercel caps a request body at ~4.5 MB). The
  *  bucket's CORS must allow PUT from the app's origin (tools/r2-cors.mjs). `expires` in seconds (max 7 days). */
-export function presignUrl(cfg, method, key, expires = 900) {
+export function presignUrl(cfg, method, key, expires = 900, extraQuery = {}) {
   const url = new URL(cfg.endpoint.replace(/\/+$/, ""));
   const canonicalUri = `/${[cfg.bucket, ...key.split("/")].map(encodeSegment).join("/")}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
   const dateStamp = amzDate.slice(0, 8);
   const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`;
   const q = {
+    ...extraQuery,
     "X-Amz-Algorithm": ALGORITHM, "X-Amz-Credential": `${cfg.accessKeyId}/${scope}`, "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(Math.min(604800, Math.max(1, expires))), "X-Amz-SignedHeaders": "host",
   };
-  const cq = Object.keys(q).sort().map((k) => `${encodeSegment(k)}=${encodeSegment(q[k])}`).join("&");
+  const cq = canonicalQuery(q);
   const canonicalRequest = [method, canonicalUri, cq, `host:${url.host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
   const stringToSign = [ALGORITHM, amzDate, scope, sha256hex(canonicalRequest)].join("\n");
   const signature = hmac(signingKey(cfg.secretAccessKey, dateStamp), stringToSign).toString("hex");
   return `${url.origin}${canonicalUri}?${cq}&X-Amz-Signature=${signature}`;
+}
+
+function canonicalQuery(q) {
+  return Object.keys(q ?? {}).sort().map((k) => `${encodeSegment(k)}=${encodeSegment(String(q[k] ?? ""))}`).join("&");
+}
+
+/** Multipart upload (for big files, sent by the BROWSER part by part through presigned URLs):
+ *  create → presign each part (presignUrl(cfg, "PUT", key, exp, { partNumber, uploadId })) → complete. Parts are
+ *  ≥ 5 MB except the last; the browser reads each part's ETag (the bucket's CORS must expose ETag). */
+export async function createMultipart(cfg, key, contentType = "application/octet-stream") {
+  const r = await signedRequest(cfg, "POST", key, "", { "content-type": contentType }, { uploads: "" });
+  const id = /<UploadId>([^<]+)<\/UploadId>/.exec(await r.text())?.[1];
+  if (!id) throw new Error(`R2 did not start a multipart upload for ${key}`);
+  return id;
+}
+export async function completeMultipart(cfg, key, uploadId, parts) {
+  const xml = `<CompleteMultipartUpload>${[...parts].sort((a, b) => a.partNumber - b.partNumber)
+    .map((p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${String(p.etag).replace(/[<>&]/g, "")}</ETag></Part>`).join("")}</CompleteMultipartUpload>`;
+  await signedRequest(cfg, "POST", key, xml, { "content-type": "application/xml" }, { uploadId });
+  return key;
+}
+export async function abortMultipart(cfg, key, uploadId) {
+  await signedRequest(cfg, "DELETE", key, "", {}, { uploadId });
 }
 
 /** Store `body` at `key`, recording its sha256 in object metadata.

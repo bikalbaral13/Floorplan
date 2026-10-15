@@ -16,10 +16,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { libraryPath, saveToCloudLibrary, uploadDirect, uploadToBucket } from "./cloudLibrary";
+import { deleteFromBucket, libraryPath, saveToCloudLibrary, uploadDirect, uploadToBucket } from "./cloudLibrary";
+import { toast } from "sonner";
+import { appConfig, loadAppConfig } from "./appConfig";
 import { registerAgentCommand } from "./agentBridge";
 import { inputsDir, pipelineDir, rememberPhase, stampedName, type InputKind } from "./projectPaths";
-import { connectFrame, FRAME_SANDBOX, framePreamble, type Store } from "./pipelineFrame";
+import { connectFrame, FRAME_SANDBOX, framePreamble, HOST_CAPABILITIES, HOST_VERSION, type Store } from "./pipelineFrame";
 
 interface PipelineApp {
   id: string; title: string; phase?: string; version?: string; description?: string; mount?: boolean;
@@ -80,7 +82,9 @@ const projectKey = (code: string, rel: string) => {
 async function addProjectInput(code: string, key: string, blob: Blob) {
   const mk = `${PROJ}/${code}/project.json`;
   const m = JSON.parse(await text(mk, true)) as { inputs?: { path: string }[]; history?: unknown[] };
-  const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  // sha256 of the whole file — skipped above 200 MB (it would hold the file in memory twice); R2 keeps its ETag
+  const hash = blob.size > 200e6 ? null
+    : [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map((b) => b.toString(16).padStart(2, "0")).join("");
   const rel = key.slice(`${PROJ}/${code}/`.length);
   m.inputs = [...(m.inputs ?? []).filter((i) => i.path !== rel), { path: rel, sha256: hash, bytes: blob.size, added: new Date().toISOString(), by: "editor" } as { path: string }];
   await saveKey(mk, JSON.stringify(m, null, 1));
@@ -194,6 +198,7 @@ function r2Backend(dataDir: string, local: string, live: Live, onUserEdit: () =>
  *    kind "page"   a page shown as it is ("{planner}" = the program project's typology planner), no store
  *    kind "app"    a pipeline UI made with the Pipeline Creator: index.html + its files, store seeded from seed.json */
 async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
+  await loadAppConfig();   // host.config for the page (library/Config/app.json)
   const t = app.templates;
   // The frame's files come from the bucket's PUBLIC url: a sandboxed (opaque-origin) frame cannot reach the app's
   // own /__r2 route on a local dev host, and version folders never change, so the public cache is safe.
@@ -204,7 +209,8 @@ async function fetchFrame(app: PipelineApp, code: string): Promise<Loaded> {
   const inject = (html: string, base: string) => {
     // space-brief's own tab row moves to the editor's top bar (beside Drawings); its Drawings tab is dropped.
     const pre = framePreamble(pub(base), { id: app.id, code, kv, hostTabs: app.kind === "brief",
-      projectUrl: pub(`${PROJ}/${code}/`), dir: pipelineDir(code, app.id, app.phase).slice(`${PROJ}/${code}/`.length) });
+      projectUrl: pub(`${PROJ}/${code}/`), dir: pipelineDir(code, app.id, app.phase).slice(`${PROJ}/${code}/`.length),
+      host: { version: HOST_VERSION, capabilities: HOST_CAPABILITIES, config: { ...appConfig(), ...((appConfig().pipelines ?? {})[app.id] ?? {}) } } });
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + pre) : pre + html;
   };
   const out = { app, code, page: "", css: "", scripts: [], fonts: [], local: "{}", kv, kvKey: projDir + "storage.json" };
@@ -539,13 +545,13 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       store, kv,
       onWrite: () => { save(); setStoreRev((v) => v + 1); if (!live.claudeWriting) onUserEdit(); },
       onKv: () => saveKv(),
-      upload: async (blob, type, name, target) => {
-        const kind = /^inputs\/(drawings|decks|images|designs|models)\/?$/.exec(target ?? "")?.[1] as InputKind | undefined;
+      upload: async (blob, type, name, target, onProgress) => {
+        const kind = /^inputs\/(drawings|decks|images|designs|models|moodboards)\/?$/.exec(target ?? "")?.[1] as InputKind | undefined;
         if (kind) {
           // a user file → the project's inputs/<kind>/ with its own name (stamped), listed in project.json inputs[]
           const key = inputsDir(loaded.code, kind) + stampedName(name || `upload.${type.split("/")[1] ?? "bin"}`);
-          const r = await uploadDirect(key, blob, type);
-          if (!r.ok) throw new Error(r.error);
+          const r = await uploadDirect(key, blob, type, onProgress);
+          if (!r.ok) throw Object.assign(new Error(r.error), { reason: r.reason });
           void addProjectInput(loaded.code, key, blob).catch(() => { /* the file is in R2 either way */ });
           return { id: `../${key}`, key, url: r.url };
         }
@@ -563,6 +569,36 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         if (!r.ok) throw new Error(`list ${rel}: ${r.status}`);
         return ((await r.json()).files ?? []) as string[];
       },
+      write: async (rel, content) => {
+        const key = projectKey(loaded.code, rel);
+        const r = await saveKey(key, content);
+        if (!r.ok) throw new Error(r.error ?? `could not write ${rel}`);
+        return { key };
+      },
+      del: async (rel) => {
+        const key = projectKey(loaded.code, rel);
+        if (/\/project\.json$/.test(key) && key.split("/").length === 3) throw new Error("project.json cannot be deleted from a pipeline");
+        const r = await deleteFromBucket(key);
+        if (!r.ok) throw new Error(r.error ?? `could not delete ${rel}`);
+        return { key };
+      },
+      cancelJob: async (stage) => {
+        const st = String(stage).toUpperCase();
+        const key = `${pipelineDir(loaded.code, loaded.app.id, loaded.app.phase)}jobs/${st}.json`;
+        let job: Record<string, unknown> = {};
+        try { job = JSON.parse(await text(key, true)); } catch { throw new Error(`no job ${st}`); }
+        if (job.status !== "queued") throw new Error(`${st} is ${String(job.status)} — only a queued job can be cancelled`);
+        const r = await saveKey(key, JSON.stringify({ ...job, status: "cancelled", cancelled: new Date().toISOString() }, null, 1));
+        if (!r.ok) throw new Error(r.error ?? "could not cancel");
+        return { key };
+      },
+      openCanvas: async (rel) => {
+        const key = projectKey(loaded.code, rel);
+        const json = await text(key, true);
+        window.dispatchEvent(new CustomEvent("bp-open-plan", { detail: { json, path: key } }));
+        return { opened: key };
+      },
+      notify: (message, level) => { (level === "error" ? toast.error : level === "success" ? toast.success : level === "warning" ? toast.warning : toast.info)(message); },
       job: async (stage, args) => {
         const st = String(stage).toUpperCase();
         if (!/^[A-Z0-9][A-Z0-9_]{1,40}$/.test(st)) throw new Error(`bad stage "${stage}"`);

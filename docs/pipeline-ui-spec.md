@@ -158,3 +158,14 @@ pipeline without a UI falls back to `viewer.form` for its gates.
   `Projects/<CODE>/` (`pipeline.dir` = this pipeline's folder, e.g. `3-build/build-from-deck/`).
 - `pipeline.job(stage, args)` — queue a runner stage: `<pipeline dir>/jobs/<STAGE>.json` (runner-job/1), picked up by
   `tools/runner/worker.mjs`. Example app: `tools/pipeline-app/apps/build-from-deck/`.
+
+## Host v1 (2026-10-15)
+- `pipeline.host` = `{ version: "1.0.0", capabilities: [...], config }` — check a capability before using a call;
+  `config` = `library/Config/app.json` with `pipelines.<id>` merged in.
+- `assets.upload(blob, { name, target, onProgress(loaded, total) })` — any size, straight to R2 (presigned PUT, multipart
+  above 64 MB, 3 parts in flight). A failure rejects with `{ code, message }`, code = cors | token | expired | network | server.
+- `write(path, content)`, `del(path)` — one project file (paths relative to `Projects/<CODE>/`; the manifest cannot be deleted).
+- `cancelJob(stage)` — a queued runner job → cancelled. `openCanvas(path)` — load a project canvas in the editor.
+  `notify(message, level)` — a toast (info | success | warning | error).
+- Server routes behind it: `/__r2/upload-plan`, `/upload-complete`, `/upload-abort`, `/upload-done` (lists an inputs/ file
+  in project.json), `/log` (the editor's errors → relay/logs/). Upload links (`project.upload_link`) → `/upload.html?g=<grant>`.

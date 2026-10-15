@@ -220,6 +220,8 @@ import { shellSheet } from "./shell3d";
 import { groupedToMerged, groupToSite, isGroupedPlan, siteToGroup, type PlanGroup } from "./planGroups";
 import { applyInstanceTransform, designLevelFor, loadDesignPaths, uniqueInstances, type DesignPaths } from "./designInstances";
 import { activeProject, mediaDir } from "./projectPaths";
+import { installClientLog } from "./clientLog";
+import { loadAppConfig } from "./appConfig";
 import { getPythonResult, getPythonError, onPythonResult, objIsPython, pythonRotation } from "./python/pythonObjects";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
 import { MESH3D_FORMATS } from "./export/flowMesh3dFormats";
@@ -28684,6 +28686,18 @@ User request: ${aiPrompt.trim()}`;
   };
   const importPlanTextRef = useRef(importPlanText);
   importPlanTextRef.current = importPlanText;
+  // Host v1: a pipeline UI opens a project canvas (window.pipeline.openCanvas) — the same path as Import JSON —
+  // and the editor reports its own errors to R2 for the connector's session.doctor.
+  useEffect(() => {
+    installClientLog();
+    void loadAppConfig();
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ json: string; path: string }>).detail;
+      void importPlanTextRef.current(d.json, d.path).then((ok) => { if (!ok) toast.error(`Could not open ${d.path}`); });
+    };
+    window.addEventListener("bp-open-plan", onOpen);
+    return () => window.removeEventListener("bp-open-plan", onOpen);
+  }, []);
 
   useEffect(() => { setBridgeLinkedDesign(linkedDesign); }, [linkedDesign]);
 

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upload to project</title>
+<style>
+  :root { --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0369a1; --ok: #15803d; --bad: #b91c1c; --bg: #f8fafc; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink: #e2e8f0; --muted: #94a3b8; --line: #334155; --bg: #0f172a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  code { font: 12px ui-monospace, Consolas, monospace; }
+  .drop { display: block; margin: 20px 0; padding: 40px 16px; border: 2px dashed var(--line); border-radius: 12px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--accent); }
+  .file { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Upload to <span id="code">…</span></h1>
+  <p class="muted" id="where">Checking the link…</p>
+  <label class="drop" id="drop" hidden>
+    <input id="file" type="file" multiple hidden>
+    <b>Drop files here</b> or <u>choose files</u><br><span class="muted">Any size — files go straight to the project's storage.</span>
+  </label>
+  <div id="list"></div>
+</main>
+<script>
+/* Standalone upload page for a connector upload link (project.upload_link → /upload.html?g=<grant>). The grant
+   authorises one project's inputs/<kind>/ until it expires; the bytes go straight to R2 through presigned URLs
+   (multipart above 64 MB), then /__r2/upload-done lists the file in project.json. Same protocol as
+   src/floorplan/hostUpload.ts. */
+(function () {
+  "use strict";
+  var g = new URLSearchParams(location.search).get("g") || "";
+  var grant = null;
+  var $ = function (id) { return document.getElementById(id); };
+  function post(path, body) {
+    return fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ grant: g }, body)) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw new Error(j.error || ("HTTP " + r.status)); return j; }); });
+  }
+  function put(url, blob, onBytes) {
+    return new Promise(function (res, rej) {
+      var x = new XMLHttpRequest(); x.open("PUT", url);
+      x.upload.onprogress = function (e) { onBytes(e.loaded); };
+      x.onload = function () { x.status < 300 ? res(x.getResponseHeader("ETag") || "") : rej(new Error("storage answered " + x.status)); };
+      x.onerror = function () { rej(new Error("the storage refused the upload from this site (CORS) — tell Claude to run session.doctor")); };
+      x.send(blob);
+    });
+  }
+  function stamp(name) {
+    var dot = name.lastIndexOf("."), base = (dot > 0 ? name.slice(0, dot) : name).replace(/[^\w.-]+/g, "_").slice(0, 60) || "file";
+    return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19) + "_" + base + (dot > 0 ? name.slice(dot).toLowerCase() : "");
+  }
+  function upload(file) {
+    var row = document.createElement("div"); row.className = "file";
+    row.innerHTML = "<div><b></b> <span class='muted'></span></div><div class='bar'><i></i></div><div class='state muted'></div>";
+    row.querySelector("b").textContent = file.name;
+    row.querySelector("span").textContent = (file.size / 1e6).toFixed(1) + " MB";
+    $("list").appendChild(row);
+    var bar = row.querySelector("i"), state = row.querySelector(".state");
+    var key = grant.prefix + stamp(file.name), total = file.size || 1;
+    var show = function (n) { bar.style.width = Math.min(100, n / total * 100).toFixed(1) + "%"; state.textContent = Math.round(n / total * 100) + "%"; };
+    return post("/__r2/upload-plan", { key: key, size: file.size, contentType: file.type || "application/octet-stream" }).then(function (plan) {
+      if (plan.mode === "single") return put(plan.url, file, show);
+      var sent = {}, parts = plan.parts, done = [], next = 0, ps = plan.partSize;
+      var sum = function () { var s = 0; for (var k in sent) s += sent[k]; show(s); };
+      function worker() {
+        if (next >= parts.length) return Promise.resolve();
+        var p = parts[next++];
+        return put(p.url, file.slice((p.partNumber - 1) * ps, p.partNumber * ps), function (n) { sent[p.partNumber] = n; sum(); })
+          .then(function (etag) { if (!etag) throw new Error("the storage hid the part's ETag (CORS ExposeHeaders) — tell Claude to run session.doctor"); done.push({ partNumber: p.partNumber, etag: etag }); return worker(); });
+      }
+      return Promise.all([worker(), worker(), worker()]).then(function () { return post("/__r2/upload-complete", { key: key, uploadId: plan.uploadId, parts: done }); },
+        function (e) { post("/__r2/upload-abort", { key: key, uploadId: plan.uploadId }).catch(function () {}); throw e; });
+    }).then(function () { return post("/__r2/upload-done", { key: key, size: file.size }); })
+      .then(function () { show(total); state.className = "state ok"; state.textContent = "Uploaded — " + key.slice(key.indexOf("inputs/")); },
+        function (e) { state.className = "state bad"; state.textContent = "Failed: " + e.message; });
+  }
+  function start(files) { Array.prototype.reduce.call(files, function (p, f) { return p.then(function () { return upload(f); }); }, Promise.resolve()); }
+  fetch("/__r2/raw/relay/grants/" + encodeURIComponent(g) + ".json", { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (gr) {
+    if (Date.parse(gr.expires) < Date.now()) throw new Error("expired");
+    grant = gr;
+    $("code").textContent = gr.code;
+    $("where").innerHTML = "Files go to <code></code> · link valid until " + new Date(gr.expires).toLocaleString();
+    $("where").querySelector("code").textContent = gr.prefix;
+    var drop = $("drop"); drop.hidden = false;
+    $("file").addEventListener("change", function () { start($("file").files); });
+    ["dragover", "dragenter"].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
+    ["dragleave", "drop"].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove("over"); }); });
+    drop.addEventListener("drop", function (e) { start(e.dataTransfer.files); });
+  }).catch(function (e) {
+    $("code").textContent = "project";
+    $("where").innerHTML = "<span class='bad'>" + (e && e.message === "expired" ? "This upload link has expired." : "This upload link is not valid.") + "</span> Ask Claude for a new one.";
+  });
+})();
+</script>
+</body>
+</html>

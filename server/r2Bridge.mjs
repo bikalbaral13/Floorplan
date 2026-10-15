@@ -12,7 +12,10 @@
 
 import path from "node:path";
 import crypto from "node:crypto";
-import { r2ConfigFrom, putObject, getObjectText, signedRequest, listObjects, listObjectsDetailed, deleteObject, presignUrl } from "../tools/r2.mjs";
+import { r2ConfigFrom, putObject, getObjectText, signedRequest, listObjects, listObjectsDetailed, deleteObject, presignUrl, createMultipart, completeMultipart, abortMultipart } from "../tools/r2.mjs";
+
+/** One PUT up to this size; bigger files go up in parts (R2 allows 5 GB per PUT, but parts can be retried). */
+const SINGLE_MAX = 64 * 1024 * 1024, PART_SIZE = 16 * 1024 * 1024, MULTIPART_MAX = 50e9;
 
 
 /** Content types for what the Library holds; /save accepts only these. */
@@ -203,6 +206,63 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
         prefix: cfg?.prefix ?? "",
       });
     }
+    // ── Host v1: uploads of any size straight to R2, upload grants, client logs ───────────────────────────────
+    // POST /upload-plan { key, size, contentType, grant? } → { mode: "single", url } or, above SINGLE_MAX,
+    //   { mode: "multipart", uploadId, partSize, parts: [{ partNumber, url }] }. The browser PUTs the bytes to R2
+    //   itself (no ~4.5 MB server-function limit); a multipart upload then calls /upload-complete with the ETags.
+    // Authorised by the library token (as every write) OR by an upload GRANT the connector made
+    //   (relay/grants/<id>.json: one project's inputs/<kind>/, until it expires) — for the upload page.
+    // POST /log { level, message, … } → relay/logs/<day>/<ts>.json: the editor's own errors, for session.doctor.
+    if (req.method === "POST" && ["/upload-plan", "/upload-complete", "/upload-abort", "/upload-done", "/log"].includes(route)) {
+      const body = await readJson(req);
+      if (route === "/log") {
+        if (!envCfg) return sendJson(res, 200, { ok: false });
+        const entry = { at: new Date().toISOString(), ...Object.fromEntries(Object.entries(body ?? {}).slice(0, 12).map(([k, v]) => [k, String(v ?? "").slice(0, 2000)])) };
+        const day = entry.at.slice(0, 10);
+        await putObject(envCfg, `relay/logs/${day}/${entry.at.replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 7)}.json`, JSON.stringify(entry), "application/json");
+        return sendJson(res, 200, { ok: true });
+      }
+      const key = cleanBucketKey(body.key);
+      if (!key || !/^Projects\/[A-Z0-9][A-Z0-9_]*\//.test(key)) return sendJson(res, 400, { error: "uploads go to Projects/<CODE>/… keys" });
+      let ucfg = cfg;
+      if (body.grant) {
+        const g = envCfg && /^[a-z0-9]{12,40}$/.test(String(body.grant))
+          ? await getObjectText(envCfg, `relay/grants/${body.grant}.json`).then((r) => JSON.parse(r.text)).catch(() => null) : null;
+        if (!g || Date.parse(g.expires) < Date.now()) return sendJson(res, 403, { error: "this upload link has expired — ask for a new one" });
+        if (!key.startsWith(g.prefix)) return sendJson(res, 403, { error: `this upload link only allows ${g.prefix}` });
+        ucfg = envCfg;
+      }
+      if (!ucfg) return sendJson(res, 401, { error: "uploading needs a library token (Preferences ▸ Cloud Library) or an upload link from Claude", code: "token" });
+      if (route === "/upload-plan") {
+        const size = Number(body.size) || 0;
+        const type = String(body.contentType || "application/octet-stream").slice(0, 120);
+        if (size <= SINGLE_MAX) return sendJson(res, 200, { ok: true, mode: "single", key, url: presignUrl(ucfg, "PUT", key, 3600), publicUrl: publicUrlOf(ucfg, key) });
+        if (size > MULTIPART_MAX) return sendJson(res, 413, { error: `files up to ${MULTIPART_MAX / 1e9} GB` });
+        const partSize = Math.max(PART_SIZE, Math.ceil(size / 9000));
+        const uploadId = await createMultipart(ucfg, key, type);
+        const n = Math.ceil(size / partSize);
+        const parts = Array.from({ length: n }, (_, i) => ({ partNumber: i + 1, url: presignUrl(ucfg, "PUT", key, 6 * 3600, { partNumber: i + 1, uploadId }) }));
+        return sendJson(res, 200, { ok: true, mode: "multipart", key, uploadId, partSize, parts, publicUrl: publicUrlOf(ucfg, key) });
+      }
+      if (route === "/upload-done") {
+        // list the file in the project's manifest (project.json inputs[]) — the upload page has no token to write it
+        const m = /^Projects\/([A-Z0-9][A-Z0-9_]*)\/(inputs\/.+)$/.exec(key);
+        if (!m) return sendJson(res, 400, { error: "only inputs/ files are listed" });
+        const mk = `Projects/${m[1]}/project.json`;
+        const man = await getObjectText(ucfg, mk, 5_000_000).then((r) => JSON.parse(r.text)).catch(() => null);
+        if (!man) return sendJson(res, 404, { error: `no ${mk}` });
+        man.inputs = [...(man.inputs ?? []).filter((i) => i.path !== m[2]), { path: m[2], bytes: Number(body.size) || null, added: new Date().toISOString(), by: body.grant ? "upload link" : "editor" }];
+        await putObject(ucfg, mk, JSON.stringify(man, null, 1), "application/json");
+        return sendJson(res, 200, { ok: true, key });
+      }
+      if (route === "/upload-complete") {
+        await completeMultipart(ucfg, key, String(body.uploadId), Array.isArray(body.parts) ? body.parts : []);
+        return sendJson(res, 200, { ok: true, key, publicUrl: publicUrlOf(ucfg, key) });
+      }
+      await abortMultipart(ucfg, key, String(body.uploadId)).catch(() => {});
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (!cfg) return sendJson(res, 401, { error: envCfg ? "writing needs a library token — enter it in Preferences ▸ Cloud Library" : "the server has no R2 keys (set R2_* in the Vercel env)" });
 
     // POST /save { path, content, area? } → one object under the library prefix, or under Projects/ (area "projects").
