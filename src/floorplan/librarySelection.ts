@@ -1,6 +1,7 @@
 /**
  * The Library selection — R2 files ticked in the navigator. Ticking IS the selection: nothing is loaded
- * onto the canvas; the chat agent reads what is here when a message is sent. Per browser (localStorage).
+ * onto the canvas; the chat agent reads what is here when a message is sent. Per TAB (sessionStorage): a new
+ * tab starts with nothing ticked, so the chat starts from scratch; a reload of the same tab keeps the ticks.
  *
  * Behaviour is by folder (`kindOf`): a Skill's text becomes agent instructions; small text/JSON files
  * (objects, workflows, designs, materials …) go in as their contents; anything else (images, .glb,
@@ -41,12 +42,13 @@ export function kindOf(key: string): SelKind {
 const KEY = "bp.editor.librarySelection";
 const listeners = new Set<() => void>();
 function read(): SelItem[] {
-  try { const v = JSON.parse(localStorage.getItem(KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  try { localStorage.removeItem(KEY); } catch { /* older builds kept the ticks forever in localStorage */ }
+  try { const v = JSON.parse(sessionStorage.getItem(KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 let current: SelItem[] = read();
 function commit(next: SelItem[]) {
   current = next;
-  try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* in-memory only */ }
+  try { sessionStorage.setItem(KEY, JSON.stringify(next)); } catch { /* in-memory only */ }
   listeners.forEach((l) => l());
 }
 
