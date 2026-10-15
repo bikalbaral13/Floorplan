@@ -16,13 +16,14 @@
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
 import { libraryMcpConfig, libraryStore } from "./libraryMcp.mjs";
 
-const DESIGN_PATH = /^Designs\/[^\\]*\.json$/i;
+// a project canvas (Projects/<CODE>/…/*.json — e.g. shared/canvas.json, a pipeline's output/) or an older library design
+const DESIGN_PATH = /^(Projects\/[A-Z0-9][A-Z0-9_]*\/|Designs\/)[^\\]*\.json$/i;
 
 export const USE_DESIGN_TOOL = {
   name: "use_design",
-  description: "Pick the Library design (e.g. \"Designs/My House.json\") this session edits when NO editor tab is connected. While a tab is connected, canvas tools drive that tab; with none, they fall back to editing this file headlessly (walls, openings, objects, layers, delete, snapshot, export). A tab that has a Library design open sets it automatically. `create: true` makes an empty design if the file does not exist.",
+  description: "Pick the project canvas (e.g. \"Projects/VILLA_A1/shared/canvas.json\") this session edits when NO editor tab is connected. While a tab is connected, canvas tools drive that tab; with none, they fall back to editing this file headlessly (walls, openings, objects, layers, delete, snapshot, export). A tab that has a Library design open sets it automatically. `create: true` makes an empty design if the file does not exist.",
   inputSchema: { type: "object", properties: {
-    path: { type: "string", description: "Designs/<name>.json" },
+    path: { type: "string", description: "a project canvas: Projects/<CODE>/shared/canvas.json (or a pipeline output, e.g. Projects/<CODE>/3-build/build-from-deck/output/<CODE>.room.canvas.json)" },
     create: { type: "boolean", description: "create an empty design when the file is missing (default false)" },
   }, required: ["path"] },
 };
@@ -31,7 +32,7 @@ export const LOAD_DESIGN_TOOL = {
   name: "load_design",
   description: "FASTEST way to draw: show a whole plan in the linked editor tab in ONE step, exactly as Import JSON would (objects resolved, scale restored); the tab then stays linked to the file, so later edit_design batches on it appear there live. BY PATH (preferred): omit `design` and the Library file at `path` (already uploaded, e.g. straight to R2 by a local pipeline) is loaded — no plan bytes pass through this call. WITH `design`: the complete plan JSON (standard Import/Export format — nodes, segments, spaces, layers, settings; older walls/rooms exports work too) is saved to `path` first. With no tab connected it is only saved. Build the whole plan as a file, load it once, then check with snapshot_canvas — never draw it piece by piece.",
   inputSchema: { type: "object", properties: {
-    path: { type: "string", description: "Designs/<name>.json" },
+    path: { type: "string", description: "a project canvas: Projects/<CODE>/shared/canvas.json (or a pipeline output, e.g. Projects/<CODE>/3-build/build-from-deck/output/<CODE>.room.canvas.json)" },
     design: { description: "optional — the plan as a JSON object or its text; omit to load the existing file at `path`" },
     overwrite: { type: "boolean", description: "with `design`: replace an existing file (default false) — read it first if it may hold work you want to keep" },
   }, required: ["path"] },
@@ -42,7 +43,7 @@ export async function saveDesignJson(session, args, user = "relay") {
   const cfg = libraryMcpConfig();
   if (!cfg) throw new Error("library storage is not configured on this server");
   const path = String(args.path ?? "").trim().replace(/^library\//i, "");
-  if (!validDesignPath(path)) throw new Error("path must look like Designs/<name>.json");
+  if (!validDesignPath(path)) throw new Error("path must be a project canvas, e.g. Projects/<CODE>/shared/canvas.json");
   if (args.design === undefined || args.design === null || args.design === "") {
     // Load BY PATH: the file is already in the Library — read it here so its bytes never cross the MCP call.
     const store = libraryStore(cfg);
@@ -125,7 +126,7 @@ export async function runHeadless(session, name, args, user = "relay") {
 
   if (name === "use_design") {
     const p = String(args.path ?? "").trim();
-    if (!validDesignPath(p)) return errText("path must be Designs/<name>.json");
+    if (!validDesignPath(p)) return errText("path must be a project canvas, e.g. Projects/<CODE>/shared/canvas.json");
     if (!(await store.exists(p))) {
       if (!args.create) return errText(`${p} does not exist — pass create: true to start it empty, or pick an existing design (list_library folder "Designs")`);
       await callDesignTool(store, "create_design", { path: p }, who);
@@ -144,7 +145,7 @@ export async function runHeadless(session, name, args, user = "relay") {
 
   if (TAB_ONLY[name]) return notConnected(TAB_ONLY[name]);
   const p = session.design;
-  const needDesign = () => notConnected("and this session has no design to edit headless — call use_design with a Designs/<name>.json path");
+  const needDesign = () => notConnected("and this session has no design to edit headless — call use_design with a project canvas path (Projects/<CODE>/shared/canvas.json)");
 
   if (name === "import_objects") return text({ ok: true, headless: true, note: "Headless edits resolve objects from the Library's Objects/ folder on demand — nothing to import." });
   if (name === "list_objects" || name === "list_draw_tools") return wrap(await callDesignTool(store, "list_objects", {}, who));

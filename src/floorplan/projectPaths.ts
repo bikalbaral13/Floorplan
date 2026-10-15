@@ -13,7 +13,7 @@
 export const PHASE_DIRS = { program: "1-program", plan: "2-plan", build: "3-build", present: "4-present" } as const;
 export type Phase = keyof typeof PHASE_DIRS;
 export const UNASSIGNED = "_unassigned";
-export type InputKind = "images" | "drawings" | "decks" | "designs" | "models" | "shared";
+export type InputKind = "images" | "drawings" | "decks" | "designs" | "models" | "moodboards" | "shared";
 export type MediaKind = "renders" | "video" | "drawings";
 
 const ALIASES: Record<string, Phase> = { design: "plan", "plan/design": "plan" };

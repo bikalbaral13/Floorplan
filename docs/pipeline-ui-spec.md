@@ -148,3 +148,13 @@ pipeline without a UI falls back to `viewer.form` for its gates.
 - Pipeline Creator: pages are right-panel tabs — no drawing view, no chat tab, ~540 px wide, tabs declared with
   `window.pipeline.setTabs(...)`. Template updated.
 - `publish.mjs --templates` now MERGES apps.json by id (it had overwritten connector-created entries).
+
+
+## window.pipeline additions (2026-10-15)
+- `pipeline.assets.upload(blob, { name, target: "inputs/decks" })` — a user file into `Projects/<CODE>/inputs/<kind>/`
+  (kinds: drawings, decks, images, designs, models, moodboards), sent straight to R2 through a pre-signed URL and
+  listed in `project.json` `inputs[]`. Without `target` it is the app's own upload (its data folder), as before.
+- `pipeline.read(path)`, `pipeline.list(path)`, `pipeline.url(path)` — the project's files, paths relative to
+  `Projects/<CODE>/` (`pipeline.dir` = this pipeline's folder, e.g. `3-build/build-from-deck/`).
+- `pipeline.job(stage, args)` — queue a runner stage: `<pipeline dir>/jobs/<STAGE>.json` (runner-job/1), picked up by
+  `tools/runner/worker.mjs`. Example app: `tools/pipeline-app/apps/build-from-deck/`.

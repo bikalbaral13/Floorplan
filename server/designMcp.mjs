@@ -40,9 +40,9 @@ const OPS_DOC = `Ops (all coordinates in METRES, y grows DOWN the page):
 export const DESIGN_TOOLS = [
   {
     name: "create_design",
-    description: "Start a NEW empty design (standard plan JSON) at `path` in the library, e.g. \"Designs/My House.json\". Then draw into it with edit_design. Refuses to replace an existing file unless overwrite is true. Open it in the editor at https://floorplan-indol.vercel.app/floorplan-editor (Library ▸ Designs).",
+    description: "Start a NEW empty design (standard plan JSON) at `path` in the library, e.g. \"Projects/VILLA_A1/shared/canvas.json\". Then draw into it with edit_design. Refuses to replace an existing file unless overwrite is true. Open it in the editor at https://floorplan-indol.vercel.app/floorplan-editor (Library ▸ Designs).",
     inputSchema: { type: "object", properties: {
-      path: { type: "string", description: "library-relative .json path, usually under Designs/" },
+      path: { type: "string", description: ".json path of a project canvas, usually Projects/<CODE>/shared/canvas.json" },
       pixelsPerMeter: { type: "number", description: "world pixels per metre (default 50)" },
       keywords: { type: "string" },
       overwrite: { type: "boolean", description: "replace an existing file (default false)" },

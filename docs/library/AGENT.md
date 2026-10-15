@@ -16,6 +16,8 @@ Source of this file: `docs/library/AGENT.md` in the Floorplan repo (edit there, 
 
 ## 1. How to work
 
+0. **Open the live editor:** `session { op: "open" }` → give the user the link. It is what they see; there is no R2
+   viewer any more (the `viewer`, `skills` and `workflow` tool groups are retired and hidden).
 1. **Find the project.** `Projects/index.json` lists every project; `Projects/<CODE>/project.json` says which phase it
    is in and who is working on it. A new project: follow `Projects/project_creation.md` §7.
 2. **Find the pipeline** for the phase in `library/Pipelines/index.json` (by `phase` and `path` — never a hard-coded

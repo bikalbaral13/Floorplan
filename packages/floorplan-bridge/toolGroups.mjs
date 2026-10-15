@@ -15,11 +15,11 @@
 /** group → { summary, ops: { op → flat command name } }. Order is the order tools are listed in. */
 export const GROUPS = {
   viewer: {
-    summary: "START HERE. The HTML viewer (JSON · 2D · 3D, hosted in R2) is the canvas — no editor app, no pairing. op:open → give the user the link; build designs as files; op:show them; op:snapshot to check; op:form to ask the user (never self-answer), op:events for their answers and clicks.",
+    summary: "The R2 HTML viewer — RETIRED (its files were removed from R2; hidden from the list). Use session.open: the live editor.",
     ops: { open: "viewer_open", show: "viewer_show", snapshot: "viewer_snapshot", events: "viewer_events", form: "viewer_form" },
   },
   session: {
-    summary: "The live editor link and what is on the canvas right now.",
+    summary: "START HERE. op:open → a one-time link to the live BuilderPluss editor, already connected to you (no code to type): give it to the user; everything they see and do happens there. op:status / state / selection / snapshot read it.",
     ops: { open: "open_editor", connect: "connect_editor", status: "editor_status", state: "get_state", selection: "get_selection", snapshot: "snapshot_canvas" },
   },
   step: {
@@ -27,18 +27,18 @@ export const GROUPS = {
     ops: { begin: "begin_step", checkpoint: "checkpoint", changes: "get_changes_since" },
   },
   library: {
-    summary: "The shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/, Images/, Workflows/). If you can reach R2 directly (local keys, tools/r2.mjs), read and write there instead — this is for clients that only have the connector.",
+    summary: "The R2 bucket: library/ = reusable Objects/, Materials/, Pipelines/; Projects/<CODE>/ = everything one project uploads or produces (inputs/, <n-phase>/<pipeline>/ steps + output, shared/canvas.json, media/). If you can reach R2 directly (local keys, tools/r2.mjs), read and write there instead — this is for clients that only have the connector.",
     ops: {
       list: "list_library", search: "search_library", read: "read_file", write: "write_file",
       selection: "get_library_selection", select: "set_library_selection",
     },
   },
   skills: {
-    summary: "Playbooks for multi-step jobs. Call op:list FIRST for anything beyond a single edit, then op:read the one that fits.",
+    summary: "Playbooks under library/Skills/ — RETIRED (the folder was removed; hidden from the list). The journeys are in AGENT.md §5 and each pipeline's AGENTS.md.",
     ops: { list: "list_skills", read: "read_skill" },
   },
   design: {
-    summary: "Whole designs, JSON-first: load a complete plan at once, batch edits, export, render.",
+    summary: "Whole canvases, JSON-first: load a complete plan at once (by path — Projects/<CODE>/shared/canvas.json, or a pipeline output such as Projects/<CODE>/3-build/build-from-deck/output/<CODE>.room.canvas.json), batch edits, export, render.",
     ops: {
       use: "use_design", create: "create_design", load: "load_design", get: "get_design", edit: "edit_design",
       render: "render_design", export: "export_plan", plan: "get_plan", apply_model: "apply_model", clear: "clear_canvas",
@@ -64,7 +64,7 @@ export const GROUPS = {
     },
   },
   workflow: {
-    summary: "Saved flows under Workflows/ run as tools, by PATH: op:list → op:describe { path } → op:run { path, inputs, space_id? }. Plus the raw Flow graph ops for building new flows.",
+    summary: "Saved flows under library/Workflows/ — RETIRED (the folder was removed; hidden from the list).",
     ops: {
       list: "list_workflows", describe: "describe_workflow", run: "run_workflow",
       catalog: "flow_node_catalog", get: "get_flow", compile: "compile_flow", apply: "flow_apply", commit: "flow_commit",
@@ -87,11 +87,11 @@ export const GROUPS = {
     ops: { create: "project_create", status: "project_status", list: "project_list", job: "project_job", jobs: "project_jobs" },
   },
   pipelines: {
-    summary: "Make NEW pipelines with their own UI in the R2 library, no app rebuild: op:create writes the pipeline folder, its UI (index.html + files) and run steps and registers it — the editor then opens the UI as a tab (pipeline.run). op:update makes a preview version, op:release (only after the user approves) makes it stable, op:rollback goes back. Read Skills/Pipeline Creator first.",
+    summary: "Make NEW pipelines with their own UI in the R2 library, no app rebuild: op:create writes the pipeline folder, its UI (index.html + files) and run steps and registers it — the editor then opens the UI as a tab (pipeline.run). op:update makes a preview version, op:release (only after the user approves) makes it stable, op:rollback goes back. The UI talks to the editor through window.pipeline (db, assets.upload, read, list, job, emit — docs/pipeline-ui-spec.md); a run keeps its files in Projects/<CODE>/<n-phase>/<id>/.",
     ops: { list: "pipeline_list", create: "pipeline_create", update: "pipeline_update", release: "pipeline_release", rollback: "pipeline_rollback" },
   },
   moodboard: {
-    summary: "Moodboard picks (Plan step 4): open the picker for the USER, then read what they saved.",
+    summary: "Moodboard picks: a moodboard/1 board saved in the project (Projects/<CODE>/inputs/moodboards/<name>.json, library.write); op:open_picker shows it to the USER in the editor (the Project panel's project), op:get reads what they saved on the plan. Never pick for them.",
     ops: { open_picker: "open_moodboard_picker", get: "get_moodboards" },
   },
 };
@@ -101,6 +101,12 @@ export const GROUPS = {
  *  covers walls, openings, objects, spaces, attach, delete, layers and moves. They stay CALLABLE (grouped and
  *  flat), so older skills keep working. MCP_FULL_TOOLS=1 lists them again (rollback). A group whose every op
  *  is hidden (layers) drops out of the list. */
+/** Groups whose R2 folders were removed (2026-10-15: library/ is Objects, Materials, Pipelines only): not LISTED,
+ *  still callable so an old prompt gets a clear answer. MCP_FULL_TOOLS=1 lists them again. */
+export const HIDDEN_GROUPS = new Set(["viewer", "skills", "workflow"]);
+/** Listing order: what a chat needs first. Groups not named here follow in GROUPS order. */
+const ORDER = ["session", "project", "pipeline", "design", "objects", "library", "chat", "step", "underlay", "moodboard", "pipelines"];
+
 export const HIDDEN_OPS = {
   draw: ["segment", "wall", "freehand", "opening", "style", "delete", "tools"],   // tools = the ~360 KB schema dump; objects.list { object } gives one object's params
   objects: ["place", "attach_segment", "attach_space"],
@@ -136,7 +142,10 @@ export function groupedTools(flatTools) {
   const byName = new Map(flatTools.map((t) => [t.name, t]));
   const schemaOf = (flat) => byName.get(flat)?.inputSchema ?? EXTRA_SCHEMAS[flat];
   const out = [];
-  for (const [g, def] of Object.entries(GROUPS)) {
+  const rank = (g) => { const i = ORDER.indexOf(g); return i < 0 ? ORDER.length : i; };
+  const entries = Object.entries(GROUPS).sort((a, b) => rank(a[0]) - rank(b[0]));
+  for (const [g, def] of entries) {
+    if (!SHOW_ALL && HIDDEN_GROUPS.has(g)) continue;
     const ops = Object.entries(def.ops).filter(([op, flat]) => schemaOf(flat) && !isHidden(g, op));
     if (!ops.length) continue;
     // Union of every op's properties, so a client that validates arguments lets each op's fields through.

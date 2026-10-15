@@ -212,6 +212,8 @@ export interface CloudSaveResult {
 /** Write one file into the cloud Library. `relPath` is Library-relative — "Designs/plan.json",
  *  "Objects/Site/site.json" — the prefix is added server-side so the client cannot escape it. */
 export async function saveToCloudLibrary(relPath: string, content: string, area: "library" | "projects" = "library"): Promise<CloudSaveResult> {
+  // A "Projects/…" path is a project file (bucket root), whichever caller passes it.
+  if (area === "library" && /^\/*Projects\//.test(relPath)) { area = "projects"; relPath = relPath.replace(/^\/*Projects\//, ""); }
   try {
     const res = await r2Fetch("/__r2/save", {
       method: "POST",
@@ -233,10 +235,12 @@ export async function cloudLibraryUrl(relPath: string): Promise<string> {
   // The SETTING wins — it is the single source of the library address (see LIBRARY PATH above), and it
   // already includes the key prefix. Only when it has been cleared does the build's own bucket answer.
   const configured = libraryPath();
-  if (configured) return joinLibrary(configured, relPath);
+  // "Projects/…" is project data at the bucket ROOT, beside library/ — not inside it.
+  const projects = /^\/*Projects\//.test(relPath);
+  if (configured) return joinLibrary(projects ? configured.replace(/\/+$/, "").replace(/\/library$/, "") : configured, relPath);
   const { publicUrl, prefix } = await cloudLibraryStatus();
   if (!publicUrl) return "";
-  return joinLibrary(`${publicUrl}/${prefix.replace(/^\/+|\/+$/g, "")}`, relPath);
+  return joinLibrary(projects ? publicUrl : `${publicUrl}/${prefix.replace(/^\/+|\/+$/g, "")}`, relPath);
 }
 
 /** Fetch and parse one JSON file from the cloud Library. Null when unconfigured or absent —
@@ -424,7 +428,9 @@ export async function deleteFromBucket(key: string): Promise<CloudWriteResult> {
  */
 export async function listCloudLibraryFiles(dir: string): Promise<string[] | null> {
   try {
-    const res = await r2Fetch(`/__r2/list?dir=${encodeURIComponent(dir)}`);
+    const proj = /^\/*Projects\//.test(dir);
+    const d = proj ? dir.replace(/^\/*Projects\//, "") : dir;
+    const res = await r2Fetch(`/__r2/list?dir=${encodeURIComponent(d)}${proj ? "&area=projects" : ""}`);
     if (!res.ok) return null;
     const body = (await res.json().catch(() => null)) as { ok?: unknown; files?: unknown } | null;
     return body?.ok === true && Array.isArray(body.files) ? body.files.map(String) : null;

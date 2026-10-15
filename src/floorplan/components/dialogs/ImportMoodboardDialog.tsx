@@ -4,6 +4,7 @@ import { CloudDownload, Loader2, Palette, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fetchFromCloudLibrary, libraryPath, listCloudLibraryFiles } from "../../cloudLibrary";
+import { activeProject, inputsDir } from "../../projectPaths";
 import {
   isMoodboardFile,
   mergePicksIntoBoard,
@@ -14,7 +15,8 @@ import {
 import type { MoodboardSelection, Room } from "../../types";
 
 /** Library folder the boards live in (relative to the Library Path). */
-const BOARD_DIR = "Moodboards";
+/** Boards belong to a project: Projects/<CODE>/inputs/moodboards/ of the project open in the editor. */
+const boardDir = () => inputsDir(activeProject(), "moodboards").replace(/\/$/, "");
 
 export interface ImportMoodboardDialogProps {
   open: boolean;
@@ -25,14 +27,14 @@ export interface ImportMoodboardDialogProps {
   moodboards: MoodboardSelection[] | undefined;
   /** Write the new list back to the plan (one undoable step). */
   onStore: (next: MoodboardSelection[]) => void;
-  /** Open straight into this board's picker (file name under Moodboards/, e.g. "x.json") — used by the
+  /** Open straight into this board's picker (file name under the project's inputs/moodboards/, e.g. "x.json") — used by the
    *  bridge's open_moodboard_picker. */
   initialBoard?: string;
 }
 
 /**
  * Files ▸ Import Moodboard. Two steps in one dialog:
- *   1. choose a board — from the Library's `Moodboards/` folder or a file from the device — or manage
+ *   1. choose a board — from the open project's `inputs/moodboards/` folder or a file from the device — or manage
  *      the boards already on the plan;
  *   2. pick — the moodboard picker page (public/moodboard-picker.html, the same page the R2 skill ships)
  *      in an iframe, loaded with the board plus the plan's earlier picks. "Save to plan" posts the board
@@ -49,7 +51,7 @@ export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, o
   useEffect(() => {
     if (!open) { setBoard(null); return; }
     setFiles(undefined);
-    void listCloudLibraryFiles(BOARD_DIR).then((list) => setFiles(list ? list.filter((f) => f.endsWith(".json")).sort() : null));
+    void listCloudLibraryFiles(boardDir()).then((list) => setFiles(list ? list.filter((f) => f.endsWith(".json")).sort() : null));
   }, [open]);
 
   // Messages from the picker. Checked by SOURCE (our own iframe), not origin: the page is served by this
@@ -82,10 +84,10 @@ export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, o
 
   const openLibrary = async (rel: string) => {
     setLoading(rel);
-    const json = await fetchFromCloudLibrary<unknown>(`${BOARD_DIR}/${rel}`).catch(() => null);
+    const json = await fetchFromCloudLibrary<unknown>(`${boardDir()}/${rel}`).catch(() => null);
     setLoading(null);
     if (!isMoodboardFile(json)) { toast.error(`${rel} is not a moodboard/1 file`); return; }
-    setBoard({ json, source: `${BOARD_DIR}/${rel}` });
+    setBoard({ json, source: `${boardDir()}/${rel}` });
   };
   const openDevice = (f: File) => {
     void f.text().then((t) => {
@@ -97,7 +99,7 @@ export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, o
   };
   // Bridge-opened: go straight to the requested board's picker.
   useEffect(() => {
-    if (open && initialBoard) void openLibrary(initialBoard.replace(/^Moodboards\//, ""));
+    if (open && initialBoard) void openLibrary(initialBoard.replace(/^.*\/moodboards\//, "").replace(/^Moodboards\//, ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per open / board
   }, [open, initialBoard]);
   const removeBoard = (id: string) => onStore((moodboards ?? []).filter((m) => m.id !== id));

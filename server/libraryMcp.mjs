@@ -102,7 +102,7 @@ async function exists(cfg, key) {
 const LIBRARY_TOOLS = [
   {
     name: "list_library",
-    description: "List files in the shared R2 library. `folder` is relative to the library root, e.g. \"Designs\", \"Objects\", \"Materials\", \"Moodboards\", \"Images\", \"Workflows\", \"Skills/Floorplan Tracer\". Omit it to see the top-level folders with file counts. Designs (floor plan JSONs the editor opens) live in Designs/; pictures (moodboards, plan scans, references) in Images/; workflow definitions in Workflows/.",
+    description: "List files in the R2 bucket. `folder` is relative to library/ — \"Objects\", \"Materials\", \"Pipelines\" (reusable) — or a project folder, \"Projects/<CODE>\" (everything one project uploads or produces: inputs/, <n-phase>/<pipeline>/, shared/canvas.json, media/). Omit it to see the top-level folders with file counts.",
     inputSchema: { type: "object", properties: {
       folder: { type: "string", description: "folder relative to the library root; omit for the overview" },
       recursive: { type: "boolean", description: "include files in sub-folders (default true)" },
@@ -115,15 +115,15 @@ const LIBRARY_TOOLS = [
   },
   {
     name: "read_file",
-    description: "Read one text file (JSON, Markdown, …) from the library. Large files come back in 1 MB chunks: if `truncated` is true, call again with `offset` = the returned `nextOffset`. Images (.png .jpg .webp .gif, up to 3.5 MB) come back as an image you can look at, e.g. Images/<name>.png. Other binary files (.glb, .blend) are not read — you get their public URL instead.",
+    description: "Read one text file (JSON, Markdown, …) from the library. Large files come back in 1 MB chunks: if `truncated` is true, call again with `offset` = the returned `nextOffset`. Images (.png .jpg .webp .gif, up to 3.5 MB) come back as an image you can look at, e.g. Projects/<CODE>/inputs/images/<name>.png. Other binary files (.glb, .blend) are not read — you get their public URL instead.",
     inputSchema: { type: "object", properties: {
-      path: { type: "string", description: "e.g. \"Designs/Windsor_park_B1.json\" or \"Skills/Floorplan Tracer/scope-the-trace.md\"" },
+      path: { type: "string", description: "e.g. \"Objects/Architectural/door.json\" or \"Projects/VILLA_A1/3-build/build-from-deck/steps/S1_INTAKE/questions.json\"" },
       offset: { type: "number", description: "byte offset to start from (default 0)" },
     }, required: ["path"] },
   },
   {
     name: "write_file",
-    description: "Save a file into the library — a .json or .md (a new design in Designs/, an object in Objects/, a material, a skill note), or an image (.png .jpg .webp .gif, up to ~3 MB) into Images/ with `base64` set to the image bytes, e.g. a picture the user attached in chat. JSON must be valid. An existing file is only replaced when `overwrite` is true, so read it first and keep what you did not mean to change. Anyone opening the deployed editor sees the result in the library.",
+    description: "Save a file — a .json or .md (a project file under Projects/<CODE>/…, an object in Objects/, a material in Materials/), or an image (.png .jpg .webp .gif, up to ~3 MB) into Projects/<CODE>/inputs/images/ with `base64` set to the image bytes, e.g. a picture the user attached in chat. JSON must be valid. An existing file is only replaced when `overwrite` is true, so read it first and keep what you did not mean to change. Anyone opening the deployed editor sees the result in the library.",
     inputSchema: { type: "object", properties: {
       path: { type: "string", description: "library-relative path ending in .json or .md" },
       content: { description: "the file body: a string, or a JSON value for a .json file" },
@@ -172,22 +172,22 @@ function allTools() {
   return toolList;
 }
 
-const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library — data, skills, the engine and an HTML viewer. The VIEWER is the canvas; no editor app is needed.
+const INSTRUCTIONS = `BuilderPluss: projects in R2, run through pipelines, shown live in the BuilderPluss editor.
+The bucket: library/ = reusable Objects, Materials, Pipelines; Projects/<CODE>/ = everything one project uploads or produces.
 
 START HERE
-1. read_file { path: "AGENT.md" } — how the library is organised and the rules that matter.
-2. viewer { op: "open", src? } → give the user the link it returns (open it beside the chat if you can). Keep the session id.
+1. read_file { path: "AGENT.md" } — the bucket, the project layout and the create-a-project → run-a-pipeline journey (§5).
+2. session { op: "open" } → give the user the link (open it beside the chat if you can). That live editor is what the user sees.
+3. project { op: "list" | "status" | "create" } — ask the USER for a new project's code and title; never invent them.
 
-TOOLS ARE GROUPED: viewer, library, skills, design, objects, workflow, … (+ await_result). Each takes an \`op\` — e.g. skills { op: "list" }, design { op: "load", path: "Designs/X.json" }. op: "describe_ops" gives a group's full arguments; old flat names (read_file, load_design, …) still work.
+TOOLS ARE GROUPED: session, project, pipeline, design, objects, library, chat, … (+ await_result). Each takes an \`op\` — e.g. project { op: "status", code }, pipeline { op: "run", pipeline: "build-from-deck", code }. op: "describe_ops" gives a group's full arguments; old flat names still work.
 
 HOW TO HANDLE A REQUEST
-1. Anything beyond a single small edit: skills { op: "list" }, read the skill that fits, follow it step by step. Read files it references with read_file.
-2. Work FILE-FIRST: build or change the plan as JSON and save it ONCE — design.load { path, design } (new or whole plan) or one design.edit batch (up to 500 ops). If you can run code locally with R2 keys, do the job locally (tools/r2.mjs) and pass paths, never big JSON or image bytes, through these tools.
-3. Show it: viewer { op: "show", session, src: path }. Check it: viewer { op: "snapshot", session } (or design.render with no viewer open).
-4. Questions for the user — questionnaires, scope forms, choices — go in viewer { op: "form" }; poll viewer { op: "events" } for the answers and for what the user clicked. Never answer a form yourself.
-5. A call that returns { pending: true, ticket } → await_result with the ticket until it finishes.
-6. Steps a skill runs on the user's PC (Blender, Python/DXF, .skp) cannot run here: finish the rest, save, and give the exact local command.
-The live editor tab (session.open, flows, underlays, checkpoints) is still available for work that needs it, but is not the default.`;
+1. A pipeline for a project: pipeline.run opens its app (tabs) in the editor; the user uploads and answers there; you queue script stages with project.job and do the judgement steps yourself (library.read / library.write under Projects/<CODE>/). Follow AGENT.md §5.
+2. Work FILE-FIRST on canvases: build or change the plan as JSON and save it ONCE — design.load { path: "Projects/<CODE>/shared/canvas.json", design } or one design.edit batch. Pass paths, never big JSON or image bytes.
+3. Questions for the user go in the pipeline's app or chat { op: "ask" }. Never answer them yourself and never approve a step for the user.
+4. A call that returns { pending: true, ticket } → await_result with the ticket until it finishes.
+5. Script stages run on the user's runner (node tools/runner/worker.mjs). A job queued for over a minute = no runner online: tell the user, do not try to run it yourself.`;
 
 /** A skill is a folder under Skills/; each .md in it is one playbook with a `description:` in its front matter. */
 const describe = (t) => {
