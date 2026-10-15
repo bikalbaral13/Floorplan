@@ -64,7 +64,7 @@ export const PROJECT_TOOLS = [
   },
   {
     name: "project_job",
-    description: "Queue ONE script stage of a pipeline for the runner (a machine with Python; tools/runner/worker.mjs): writes <pipeline dir>/jobs/<STAGE>.json. Build-from-deck stages: S1_INTAKE { deck: 'inputs/decks/<file>' }, S2_DRAFT { project, room }, S2_FINALIZE, S3_GEOMETRY, S4_CHECK, S5_COMPOSE, S6_DRAWINGS. Then poll project.jobs. A stage already running is refused.",
+    description: "Queue ONE script stage of a pipeline for the runner (a machine with Python; tools/runner/worker.mjs): writes <pipeline dir>/jobs/<STAGE>.json. Build-from-deck stages: S1_INTAKE { deck: 'inputs/decks/<file>' }, S2_DRAFT { project, room }, S2_FINALIZE, S3_GEOMETRY, S4_CHECK, S5_COMPOSE, S6_DRAWINGS. Then poll project.jobs. A stage already running is refused. The runner fetches the pipeline's current release from R2 and runs it only if the USER approved that release on the runner machine — a job failing with 'not approved' means: ask the user to run `node tools/runner/worker.mjs approve <pipeline>` there, then queue it again (never try to approve yourself).",
     inputSchema: { type: "object", properties: {
       code, pipeline, stage: { type: "string", description: "e.g. S1_INTAKE" }, args: { type: "object", description: "stage arguments" },
       phase: { type: "string" },

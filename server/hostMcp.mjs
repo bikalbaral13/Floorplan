@@ -76,10 +76,10 @@ export async function callHostTool(cfg, name, args = {}, user = "user") {
     // 3. runner
     const beats = (await listObjectsDetailed(cfg, "relay/runner/").catch(() => [])).filter((o) => o.key.endsWith(".json"));
     const runners = [];
-    for (const o of beats) { const b = await readJson(cfg, o.key); if (b) runners.push({ worker: b.worker, seen: b.at, ageSec: Math.round((Date.now() - Date.parse(b.at)) / 1000), pipelines: b.pipelines }); }
+    for (const o of beats) { const b = await readJson(cfg, o.key); if (b) runners.push({ worker: b.worker, seen: b.at, ageSec: Math.round((Date.now() - Date.parse(b.at)) / 1000), pipelines: b.pipelines, source: b.source }); }
     const live = runners.filter((r) => r.ageSec < 90);
     if (!live.length) problems.push({ what: "no runner is online", effect: "script stages (project.job) stay queued", fix: "on a machine with the Floorplan repo and Python: node tools/runner/worker.mjs (keep it running)", detail: runners });
-    else ok.push(`runner online: ${live.map((r) => r.worker).join(", ")}`);
+    else ok.push(`runner online: ${live.map((r) => `${r.worker} (${r.source ?? "r2"}; approved: ${(r.pipelines ?? []).join(", ") || "nothing yet"})`).join("; ")}`);
     // 4. the editor's recent errors
     const days = [0, 1].map((d) => new Date(Date.now() - d * 864e5).toISOString().slice(0, 10));
     const logs = [];

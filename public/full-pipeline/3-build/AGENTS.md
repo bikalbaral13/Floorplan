@@ -7,7 +7,8 @@ Pilot: INFRA (Competition) 2024 → RECEPTION (`projects/INFRA_RECEPTION`).
 ## Run from a chat (connector + runner)
 A project can be driven end to end from claude.ai: the user uploads the deck in the Build app (the editor tab
 `pipeline.run { pipeline: "build-from-deck", code }`, source `tools/pipeline-app/apps/build-from-deck/`), the script
-stages run on the runner (`node tools/runner/worker.mjs`, recipe `runner.json`), and the agent writes the judgement
+stages run on the runner (`node tools/runner/worker.mjs`, recipe `runner.json`, fetched from this pipeline's approved
+R2 release — approve a new release with `node tools/runner/worker.mjs approve build-from-deck`), and the agent writes the judgement
 files (`roombrief.curated.json`, `trace.px.json`, `resolve.json`) to `Projects/<CODE>/3-build/build-from-deck/steps/`.
 The full journey: R2 `library/AGENT.md` §5. S1 also reads a **PDF** deck (pages rendered to `pages/`) and writes
 `questions.json` (tools/questions.py) for the user — project, room, ceiling height, a scale dimension.

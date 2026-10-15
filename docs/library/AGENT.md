@@ -122,3 +122,14 @@ Render (S7) and QA (S8) are not in the runner yet.
 
 A pipeline UI checks `window.pipeline.host.capabilities` before using a call — host v1: db, upload-any-size,
 upload-progress, read, list, write, delete, url, job, cancel-job, open-canvas, notify, emit, tabs, downloads.
+
+## 7. The runner runs pipelines from R2 — after the user approves them
+
+`tools/runner/worker.mjs` (on the user's machine) finds a pipeline through `library/Pipelines/index.json`, downloads
+its current release (`release.json` pins every file's sha256), checks every file and runs the stage from the release's
+`runner.json`. So a new or fixed stage is just a publish to R2 — no repo change.
+
+It runs a release ONLY when the user approved that exact release on that machine:
+`node tools/runner/worker.mjs approve <pipeline>` (shows the scripts, asks yes/no; approvals live in the user's home
+folder, never in R2). Every new publish needs a new approval. A job that fails with "not approved" → tell the user to
+approve it, then queue the stage again. You cannot approve, and must not try to.
