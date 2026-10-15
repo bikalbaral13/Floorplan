@@ -42,7 +42,7 @@ export function zipStore(entries: ZipEntry[]): Blob {
     local.setUint16(8, 0, true); local.setUint16(10, time, true); local.setUint16(12, date, true);
     local.setUint32(14, crc, true); local.setUint32(18, e.data.length, true); local.setUint32(22, e.data.length, true);
     local.setUint16(26, name.length, true); local.setUint16(28, 0, true);
-    parts.push(local.buffer, name, e.data);
+    parts.push(local.buffer, name as BlobPart, e.data as BlobPart);
     const cen = new DataView(new ArrayBuffer(46));
     cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true);
     cen.setUint16(10, 0, true); cen.setUint16(12, time, true); cen.setUint16(14, date, true);
@@ -57,5 +57,5 @@ export function zipStore(entries: ZipEntry[]): Blob {
   const end = new DataView(new ArrayBuffer(22));
   end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
   end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
-  return new Blob([...parts, ...central, end.buffer], { type: "application/zip" });
+  return new Blob([...parts, ...(central as BlobPart[]), end.buffer], { type: "application/zip" });
 }

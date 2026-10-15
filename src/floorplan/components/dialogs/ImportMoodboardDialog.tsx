@@ -139,8 +139,8 @@ export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, o
                       <div className="truncate font-medium">{m.title ?? m.id}</div>
                       <div className="text-xs text-slate-500">{m.picks.length} picks · {locked} locked · {m.source}</div>
                     </div>
-                    {m.source.startsWith(`${BOARD_DIR}/`) && (
-                      <Button size="sm" variant="outline" onClick={() => void openLibrary(m.source.slice(BOARD_DIR.length + 1))}>Edit picks</Button>
+                    {m.source.startsWith(`${boardDir()}/`) && (
+                      <Button size="sm" variant="outline" onClick={() => void openLibrary(m.source.slice(boardDir().length + 1))}>Edit picks</Button>
                     )}
                     <Button size="sm" variant="ghost" title="Remove from plan" aria-label={`Remove ${m.title ?? m.id}`} onClick={() => removeBoard(m.id)}>
                       <Trash2 className="h-4 w-4" />
@@ -152,10 +152,10 @@ export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, o
           )}
 
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">From the Library ({BOARD_DIR}/)</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">From this project ({boardDir()}/)</p>
             {files === undefined && <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Listing…</p>}
             {files === null && <p className="text-sm text-slate-500">The Library can't be listed here (listing needs the dev server). Use a file from the device.</p>}
-            {files?.length === 0 && <p className="text-sm text-slate-500">No boards in {BOARD_DIR}/ yet.</p>}
+            {files?.length === 0 && <p className="text-sm text-slate-500">No boards in {boardDir()}/ yet.</p>}
             {files?.map((f) => (
               <button key={f} type="button" disabled={!!loading} onClick={() => void openLibrary(f)}
                 className="flex w-full items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5 text-left text-sm hover:border-sky-400 disabled:opacity-60">
