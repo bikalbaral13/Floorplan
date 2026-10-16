@@ -133,6 +133,8 @@ export interface IssuedRef {
   images: { url: string; title?: string }[];
 }
 const FRAME_TAB = "app";
+/** sessionStorage: the pipeline run this tab has open ({ pipeline, code, channel }), reopened after a reload. */
+const OPEN_RUN_KEY = "bp.openPipelineRun";
 const raw = (key: string) => `/__r2/raw/${key.split("/").map(encodeURIComponent).join("/")}`;
 const SAVE_DELAY = 800;
 
@@ -329,7 +331,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     } catch (e) { setError(`Could not load ${app.title} for ${code}: ${(e as Error).message}`); }
     setBusy(null);
   };
-  const unload = () => { teardown(); setLoaded(null); setTabs([]); setActive("drawings"); setRun(null); runRef.current = null; };
+  const unload = () => { try { sessionStorage.removeItem(OPEN_RUN_KEY); } catch { /* */ } teardown(); setLoaded(null); setTabs([]); setActive("drawings"); setRun(null); runRef.current = null; };
   useEffect(() => teardown, []);
 
   // ── Pipeline runs (Claude drives, the user approves) ──
@@ -389,7 +391,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       };
     };
 
-    registerAgentCommand("pipeline_run", async (a) => {
+    const runPipeline = async (a: Record<string, unknown>) => {
       const pipeline = String(a.pipeline ?? "space-brief"), code = String(a.code ?? "").trim();
       if (!code) throw new Error("pipeline_run needs `code` (the project code)");
       const list: PipelineApp[] = JSON.parse(await text(`${LIB}/Pipelines/apps.json`, true)).apps ?? [];
@@ -421,7 +423,19 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
       showStep(runRef.current!);
       return { ...status(), resumed: r === prior, cols: live.api?.COLS ?? [],
         note: "The app is open as a full tab. Fill 'claude' steps with pipeline_patch, wait for the user with pipeline_events { wait: true }, then pipeline_advance. Never approve a gate yourself." };
+    };
+    registerAgentCommand("pipeline_run", async (a) => {
+      const out = await runPipeline(a);
+      // remember the open run for THIS tab, so a reload (or an app update) reopens its tabs
+      try { sessionStorage.setItem(OPEN_RUN_KEY, JSON.stringify({ pipeline: a.pipeline ?? "space-brief", code: a.code, channel: a.channel })); } catch { /* */ }
+      return out;
     });
+    // after a reload: reopen the pipeline run this tab had open (resumes its run.json)
+    try {
+      const prev = JSON.parse(sessionStorage.getItem(OPEN_RUN_KEY) ?? "null") as { pipeline?: string; code?: string; channel?: string } | null;
+      if (prev?.code) void runPipeline({ ...prev }).catch(() => { try { sessionStorage.removeItem(OPEN_RUN_KEY); } catch { /* */ } });
+    } catch { /* none */ }
+
 
     registerAgentCommand("pipeline_status", () => status());
 

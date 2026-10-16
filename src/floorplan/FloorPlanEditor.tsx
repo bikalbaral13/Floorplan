@@ -220,7 +220,7 @@ import { shellSheet } from "./shell3d";
 import { groupedToMerged, groupToSite, isGroupedPlan, siteToGroup, type PlanGroup } from "./planGroups";
 import { applyInstanceTransform, designLevelFor, loadDesignPaths, uniqueInstances, type DesignPaths } from "./designInstances";
 import { activeProject, mediaDir } from "./projectPaths";
-import { installClientLog } from "./clientLog";
+import { installClientLog, reportClientError } from "./clientLog";
 import { loadAppConfig } from "./appConfig";
 import { getPythonResult, getPythonError, onPythonResult, objIsPython, pythonRotation } from "./python/pythonObjects";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
@@ -28696,8 +28696,33 @@ User request: ${aiPrompt.trim()}`;
       void importPlanTextRef.current(d.json, d.path).then((ok) => { if (!ok) toast.error(`Could not open ${d.path}`); });
     };
     window.addEventListener("bp-open-plan", onOpen);
-    return () => window.removeEventListener("bp-open-plan", onOpen);
+    // A tab opened before a deploy asks for code chunks that no longer exist (the 3D view, a dialog): Vite then fires
+    // vite:preloadError. Reload ONCE onto the new deploy and reopen the canvas this tab had open, instead of failing
+    // into an empty editor.
+    const onStale = (e: Event) => {
+      e.preventDefault();
+      try {
+        if (sessionStorage.getItem("bp.staleReload")) return;          // already tried — do not loop
+        sessionStorage.setItem("bp.staleReload", String(Date.now()));
+        if (linkedDesignRef.current) sessionStorage.setItem("bp.restoreDesign", linkedDesignRef.current);
+      } catch { /* storage blocked: still reload */ }
+      reportClientError("stale-chunk", "a code chunk from an older deploy failed to load — reloading onto the new one");
+      window.location.reload();
+    };
+    window.addEventListener("vite:preloadError", onStale);
+    // after such a reload: reopen the canvas the tab had, from R2
+    let restore: string | null = null;
+    try { restore = sessionStorage.getItem("bp.restoreDesign"); sessionStorage.removeItem("bp.restoreDesign"); } catch { /* none */ }
+    if (restore) {
+      const path = restore;
+      void fetchDesignText(path).then((t) => t ? importPlanTextRef.current(t, path) : false)
+        .then((ok) => { if (ok) toast.success(`Reopened ${path.split("/").pop()} after the app updated`); });
+    }
+    const clearFlag = window.setTimeout(() => { try { sessionStorage.removeItem("bp.staleReload"); } catch { /* */ } }, 60_000);
+    return () => { window.removeEventListener("bp-open-plan", onOpen); window.removeEventListener("vite:preloadError", onStale); window.clearTimeout(clearFlag); };
   }, []);
+  const linkedDesignRef = useRef<string | null>(null);
+  linkedDesignRef.current = linkedDesign;
 
   useEffect(() => { setBridgeLinkedDesign(linkedDesign); }, [linkedDesign]);
 
