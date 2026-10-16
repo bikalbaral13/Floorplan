@@ -79,10 +79,13 @@ export async function signedRequest(cfg, method, key, body = "", extraHeaders = 
   const authorization =
     `${ALGORITHM} Credential=${cfg.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
+  // A request that never answers (an R2 hiccup) must not hang its caller forever — the runner's loop, a server
+  // function. 5 minutes covers a large file; R2_TIMEOUT_MS overrides.
   const response = await fetch(`${url.origin}${canonicalUri}${cq ? `?${cq}` : ""}`, {
     method,
     headers: { ...headers, Authorization: authorization },
     body: method === "GET" || method === "HEAD" ? undefined : payload,
+    signal: AbortSignal.timeout(Number(globalThis.process?.env?.R2_TIMEOUT_MS) || 300_000),
   });
 
   if (!response.ok) {
