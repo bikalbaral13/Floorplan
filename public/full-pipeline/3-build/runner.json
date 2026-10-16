@@ -200,6 +200,14 @@
     {
      "from": "{PROJ}/{CODE}.canvas.json",
      "to": "{OUT}{CODE}.canvas.json"
+    },
+    {
+     "from": "{PROJ}/roombrief.json",
+     "to": "{STEPS}S2_BRIEF/roombrief.json"
+    },
+    {
+     "from": "{PROJ}/roombrief.json",
+     "to": "{OUT}roombrief.json"
     }
    ],
    "next": "The user checks geometry_check.png (Plan tab) and approves."
@@ -364,6 +372,62 @@
      "optional": true
     }
    ]
+  },
+  "S7_3D": {
+   "title": "3D model (.blend, .fbx, .glb) and snapshot images of the composed room (Blender on the runner)",
+   "args": {
+    "res": "optional, default 1280x720",
+    "samples": "optional Cycles samples, default 32"
+   },
+   "pull": [
+    {
+     "from": "{STEPS}S5_COMPOSE/{CODE}.room.canvas.json",
+     "to": "{PROJ}/{CODE}.room.canvas.json"
+    }
+   ],
+   "run": [
+    [
+     "node",
+     "tools/bakeplan/run.mjs",
+     "{PROJ}/{CODE}.room.canvas.json",
+     "--out",
+     "{WORK}/baked.json",
+     {
+      "cwd": "{REPO}"
+     }
+    ],
+    [
+     "blender",
+     "-b",
+     "--factory-startup",
+     "--python",
+     "tools/export_3d.py",
+     "--",
+     "{WORK}/baked.json",
+     "{WORK}/3d",
+     "{CODE}",
+     "{IF:res:--res}",
+     "{ARG?:res}",
+     "{IF:samples:--samples}",
+     "{ARG?:samples}"
+    ]
+   ],
+   "push": [
+    {
+     "from": "{WORK}/3d/*",
+     "to": "{OUT}3d/"
+    },
+    {
+     "from": "{WORK}/3d/*.png",
+     "to": "{STEPS}S7_3D/"
+    },
+    {
+     "from": "{WORK}/3d/*.png",
+     "to": "Projects/{CODE}/media/renders/",
+     "optional": true
+    }
+   ],
+   "next": "Show the user the snapshots (Room / Drawings tabs or the media/renders/ links); the model files are in output/3d/."
   }
  }
 }

@@ -345,7 +345,7 @@ def title_block(ps, brief, sheet_no, title, scale_txt, rev="0"):
     ps.add_line((tb, 10), (tb, Y - 10), dxfattribs={"layer": "A-ANNO-TTLB"})
     rows = [("PROJECT", brief["project"]), ("ROOM", brief["room"]), ("DRAWING", title), ("SCALE", scale_txt),
             ("SOURCE", f"plan-phase deck · slides {brief['source']['slides'][0]}–{brief['source']['slides'][-1]}"),
-            ("STAGE", "BUILD — from plan deck (build-from-deck S6)"), ("DATE", "08 OCT 2026")]
+            ("STAGE", "BUILD — from plan deck (build-from-deck S6)"), ("DATE", __import__("datetime").date.today().strftime("%d %b %Y").upper())]
     y = Y - 20
     for k, v in rows:
         ps.add_text(clean(k), height=2.2, dxfattribs={"layer": "A-ANNO-TTLB"}).set_placement((tb + 5, y), align=TextEntityAlignment.LEFT)

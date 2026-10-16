@@ -95,7 +95,9 @@ function globLocal(pattern) {
 function runCmd(cmd, cwd, log) {
   const opts = typeof cmd[cmd.length - 1] === "object" ? cmd[cmd.length - 1] : {};
   const argvs = cmd.filter((x) => typeof x === "string");
-  const exe = argvs[0] === "node" ? process.execPath : argvs[0] === "python" ? (process.env.PYTHON || "python") : argvs[0];
+  const BLENDER_DEFAULT = "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe";
+  const exe = argvs[0] === "node" ? process.execPath : argvs[0] === "python" ? (process.env.PYTHON || "python")
+    : argvs[0] === "blender" ? (process.env.BLENDER || (fs.existsSync(BLENDER_DEFAULT) ? BLENDER_DEFAULT : "blender")) : argvs[0];
   return new Promise((resolve, reject) => {
     log(`$ ${argvs.join(" ")}`);
     const p = spawn(exe, argvs.slice(1), { cwd: opts.cwd ?? cwd, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", BP_REPO: REPO } });

@@ -192,6 +192,17 @@ def main(project_dir, deck_dir):
     findings.append(f"canvas: {len(doc['nodes'])} nodes, {len(doc['segments'])} segments, {len(doc['spaces'])} spaces -> {out.name}")
 
     check_png(D, brief, plan, ox, oy, ppm, tr, P / "geometry_check.png")
+    # a zone outline that came from the trace replaces the deck's for every later stage (compose, drawings, QA):
+    # write the brief back with it (the original deck points stay in deck_points_px)
+    if any(z.get("outline_src") for z in brief["zones"]):
+        raw = json.loads((P / "roombrief.json").read_text(encoding="utf-8"))
+        for z in raw["zones"]:
+            nz = next((b for b in brief["zones"] if b["id"] == z["id"] and b.get("outline_src")), None)
+            if nz:
+                z.setdefault("deck_points_px", z.get("points_px"))
+                z["points_px"], z["outline_src"] = nz["points_px"], nz["outline_src"]
+        (P / "roombrief.json").write_text(json.dumps(raw, indent=1, ensure_ascii=False), encoding="utf-8")
+        findings.append("roombrief.json zones updated with the traced outline(s)")
     (P / "geometry.findings.txt").write_text("\n".join(findings) + "\n", encoding="utf-8")
     print("\n".join(findings))
 
