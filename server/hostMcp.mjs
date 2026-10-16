@@ -69,9 +69,10 @@ export async function callHostTool(cfg, name, args = {}, user = "user") {
     catch (e) { problems.push({ what: "R2 is not reachable from the server", fix: `check the R2_* keys in Vercel — ${e.message}` }); }
     // 2. CORS for direct uploads
     const cors = await corsCheck(cfg);
-    if (!cors.ok) problems.push({ what: `the bucket does not allow browser uploads from ${APP_ORIGIN} (CORS)`, effect: "files over ~4 MB cannot be uploaded from the editor (HTTP 413 / 'R2 refused the upload')",
-      fix: "Cloudflare dashboard ▸ R2 ▸ the bucket ▸ Settings ▸ CORS policy: add the rule in docs/r2-cors.json (AllowedOrigins incl. " + APP_ORIGIN + ", methods GET PUT HEAD, header content-type, ExposeHeaders ETag). Meanwhile project.upload_link still needs the same rule.", detail: cors });
-    else if (!cors.etagExposed) problems.push({ what: "CORS allows uploads but does not expose ETag", effect: "files over 64 MB (multipart) fail", fix: "add \"ExposeHeaders\": [\"ETag\"] to the bucket's CORS rule (docs/r2-cors.json)", detail: cors });
+    // without CORS, uploads still work: the editor and the upload page relay them through the app (slower)
+    const notes = [];
+    if (!cors.ok) notes.push(`uploads are RELAYED through ${APP_ORIGIN} (the bucket has no CORS rule for it): any size works, just slower. Faster direct uploads: Cloudflare ▸ R2 ▸ the bucket ▸ Settings ▸ CORS ▸ the rule in docs/r2-cors.json.`);
+    else if (!cors.etagExposed) notes.push("CORS allows direct uploads but does not expose ETag: files over 64 MB fall back to the relay (add ExposeHeaders ETag).");
     else ok.push(`CORS ok for ${APP_ORIGIN}`);
     // 3. runner
     const beats = (await listObjectsDetailed(cfg, "relay/runner/").catch(() => [])).filter((o) => o.key.endsWith(".json"));
@@ -86,10 +87,10 @@ export async function callHostTool(cfg, name, args = {}, user = "user") {
     for (const d of days) for (const o of (await listObjectsDetailed(cfg, `relay/logs/${d}/`).catch(() => [])).slice(-40)) logs.push(o.key);
     const recent = [];
     for (const k of logs.sort().slice(-15)) { const e = await readJson(cfg, k); if (e) recent.push({ at: e.at, kind: e.kind, message: e.message, reason: e.reason, project: e.project, page: e.page }); }
-    if (recent.some((e) => e.reason === "token")) problems.push({ what: "the editor has no library token in that browser", effect: "uploads and saves are refused", fix: "editor ▸ Preferences ▸ Cloud Library: enter the library token (or use project.upload_link for files)" });
+    if (recent.some((e) => e.reason === "token")) notes.push("the editor reported a refused write: inside a project (made with project.create) no token is needed; for library/ files, or if PROJECT_WRITES=token is set, the editor needs the library token (Preferences ▸ Cloud Library).");
     // 5. versions
     const apps = (await readJson(cfg, "library/Pipelines/apps.json"))?.apps ?? [];
-    const out = { ok: !problems.length, problems, fine: ok, editorErrors: recent.reverse(),
+    const out = { ok: !problems.length, problems, notes, fine: ok, editorErrors: recent.reverse(),
       versions: { deploy: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local", app: APP_ORIGIN, apps: apps.map((a) => `${a.id}@${a.version}`) } };
     if (args.project && CODE_RE.test(String(args.project).toUpperCase())) {
       const c = String(args.project).toUpperCase();

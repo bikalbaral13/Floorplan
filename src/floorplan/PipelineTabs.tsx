@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { deleteFromBucket, libraryPath, saveToCloudLibrary, uploadDirect, uploadToBucket } from "./cloudLibrary";
+import { deleteFromBucket, libraryPath, r2Headers, saveToCloudLibrary, uploadDirect, uploadToBucket } from "./cloudLibrary";
 import { toast } from "sonner";
 import { appConfig, loadAppConfig } from "./appConfig";
 import { registerAgentCommand } from "./agentBridge";
@@ -80,14 +80,13 @@ const projectKey = (code: string, rel: string) => {
 };
 /** List an uploaded file in project.json inputs[] (path, sha256, bytes, added, by). */
 async function addProjectInput(code: string, key: string, blob: Blob) {
-  const mk = `${PROJ}/${code}/project.json`;
-  const m = JSON.parse(await text(mk, true)) as { inputs?: { path: string }[]; history?: unknown[] };
   // sha256 of the whole file — skipped above 200 MB (it would hold the file in memory twice); R2 keeps its ETag
   const hash = blob.size > 200e6 ? null
     : [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const rel = key.slice(`${PROJ}/${code}/`.length);
-  m.inputs = [...(m.inputs ?? []).filter((i) => i.path !== rel), { path: rel, sha256: hash, bytes: blob.size, added: new Date().toISOString(), by: "editor" } as { path: string }];
-  await saveKey(mk, JSON.stringify(m, null, 1));
+  // the server lists it in Projects/<CODE>/project.json inputs[] (the browser never writes the manifest itself)
+  await fetch("/__r2/upload-done", { method: "POST", headers: { "Content-Type": "application/json", ...r2Headers() },
+    body: JSON.stringify({ key, size: blob.size, sha256: hash }) });
+  void code;
 }
 /** Save a JSON / text file by bucket key, into the Library or into Projects/ (the bridge allows only those two). */
 const saveKey = (key: string, content: string) =>

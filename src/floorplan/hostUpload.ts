@@ -48,8 +48,54 @@ async function postJson(path: string, body: unknown, headers: Record<string, str
   return j;
 }
 
+/** Set once a direct PUT was refused (no bucket CORS rule): later uploads on this page go straight to the relay. */
+let directBlocked = false;
+
+/** Relay: the bytes go to THIS site in 4 MiB chunks and the server puts them in R2 (it holds the keys), two chunks
+ *  per 8 MiB part — no browser → R2 request, so no bucket CORS rule is needed. Slower than direct; any size. */
+async function relayUpload(key: string, file: Blob, type: string, o: UploadOptions) {
+  const total = file.size;
+  const plan = await postJson("/__r2/upload-plan", { key, size: total, contentType: type, grant: o.grant, relay: true }, o.headers);
+  const chunk = Number(plan.chunkSize), n = Math.max(1, Number(plan.chunks));
+  const parts: { partNumber: number; etag: string }[] = [];
+  const sent = new Map<number, number>();
+  const report = () => o.onProgress?.([...sent.values()].reduce((a, b) => a + b, 0), total);
+  const sendChunk = async (i: number) => {
+    const q = new URLSearchParams({ key, uploadId: String(plan.uploadId), index: String(i), ...(i === n - 1 ? { last: "1" } : {}), ...(o.grant ? { grant: o.grant } : {}) });
+    for (let attempt = 0; ; attempt++) {
+      const r = await fetch(`/__r2/upload-chunk?${q}`, { method: "POST", headers: { "Content-Type": "application/octet-stream", ...(o.headers ?? {}) }, body: file.slice(i * chunk, (i + 1) * chunk) });
+      const j = (await r.json().catch(() => ({}))) as { partNumber?: number; etag?: string; error?: string };
+      if (r.ok) { sent.set(i, Math.min(chunk, total - i * chunk)); report(); if (j.partNumber) parts.push({ partNumber: j.partNumber, etag: String(j.etag) }); return; }
+      if (r.status === 401 || r.status === 403 || attempt >= 2) throw new UploadError(r.status === 401 ? "token" : r.status === 403 ? "expired" : "server", j.error ?? `HTTP ${r.status}`);
+    }
+  };
+  // chunk pairs (2k, 2k+1) in order inside a pair; 3 pairs at a time
+  const pairs = Array.from({ length: Math.ceil(n / 2) }, (_, k) => k);
+  let next = 0;
+  const worker = async () => { while (next < pairs.length) { const k = pairs[next++]; await sendChunk(2 * k); if (2 * k + 1 < n) await sendChunk(2 * k + 1); } };
+  try {
+    await Promise.all([worker(), worker(), worker()]);
+    await postJson("/__r2/upload-complete", { key, uploadId: plan.uploadId, parts, grant: o.grant }, o.headers);
+  } catch (e) {
+    void postJson("/__r2/upload-abort", { key, uploadId: plan.uploadId, grant: o.grant }, o.headers).catch(() => {});
+    throw e;
+  }
+  o.onProgress?.(total, total);
+  return { key, url: String(plan.publicUrl ?? ""), size: total };
+}
+
 export async function uploadToR2(key: string, file: Blob, o: UploadOptions = {}): Promise<{ key: string; url: string; size: number }> {
   const type = o.contentType || file.type || "application/octet-stream";
+  if (directBlocked) return relayUpload(key, file, type, o);
+  try {
+    return await directUpload(key, file, type, o);
+  } catch (e) {
+    if (e instanceof UploadError && e.reason === "cors") { directBlocked = true; return relayUpload(key, file, type, o); }
+    throw e;
+  }
+}
+
+async function directUpload(key: string, file: Blob, type: string, o: UploadOptions): Promise<{ key: string; url: string; size: number }> {
   const total = file.size;
   const plan = await postJson("/__r2/upload-plan", { key, size: total, contentType: type, grant: o.grant }, o.headers);
   if (plan.mode === "single") {

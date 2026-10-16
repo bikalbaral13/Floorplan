@@ -93,6 +93,27 @@ const cleanLibraryKey = (rel) => {
  *  project, outside the Library since 2026-10-15). Nothing else in the bucket is reachable through these routes. */
 const areaRoot = (cfg, area) => (area === "projects" ? "Projects" : cfg.prefix);
 
+/** PROJECT WRITES WITHOUT A TOKEN (host v1.1). A project folder is written by whoever runs it — the pipeline app in
+ *  the editor, the upload page — and the deployment's own R2 keys sign it, so no library token is needed in the
+ *  browser. Limits: only keys inside an EXISTING project (Projects/<CODE>/project.json is there, made by
+ *  project.create), never the manifest itself (it changes through /upload-done and the connector), never library/.
+ *  PROJECT_WRITES=token in the server env turns this off (then every write needs the token again). */
+const PROJECT_KEY = /^Projects\/([A-Z0-9][A-Z0-9_]*)\/(.+)$/;
+const projectSeen = new Map();
+async function projectWriteCfg(envCfg, key) {
+  if (!envCfg || process.env.PROJECT_WRITES === "token") return null;
+  const m = PROJECT_KEY.exec(key ?? "");
+  if (!m || m[2] === "project.json") return null;
+  const hit = projectSeen.get(m[1]);
+  if (hit && Date.now() - hit < 60_000) return envCfg;
+  const ok = await getObjectText(envCfg, `Projects/${m[1]}/project.json`, 64).then(() => true).catch(() => false);
+  if (ok) projectSeen.set(m[1], Date.now());
+  return ok ? envCfg : null;
+}
+/** Chunks of an upload relayed through this server (no browser → R2 request, so no bucket CORS needed): 4 MiB each
+ *  (under Vercel's ~4.5 MB body limit); two chunks make one 8 MiB multipart part (R2 wants parts >= 5 MiB, all equal). */
+const RELAY_CHUNK = 4 * 1024 * 1024;
+
 const publicUrlOf = (cfg, key) =>
   cfg.publicUrl ? `${cfg.publicUrl}/${key.split("/").map(encodeURIComponent).join("/")}` : "";
 
@@ -232,10 +253,17 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
         if (!key.startsWith(g.prefix)) return sendJson(res, 403, { error: `this upload link only allows ${g.prefix}` });
         ucfg = envCfg;
       }
-      if (!ucfg) return sendJson(res, 401, { error: "uploading needs a library token (Preferences ▸ Cloud Library) or an upload link from Claude", code: "token" });
+      if (!ucfg) ucfg = await projectWriteCfg(envCfg, key);
+      if (!ucfg) return sendJson(res, 401, { error: `${key.split("/").slice(0, 2).join("/")} is not a project yet (project.create makes it) — or this browser needs a library token`, code: "token" });
       if (route === "/upload-plan") {
         const size = Number(body.size) || 0;
         const type = String(body.contentType || "application/octet-stream").slice(0, 120);
+        if (body.relay) {
+          // relayed through this server (no bucket CORS needed): chunks to /upload-chunk, then /upload-complete
+          if (size > MULTIPART_MAX) return sendJson(res, 413, { error: `files up to ${MULTIPART_MAX / 1e9} GB` });
+          const uploadId = await createMultipart(ucfg, key, type);
+          return sendJson(res, 200, { ok: true, mode: "relay", key, uploadId, chunkSize: RELAY_CHUNK, chunks: Math.max(1, Math.ceil(size / RELAY_CHUNK)), publicUrl: publicUrlOf(ucfg, key) });
+        }
         if (size <= SINGLE_MAX) return sendJson(res, 200, { ok: true, mode: "single", key, url: presignUrl(ucfg, "PUT", key, 3600), publicUrl: publicUrlOf(ucfg, key) });
         if (size > MULTIPART_MAX) return sendJson(res, 413, { error: `files up to ${MULTIPART_MAX / 1e9} GB` });
         const partSize = Math.max(PART_SIZE, Math.ceil(size / 9000));
@@ -251,7 +279,7 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
         const mk = `Projects/${m[1]}/project.json`;
         const man = await getObjectText(ucfg, mk, 5_000_000).then((r) => JSON.parse(r.text)).catch(() => null);
         if (!man) return sendJson(res, 404, { error: `no ${mk}` });
-        man.inputs = [...(man.inputs ?? []).filter((i) => i.path !== m[2]), { path: m[2], bytes: Number(body.size) || null, added: new Date().toISOString(), by: body.grant ? "upload link" : "editor" }];
+        man.inputs = [...(man.inputs ?? []).filter((i) => i.path !== m[2]), { path: m[2], bytes: Number(body.size) || null, ...(/^[0-9a-f]{64}$/.test(String(body.sha256 ?? "")) ? { sha256: body.sha256 } : {}), added: new Date().toISOString(), by: body.grant ? "upload link" : "editor" }];
         await putObject(ucfg, mk, JSON.stringify(man, null, 1), "application/json");
         return sendJson(res, 200, { ok: true, key });
       }
@@ -261,6 +289,65 @@ export async function handleR2(req, res, envCfg, route, url, opts = {}) {
       }
       await abortMultipart(ucfg, key, String(body.uploadId)).catch(() => {});
       return sendJson(res, 200, { ok: true });
+    }
+
+    // POST /upload-chunk?key=&uploadId=&index=&last=1[&grant=] (raw body, one 4 MiB chunk). An even chunk waits in
+    // Projects/<CODE>/.uploads/<uploadId>/; the odd one after it joins it into one 8 MiB part and uploads it (→ { partNumber,
+    // etag }). A last chunk with an even index is a part on its own.
+    if (req.method === "POST" && route === "/upload-chunk") {
+      const key = cleanBucketKey(url.searchParams.get("key"));
+      const uploadId = String(url.searchParams.get("uploadId") ?? "");
+      const index = Number(url.searchParams.get("index"));
+      const last = url.searchParams.get("last") === "1";
+      if (!key || !/^Projects\//.test(key) || !uploadId || !Number.isInteger(index) || index < 0) return sendJson(res, 400, { error: "need key, uploadId, index" });
+      let ucfg = cfg;
+      const grant = url.searchParams.get("grant");
+      if (!ucfg && grant && envCfg && /^[a-z0-9]{12,40}$/.test(grant)) {
+        const g = await getObjectText(envCfg, `relay/grants/${grant}.json`).then((r) => JSON.parse(r.text)).catch(() => null);
+        if (g && Date.parse(g.expires) > Date.now() && key.startsWith(g.prefix)) ucfg = envCfg;
+      }
+      if (!ucfg) ucfg = await projectWriteCfg(envCfg, key);
+      if (!ucfg) return sendJson(res, 401, { error: "not allowed to upload here", code: "token" });
+      const body = await readRawBody(req, RELAY_CHUNK + 1024);
+      // the waiting chunk stays inside the project (Projects/<CODE>/.uploads/), deleted once its part is assembled
+      const temp = (i) => `${key.split("/").slice(0, 2).join("/")}/.uploads/${uploadId.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80)}/${i}`;
+      const uploadPart = async (partNumber, buf) => {
+        const r = await signedRequest(ucfg, "PUT", key, buf, {}, { partNumber, uploadId });
+        return { partNumber, etag: r.headers.get("etag") ?? "" };
+      };
+      if (index % 2 === 0) {
+        if (last) return sendJson(res, 200, { ok: true, ...(await uploadPart(index / 2 + 1, body)) });
+        await putObject(ucfg, temp(index), body, "application/octet-stream");
+        return sendJson(res, 200, { ok: true, stored: index });
+      }
+      const first = Buffer.from(await (await signedRequest(ucfg, "GET", temp(index - 1))).arrayBuffer());
+      const part = await uploadPart((index - 1) / 2 + 1, Buffer.concat([first, body]));
+      await deleteObject(ucfg, temp(index - 1)).catch(() => {});
+      return sendJson(res, 200, { ok: true, ...part });
+    }
+
+    // Token-less project writes (projectWriteCfg): /save into Projects/<CODE>/… and /upload of a small file there.
+    if (!cfg && req.method === "POST" && route === "/save") {
+      const body = await readJson(req);
+      const rel = cleanLibraryKey(body.path);
+      if (!rel || typeof body.content !== "string") return sendJson(res, 400, { error: "need path (*.json or *.md) + content" });
+      const key = body.area === "projects" ? `Projects/${rel}` : "";
+      const pcfg = key ? await projectWriteCfg(envCfg, key) : null;
+      if (!pcfg) return sendJson(res, 401, { error: "writing here needs a library token (Preferences ▸ Cloud Library)", code: "token" });
+      if (rel.toLowerCase().endsWith(".json")) JSON.parse(body.content);
+      await putObject(pcfg, key, body.content, LIBRARY_MIME[path.extname(rel).toLowerCase()]);
+      return sendJson(res, 200, { ok: true, key, url: publicUrlOf(pcfg, key) });
+    }
+    if (!cfg && req.method === "POST" && route === "/upload") {
+      const key = cleanBucketKey(url.searchParams.get("key"));
+      const pcfg = await projectWriteCfg(envCfg, key);
+      if (!pcfg) return sendJson(res, 401, { error: "uploading here needs a library token (Preferences ▸ Cloud Library)", code: "token" });
+      const body = await readRawBody(req, opts.uploadLimit ?? 100_000_000);
+      if (!body.length) return sendJson(res, 400, { error: "empty file" });
+      if (key.toLowerCase().endsWith(".json")) JSON.parse(body.toString("utf8"));
+      const mime = UPLOAD_MIME[path.extname(key).toLowerCase()] ?? "application/octet-stream";
+      await putObject(pcfg, key, body, mime);
+      return sendJson(res, 200, { ok: true, key, size: body.length, contentType: mime, url: publicUrlOf(pcfg, key) });
     }
 
     if (!cfg) return sendJson(res, 401, { error: envCfg ? "writing needs a library token — enter it in Preferences ▸ Cloud Library" : "the server has no R2 keys (set R2_* in the Vercel env)" });

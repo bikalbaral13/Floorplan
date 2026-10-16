@@ -50,13 +50,37 @@
       var x = new XMLHttpRequest(); x.open("PUT", url);
       x.upload.onprogress = function (e) { onBytes(e.loaded); };
       x.onload = function () { x.status < 300 ? res(x.getResponseHeader("ETag") || "") : rej(new Error("storage answered " + x.status)); };
-      x.onerror = function () { rej(new Error("the storage refused the upload from this site (CORS) — tell Claude to run session.doctor")); };
+      x.onerror = function () { var e = new Error("cors"); e.cors = true; rej(e); };
       x.send(blob);
     });
   }
   function stamp(name) {
     var dot = name.lastIndexOf("."), base = (dot > 0 ? name.slice(0, dot) : name).replace(/[^\w.-]+/g, "_").slice(0, 60) || "file";
     return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19) + "_" + base + (dot > 0 ? name.slice(dot).toLowerCase() : "");
+  }
+  var directBlocked = false;
+  // Relay: 4 MiB chunks to this site, the server assembles them in the project in R2 — no bucket CORS rule needed.
+  function relay(file, key, show) {
+    return post("/__r2/upload-plan", { key: key, size: file.size, contentType: file.type || "application/octet-stream", relay: true }).then(function (plan) {
+      var n = Math.max(1, plan.chunks), cs = plan.chunkSize, parts = [], sent = {}, next = 0;
+      var sum = function () { var t = 0; for (var k in sent) t += sent[k]; show(t); };
+      function chunk(i) {
+        var q = new URLSearchParams({ key: key, uploadId: plan.uploadId, index: String(i), grant: g });
+        if (i === n - 1) q.set("last", "1");
+        return fetch("/__r2/upload-chunk?" + q, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file.slice(i * cs, (i + 1) * cs) })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+            if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+            sent[i] = Math.min(cs, file.size - i * cs); sum(); if (j.partNumber) parts.push({ partNumber: j.partNumber, etag: j.etag });
+          }); });
+      }
+      function worker() {
+        if (next >= Math.ceil(n / 2)) return Promise.resolve();
+        var k = next++;
+        return chunk(2 * k).then(function () { return 2 * k + 1 < n ? chunk(2 * k + 1) : null; }).then(worker);
+      }
+      return Promise.all([worker(), worker(), worker()]).then(function () { return post("/__r2/upload-complete", { key: key, uploadId: plan.uploadId, parts: parts }); },
+        function (e) { post("/__r2/upload-abort", { key: key, uploadId: plan.uploadId }).catch(function () {}); throw e; });
+    });
   }
   function upload(file) {
     var row = document.createElement("div"); row.className = "file";
@@ -67,7 +91,7 @@
     var bar = row.querySelector("i"), state = row.querySelector(".state");
     var key = grant.prefix + stamp(file.name), total = file.size || 1;
     var show = function (n) { bar.style.width = Math.min(100, n / total * 100).toFixed(1) + "%"; state.textContent = Math.round(n / total * 100) + "%"; };
-    return post("/__r2/upload-plan", { key: key, size: file.size, contentType: file.type || "application/octet-stream" }).then(function (plan) {
+    var direct = directBlocked ? Promise.reject({ cors: true }) : post("/__r2/upload-plan", { key: key, size: file.size, contentType: file.type || "application/octet-stream" }).then(function (plan) {
       if (plan.mode === "single") return put(plan.url, file, show);
       var sent = {}, parts = plan.parts, done = [], next = 0, ps = plan.partSize;
       var sum = function () { var s = 0; for (var k in sent) s += sent[k]; show(s); };
@@ -79,7 +103,9 @@
       }
       return Promise.all([worker(), worker(), worker()]).then(function () { return post("/__r2/upload-complete", { key: key, uploadId: plan.uploadId, parts: done }); },
         function (e) { post("/__r2/upload-abort", { key: key, uploadId: plan.uploadId }).catch(function () {}); throw e; });
-    }).then(function () { return post("/__r2/upload-done", { key: key, size: file.size }); })
+    });
+    return direct.catch(function (e) { if (!e || !e.cors) throw e; directBlocked = true; return relay(file, key, show); })
+      .then(function () { return post("/__r2/upload-done", { key: key, size: file.size }); })
       .then(function () { show(total); state.className = "state ok"; state.textContent = "Uploaded — " + key.slice(key.indexOf("inputs/")); },
         function (e) { state.className = "state bad"; state.textContent = "Failed: " + e.message; });
   }
