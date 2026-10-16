@@ -222,6 +222,8 @@ import { applyInstanceTransform, designLevelFor, loadDesignPaths, uniqueInstance
 import { activeProject, mediaDir } from "./projectPaths";
 import { installClientLog, reportClientError } from "./clientLog";
 import { loadAppConfig } from "./appConfig";
+/** sessionStorage: the canvas (bucket path) this tab has linked — reopened after a reload. */
+const LINKED_DESIGN_KEY = "bp.linkedDesign";
 import { getPythonResult, getPythonError, onPythonResult, objIsPython, pythonRotation } from "./python/pythonObjects";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
 import { MESH3D_FORMATS } from "./export/flowMesh3dFormats";
@@ -28704,15 +28706,14 @@ User request: ${aiPrompt.trim()}`;
       try {
         if (sessionStorage.getItem("bp.staleReload")) return;          // already tried — do not loop
         sessionStorage.setItem("bp.staleReload", String(Date.now()));
-        if (linkedDesignRef.current) sessionStorage.setItem("bp.restoreDesign", linkedDesignRef.current);
       } catch { /* storage blocked: still reload */ }
       reportClientError("stale-chunk", "a code chunk from an older deploy failed to load — reloading onto the new one");
       window.location.reload();
     };
     window.addEventListener("vite:preloadError", onStale);
-    // after such a reload: reopen the canvas the tab had, from R2
+    // after ANY reload (an app update, the user's F5): reopen the canvas this tab had linked, from R2
     let restore: string | null = null;
-    try { restore = sessionStorage.getItem("bp.restoreDesign"); sessionStorage.removeItem("bp.restoreDesign"); } catch { /* none */ }
+    try { restore = sessionStorage.getItem(LINKED_DESIGN_KEY); } catch { /* none */ }
     if (restore) {
       const path = restore;
       void fetchDesignText(path).then((t) => t ? importPlanTextRef.current(t, path) : false)
@@ -28723,6 +28724,8 @@ User request: ${aiPrompt.trim()}`;
   }, []);
   const linkedDesignRef = useRef<string | null>(null);
   linkedDesignRef.current = linkedDesign;
+  // the canvas this tab has linked (Import JSON / design.load / a pipeline's openCanvas), kept per tab for a reload
+  useEffect(() => { try { if (linkedDesign) sessionStorage.setItem(LINKED_DESIGN_KEY, linkedDesign); else sessionStorage.removeItem(LINKED_DESIGN_KEY); } catch { /* */ } }, [linkedDesign]);   // runs after the restore read above
 
   useEffect(() => { setBridgeLinkedDesign(linkedDesign); }, [linkedDesign]);
 
