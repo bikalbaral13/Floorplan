@@ -5,7 +5,7 @@
  *  Grants live in relay/grants/<id>.json; the editor's own errors in relay/logs/<day>/ (POST /__r2/log);
  *  runner heartbeats in relay/runner/<worker>.json (tools/runner/worker.mjs). */
 import crypto from "node:crypto";
-import { putObject, getObjectText, listObjectsDetailed, presignUrl, deleteObject } from "../tools/r2.mjs";
+import { putObject, getObjectText, listObjectsDetailed, presignUrl, deleteObject, signedRequest } from "../tools/r2.mjs";
 
 const APP_ORIGIN = (process.env.APP_ORIGIN || "https://floorplan-indol.vercel.app").replace(/\/+$/, "");
 const KINDS = ["decks", "drawings", "images", "designs", "models", "moodboards"];
@@ -26,6 +26,14 @@ export const HOST_TOOLS = [
       code: { type: "string" }, kind: { type: "string", enum: KINDS, description: "which inputs/ folder (default decks)" },
       hours: { type: "number", description: "valid for (1–168, default 24)" },
     }, required: ["code"] },
+  },
+  {
+    name: "project_import",
+    description: "Copy a file INTO a project's inputs/<kind>/ without passing its bytes through the chat: `from` = another project's file (\"Projects/OTHER/inputs/decks/x.pptx\") — copied inside R2, any size — or an https URL (fetched by the server, up to ~200 MB). Use it when the user names a file already in R2 or online; for a file on their computer give project.upload_link instead. Lists the file in project.json.",
+    inputSchema: { type: "object", properties: {
+      code: { type: "string" }, from: { type: "string", description: "Projects/<CODE>/… key or https:// URL" },
+      kind: { type: "string", enum: KINDS, description: "inputs/ folder (default decks)" }, name: { type: "string", description: "file name to give it (default: the source's)" },
+    }, required: ["code", "from"] },
   },
   {
     name: "app_request",
@@ -111,6 +119,34 @@ export async function callHostTool(cfg, name, args = {}, user = "user") {
     await putJson(cfg, `relay/grants/${id}.json`, grant);
     return { link: `${APP_ORIGIN}/upload.html?g=${id}`, folder: grant.prefix, expires: grant.expires,
       note: "Give the user this link. Uploads go straight to R2 (any size) — the bucket needs the CORS rule (session.doctor checks it)." };
+  }
+  if (name === "project_import") {
+    const code = String(args.code ?? "").trim().toUpperCase();
+    if (!CODE_RE.test(code)) throw new Error("`code` must be a project code");
+    const man = await readJson(cfg, `Projects/${code}/project.json`);
+    if (!man) throw new Error(`no project ${code} — project.create first`);
+    const kind = KINDS.includes(args.kind) ? args.kind : "decks";
+    const from = String(args.from ?? "").trim();
+    const srcName = decodeURIComponent(from.split("?")[0].split("/").pop() || "file");
+    const base = String(args.name || srcName).replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_/, "").replace(/[^\w.-]+/g, "_").slice(0, 80) || "file";
+    const key = `Projects/${code}/inputs/${kind}/${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}_${base}`;
+    let bytes = null;
+    if (/^Projects\/[A-Z0-9][A-Z0-9_]*\/.+/.test(from) && !/(^|\/)\.\.(\/|$)/.test(from)) {
+      // server-side copy inside R2: no bytes through here, any size
+      const src = `/${cfg.bucket}/${from.split("/").map(encodeURIComponent).join("/")}`;
+      await signedRequest(cfg, "PUT", key, "", { "x-amz-copy-source": src });
+      bytes = (await listObjectsDetailed(cfg, key))[0]?.size ?? null;
+    } else if (/^https:\/\//i.test(from)) {
+      const r = await fetch(from);
+      if (!r.ok) throw new Error(`${from} answered ${r.status}`);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 200e6) throw new Error("over 200 MB — give the user project.upload_link instead");
+      await putObject(cfg, key, buf, r.headers.get("content-type") || "application/octet-stream");
+      bytes = buf.length;
+    } else throw new Error("`from` must be a Projects/<CODE>/… key or an https:// URL");
+    man.inputs = [...(man.inputs ?? []), { path: key.slice(`Projects/${code}/`.length), bytes, added: new Date().toISOString(), by: user, from }];
+    await putJson(cfg, `Projects/${code}/project.json`, man);
+    return { ok: true, key, input: key.slice(`Projects/${code}/`.length), bytes };
   }
   if (name === "app_request") {
     const at = new Date().toISOString();

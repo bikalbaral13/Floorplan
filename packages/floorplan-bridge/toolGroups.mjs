@@ -84,7 +84,7 @@ export const GROUPS = {
   },
   project: {
     summary: "Projects from start to finish: op:create a project (ask the USER for code + title first), op:status where it stands (inputs, phases, runner jobs), op:list all projects, op:job queues one script stage of a pipeline for the runner, op:jobs polls it. With pipeline.run the user uploads and answers in the pipeline's app; read library/AGENT.md §5 for the whole journey.",
-    ops: { create: "project_create", status: "project_status", list: "project_list", job: "project_job", jobs: "project_jobs", upload_link: "project_upload_link" },
+    ops: { create: "project_create", status: "project_status", list: "project_list", job: "project_job", jobs: "project_jobs", upload_link: "project_upload_link", import: "project_import" },
   },
   app: {
     summary: "When something needs the EDITOR APP's code (not R2 files): op:request writes the problem, evidence and proposal to library/Requests/ for the developer; op:requests lists the open ones. Run session.doctor first — most problems are setup (CORS, token, runner), fixed without code.",
