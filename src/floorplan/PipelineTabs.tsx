@@ -275,7 +275,7 @@ export interface PipelineTabsOptions {
 /** The pipeline's tabs live in the editor's RIGHT-HAND panel, next to Properties ("drawings" = Properties shown);
  *  the canvas in the middle always shows the drawing. `frame` is rendered inside that panel column. */
 export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
-  tabBar: ReactNode; frame: ReactNode; dialog: ReactNode; openImport: () => void; selectCanvas: (ids: string[]) => void;
+  tabBar: ReactNode; frame: ReactNode; dialog: ReactNode; openImport: () => void; openProject: () => void; selectCanvas: (ids: string[]) => void;
   sideTabs: PipeTab[]; sideActive: string | null; pickSide: (id: string | null) => void;
   /** What the loaded pipeline has issued for a canvas space (live), and the pipeline's name. */
   issuedForSpace: (spaceId: string) => IssuedRef[]; pipelineTitle: string | null;
@@ -289,6 +289,12 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
 
   // Import ▸ Pipeline: pick a pipeline that ships an app, then a project that has its data.
   const [pickOpen, setPickOpen] = useState(false);
+  // Import ▸ Project: the same dialog, listing R2 Projects/ first; a project then opens its canvas + pipeline app.
+  const [pickMode, setPickMode] = useState<"pipeline" | "project">("pipeline");
+  const [projFiles, setProjFiles] = useState<string[]>([]);
+  const [projCode, setProjCode] = useState<string | null>(null);
+  const [projApp, setProjApp] = useState<string | null>(null);
+  const [projCanvas, setProjCanvas] = useState<string | null>(null);
   const [apps, setApps] = useState<PipelineApp[] | null>(null);
   const [projects, setProjects] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -313,7 +319,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
             by[a.id] = [...new Set(files.filter((f) => f.split("/")[2] === a.id).map((f) => f.split("/")[0]))].sort();
           } else by[a.id] = [...new Set(files.filter((f) => f.split("/")[2] === a.id && f.endsWith("/app/data/local.json")).map((f) => f.split("/")[0]))].sort();
         }
-        setApps(list); setProjects(by);
+        setApps(list); setProjects(by); setProjFiles(files);
       } catch (e) { setError(`Could not read the Library: ${(e as Error).message}`); setApps([]); }
     })();
   }, [pickOpen, apps]);
@@ -719,9 +725,90 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
     </div>
   ) : null;
 
+  // ── Import ▸ Project ──
+  const projectCodes = [...new Set(projFiles.map((f) => f.split("/")[0]))].filter((c) => c && !c.startsWith("_") && !c.includes(".")).sort();
+  const filesOf = (code: string) => projFiles.filter((f) => f.startsWith(`${code}/`));
+  /** Pipelines this project has used that ship an app, latest phase first. */
+  const appsOf = (code: string) => (apps ?? []).filter((a) => (projects[a.id] ?? []).includes(code))
+    .sort((a, b) => String(b.phase ?? "").localeCompare(String(a.phase ?? "")));
+  /** The project's published canvases (pipeline output/ first, then shared/), newest pipeline first. */
+  const canvasesOf = (code: string) => filesOf(code).filter((f) => f.endsWith(".canvas.json") && !/\/(state|steps|jobs)\//.test(f))
+    .sort((a, b) => b.localeCompare(a));
+  const pickProject = (code: string) => {
+    setProjCode(code);
+    setProjApp(appsOf(code)[0]?.id ?? null);
+    setProjCanvas(canvasesOf(code)[0] ?? null);
+  };
+  const openProjectNow = async () => {
+    if (!projCode) return;
+    setError("");
+    if (projCanvas) {
+      setBusy(`canvas/${projCode}`);
+      try {
+        const key = `${PROJ}/${projCanvas}`;
+        const json = await text(key, true);
+        window.dispatchEvent(new CustomEvent("bp-open-plan", { detail: { json, path: key } }));
+      } catch (e) { setError(`Could not open ${projCanvas}: ${(e as Error).message}`); setBusy(null); return; }
+      setBusy(null);
+    }
+    const app = (apps ?? []).find((a) => a.id === projApp);
+    if (app) { await load(app, projCode); optsRef.current.onReveal?.(); }
+    else { setPickOpen(false); setPickMode("pipeline"); }
+  };
+  const projectPicker = (
+    <>
+      <DialogHeader>
+        <DialogTitle>Import project</DialogTitle>
+        <DialogDescription>A project from R2 Projects/: opens its canvas and its pipeline's tabs.</DialogDescription>
+      </DialogHeader>
+      {!apps && <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Reading Projects…</p>}
+      {apps && !projCode && (
+        <div className="flex max-h-[50vh] flex-col gap-1 overflow-y-auto">
+          {!projectCodes.length && <p className="text-xs text-slate-400">No projects in R2 yet.</p>}
+          {projectCodes.map((code) => (
+            <button key={code} type="button" onClick={() => pickProject(code)}
+              className="flex items-center justify-between rounded border border-slate-200 px-3 py-2 text-left text-[13px] hover:border-sky-400 hover:bg-sky-50">
+              <span className="font-semibold text-slate-800">{code}</span>
+              <span className="text-[11px] text-slate-500">{filesOf(code).length} files · {appsOf(code).map((a) => a.title).join(", ") || "no pipeline app"}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {apps && projCode && (
+        <div className="flex flex-col gap-3 text-[13px]">
+          <button type="button" onClick={() => setProjCode(null)} className="self-start text-xs text-sky-700 hover:underline">← All projects</button>
+          <p className="font-semibold text-slate-800">{projCode}</p>
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Canvas</p>
+            <div className="flex flex-col gap-1">
+              {canvasesOf(projCode).map((f) => (
+                <label key={f} className="flex items-center gap-2 text-xs"><input type="radio" checked={projCanvas === f} onChange={() => setProjCanvas(f)} />{f.slice(projCode.length + 1)}</label>
+              ))}
+              <label className="flex items-center gap-2 text-xs text-slate-500"><input type="radio" checked={projCanvas === null} onChange={() => setProjCanvas(null)} />Keep the current canvas</label>
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pipeline UI</p>
+            <div className="flex flex-col gap-1">
+              {appsOf(projCode).map((a) => (
+                <label key={a.id} className="flex items-center gap-2 text-xs"><input type="radio" checked={projApp === a.id} onChange={() => setProjApp(a.id)} />{a.title} <span className="text-slate-400">{a.version} · {a.phase}</span></label>
+              ))}
+              <label className="flex items-center gap-2 text-xs text-slate-500"><input type="radio" checked={projApp === null} onChange={() => setProjApp(null)} />None</label>
+            </div>
+          </div>
+          <button type="button" disabled={!!busy || (!projCanvas && !projApp)} onClick={() => void openProjectNow()}
+            className="inline-flex items-center justify-center gap-1 self-end rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+            {busy && <Loader2 className="h-3 w-3 animate-spin" />} Open project
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   const dialog = (
-    <Dialog open={pickOpen} onOpenChange={setPickOpen}>
+    <Dialog open={pickOpen} onOpenChange={(o) => { setPickOpen(o); if (!o) setPickMode("pipeline"); }}>
       <DialogContent className="max-w-lg">
+        {pickMode === "project" ? projectPicker : <>
         <DialogHeader>
           <DialogTitle>Import pipeline</DialogTitle>
           <DialogDescription>A pipeline from the Library adds its tabs to the top bar, next to Drawings.</DialogDescription>
@@ -751,6 +838,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
             </div>
           </div>
         ))}
+        </>}
         {error && <p className="text-xs text-rose-600">{error}</p>}
       </DialogContent>
     </Dialog>
@@ -797,6 +885,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   return {
     issuedForSpace, pipelineTitle: loaded?.app.title ?? null,
     tabBar, frame, dialog, openImport: () => { setError(""); setPickOpen(true); }, selectCanvas,
+    openProject: () => { setPickMode("project"); setProjCode(null); setError(""); setApps(null); setPickOpen(true); },
     sideTabs: loaded ? tabs : [], sideActive: loaded && active !== "drawings" ? active : null,
     pickSide: (id) => pick(id ?? "drawings"),
   };

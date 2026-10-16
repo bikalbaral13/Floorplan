@@ -6030,6 +6030,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const pipelineRevealRef = useRef<(() => void) | null>(null);
   const pipelineTabs = usePipelineTabs({ onSelect: (ids) => pipelineSelectRef.current?.(ids), onReveal: () => pipelineRevealRef.current?.() });
   useEffect(() => { if (isMobile) setNavOpen(false); }, [isMobile]);
+  const [planPanelOpen, setPlanPanelOpen] = useState(() => { try { return localStorage.getItem("bp.editor.planPanelOpen") !== "0"; } catch { return true; } });
+  const togglePlanPanel = () => setPlanPanelOpen((o) => { try { localStorage.setItem("bp.editor.planPanelOpen", o ? "0" : "1"); } catch { /* */ } return !o; });
   const toggleNav = () => setNavOpen((o) => { if (!isMobile) saveNavigatorOpen(!o); return !o; });
   /** Layers section: search across layer names and the elements on them; which layer rows are folded open. */
   const [navQuery, setNavQuery] = useState("");
@@ -29551,7 +29553,7 @@ User request: ${aiPrompt.trim()}`;
           );
         })()}
 
-        <div className="mb-3 space-y-1">
+        <div className="mb-2">
           {(() => {
             const allLayers = history.state.layers ?? [];
             const renderRow = (layer: typeof allLayers[number]) => {
@@ -29573,13 +29575,14 @@ User request: ${aiPrompt.trim()}`;
               const expanded = navOpenLayers.has(layer.id) || (!!navQuery && shown.length > 0) || selectedNavElement?.layerId === layer.id;
               return (
                 <div key={layer.id}>
-                <div className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] ${isActive ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                <div className={`group/row relative flex h-7 items-center gap-0.5 rounded-md pl-0.5 pr-1 text-[11.5px] transition-colors ${isActive ? "bg-sky-50 text-sky-900" : "text-slate-700 hover:bg-slate-50"} ${layer.visible ? "" : "text-slate-400"}`}>
+                  {isActive && <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-sky-500" aria-hidden />}
                   <button
                     type="button"
                     title={els.length ? (expanded ? "Hide its elements" : "Show its elements") : "No elements on this layer"}
                     disabled={!els.length}
                     onClick={() => setNavOpenLayers((prev) => { const n = new Set(prev); if (n.has(layer.id)) n.delete(layer.id); else n.add(layer.id); return n; })}
-                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                    className="rounded p-0.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 disabled:invisible"
                   >
                     {expanded && els.length ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   </button>
@@ -29589,39 +29592,38 @@ User request: ${aiPrompt.trim()}`;
                     onClick={() => updateLayer({ visible: !layer.visible })}
                     className="rounded p-0.5 hover:bg-slate-100"
                   >
-                    {layer.visible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                    {layer.visible ? <Eye className="h-3.5 w-3.5 text-slate-600" /> : <EyeOff className="h-3.5 w-3.5 text-slate-300" />}
                   </button>
-                  <button
-                    type="button"
-                    title={layer.locked ? "Unlock layer" : "Lock layer"}
-                    onClick={() => updateLayer({ locked: !layer.locked })}
-                    className="rounded p-0.5 hover:bg-slate-100"
-                  >
-                    {layer.locked ? <Lock className="h-3.5 w-3.5 text-amber-600" /> : <Unlock className="h-3.5 w-3.5 text-slate-400" />}
-                  </button>
-                  <input
-                    type="color"
-                    value={layer.color}
-                    onChange={(e) => updateLayer({ color: e.target.value })}
-                    className="h-4 w-4 cursor-pointer rounded border border-slate-200 p-0"
-                    title="Layer color"
-                  />
+                  <label className="relative mx-1 h-3 w-3 shrink-0 cursor-pointer overflow-hidden rounded-[3px] ring-1 ring-black/10" style={{ backgroundColor: layer.color }} title="Layer color">
+                    <input type="color" value={layer.color} onChange={(e) => updateLayer({ color: e.target.value })} className="absolute inset-0 cursor-pointer opacity-0" />
+                  </label>
                   <input
                     type="text"
                     value={layer.name}
                     onChange={(e) => updateLayer({ name: e.target.value })}
                     disabled={isDefault}
-                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0 text-[11px] hover:border-slate-200 focus:border-slate-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    className={`min-w-0 flex-1 truncate rounded bg-transparent px-1 py-0.5 text-[11.5px] focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-300 disabled:cursor-default ${isActive ? "font-semibold" : ""}`}
                     title={isDefault ? "Default layer name is fixed" : "Rename layer"}
                   />
-                  <input
-                    type="radio"
-                    name="active-layer"
-                    checked={isActive}
-                    onChange={() => setActiveLayerId(layer.id)}
-                    title="Set as active layer"
-                    className="cursor-pointer"
-                  />
+                  {els.length > 0 && <span className="px-1 text-[10px] tabular-nums text-slate-400" title="Elements on this layer">{els.length}</span>}
+                  <button
+                    type="button"
+                    title={layer.locked ? "Unlock layer" : "Lock layer"}
+                    onClick={() => updateLayer({ locked: !layer.locked })}
+                    className={`rounded p-0.5 hover:bg-slate-200/70 ${layer.locked ? "" : "opacity-0 focus:opacity-100 group-hover/row:opacity-100"}`}
+                  >
+                    {layer.locked ? <Lock className="h-3 w-3 text-amber-600" /> : <Unlock className="h-3 w-3 text-slate-400" />}
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={isActive}
+                    onClick={() => setActiveLayerId(layer.id)}
+                    title={isActive ? "Active layer — new elements are drawn here" : "Set as active layer"}
+                    className={`grid h-5 w-5 place-items-center rounded ${isActive ? "" : "opacity-0 hover:bg-slate-200/70 focus:opacity-100 group-hover/row:opacity-100"}`}
+                  >
+                    {isActive ? <Check className="h-3.5 w-3.5 text-sky-600" /> : <span className="h-2.5 w-2.5 rounded-full border border-slate-400" />}
+                  </button>
                   {!isDefault && !isSystem && (
                     <button
                       type="button"
@@ -29640,15 +29642,14 @@ User request: ${aiPrompt.trim()}`;
                           furniture: reassign(h.state.furniture),
                         });
                       }}
-                      className="rounded p-0.5 text-red-500 hover:bg-red-50"
+                      className="rounded p-0.5 text-slate-400 opacity-0 hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover/row:opacity-100"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </button>
                   )}
-                  {els.length > 0 && <span className="rounded-full bg-slate-100 px-1.5 text-[10px] tabular-nums text-slate-500" title="Elements on this layer">{els.length}</span>}
                 </div>
                 {expanded && shown.length > 0 && (
-                  <div className="ml-3 border-l border-slate-200 py-0.5 pl-1">
+                  <div className="ml-[13px] border-l border-slate-200 py-0.5 pl-1.5">
                     {shown.slice(0, 300).map((e) => <ElementRow key={e.key} e={e} on={isElementSelected(e)} onSelect={selectElement} />)}
                     {shown.length > 300 && <p className="px-1.5 py-1 text-[10px] text-slate-400">+{shown.length - 300} more — narrow with the filter</p>}
                   </div>
@@ -29657,6 +29658,20 @@ User request: ${aiPrompt.trim()}`;
               );
             };
 
+            /** A Default / discipline / Site section header: fold chevron, label, count, and an eye for the whole section. */
+            const groupHeader = (label: string, open: boolean, toggle: () => void, allVisible: boolean, setVisible: (v: boolean) => void, count: number) => (
+              <div className="group/hdr flex h-7 items-center gap-1 pl-0.5 pr-1">
+                <button type="button" onClick={toggle} className="flex min-w-0 flex-1 items-center gap-1 rounded py-0.5 text-left">
+                  {open ? <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" /> : <ChevronRight className="h-3 w-3 shrink-0 text-slate-400" />}
+                  <span className={`truncate text-[10px] font-semibold uppercase tracking-[0.08em] ${allVisible ? "text-slate-500" : "text-slate-300"}`}>{label}</span>
+                  <span className="ml-1 rounded bg-slate-100 px-1 text-[9.5px] tabular-nums text-slate-500">{count}</span>
+                </button>
+                <button type="button" title={allVisible ? `Hide all ${label} layers` : `Show all ${label} layers`} onClick={() => setVisible(!allVisible)}
+                  className={`rounded p-0.5 hover:bg-slate-200/70 ${allVisible ? "opacity-0 focus:opacity-100 group-hover/hdr:opacity-100" : ""}`}>
+                  {allVisible ? <Eye className="h-3.5 w-3.5 text-slate-500" /> : <EyeOff className="h-3.5 w-3.5 text-slate-300" />}
+                </button>
+              </div>
+            );
             const siteLayers = allLayers.filter((l) => SITE_GROUP_LAYER_IDS.has(l.id));
             // "Default" group: built-in Layer 0 plus the Image underlay, whose eye hides / shows the
             // reference image. The Floorplan Tracer schema's Settings block still drives the same flag,
@@ -29690,27 +29705,10 @@ User request: ${aiPrompt.trim()}`;
             return (
               <>
                 {defaultGroupLayers.length > 0 && (
-                  <div className="rounded border border-slate-200 bg-slate-50">
-                    <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
-                      <button
-                        type="button"
-                        title={allDefaultVisible ? "Hide all Default layers" : "Show all Default layers"}
-                        onClick={() => setAllDefaultVisible(!allDefaultVisible)}
-                        className="rounded p-0.5 hover:bg-slate-200"
-                      >
-                        {allDefaultVisible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDefaultLayerGroupExpanded((v) => !v)}
-                        className="flex flex-1 items-center justify-between rounded px-1 py-0.5 text-left font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-200"
-                      >
-                        <span>Default</span>
-                        <span className="text-[10px] text-slate-400">{defaultLayerGroupExpanded ? "▼" : "▶"} {defaultGroupLayers.length}</span>
-                      </button>
-                    </div>
+                  <div>
+                    {groupHeader("Default", defaultLayerGroupExpanded, () => setDefaultLayerGroupExpanded((v) => !v), allDefaultVisible, setAllDefaultVisible, defaultGroupLayers.length)}
                     {defaultLayerGroupExpanded && (
-                      <div className="space-y-1 border-t border-slate-200 bg-white p-1">
+                      <div className="space-y-px pb-1">
                         {defaultGroupLayers.map(renderRow)}
                         {/* Display layers (Grid / Space / Nodes / Segments) — visibility only (no entities,
                             so no color / active / delete). Undeletable; live below Map. */}
@@ -29720,16 +29718,18 @@ User request: ${aiPrompt.trim()}`;
                           { label: "Nodes", key: "nodes" as const },
                           { label: "Segments", key: "segments" as const },
                         ]).map(({ label, key }) => (
-                          <div key={key} className="flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px]">
+                          <div key={key} className={`flex h-7 items-center gap-0.5 rounded-md pl-[18px] pr-1 text-[11.5px] hover:bg-slate-50 ${layerVisibility[key] ? "text-slate-500" : "text-slate-300"}`}>
                             <button
                               type="button"
                               title={layerVisibility[key] ? `Hide ${label}` : `Show ${label}`}
                               onClick={() => setLayerVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
-                              className="rounded p-0.5 hover:bg-slate-100"
+                              className="rounded p-0.5 hover:bg-slate-200/70"
                             >
-                              {layerVisibility[key] ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                              {layerVisibility[key] ? <Eye className="h-3.5 w-3.5 text-slate-500" /> : <EyeOff className="h-3.5 w-3.5 text-slate-300" />}
                             </button>
-                            <span className="min-w-0 flex-1 px-1 py-0 text-[11px] text-slate-600">{label}</span>
+                            <span className="mx-1 h-3 w-3 shrink-0 rounded-[3px] border border-dashed border-slate-300" aria-hidden />
+                            <span className="min-w-0 flex-1 px-1">{label}</span>
+                            <span className="text-[9px] uppercase tracking-wide text-slate-300">display</span>
                           </div>
                         ))}
                       </div>
@@ -29744,51 +29744,18 @@ User request: ${aiPrompt.trim()}`;
                   const open = !collapsedLayerGroups.has(group);
                   const ids = new Set(members.map((l) => l.id));
                   return (
-                    <div key={`grp-${group}`} className="rounded border border-slate-200 bg-slate-50">
-                      <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
-                        <button
-                          type="button"
-                          title={allVisible ? `Hide all ${group} layers` : `Show all ${group} layers`}
-                          onClick={() => history.set({ ...history.state, layers: (history.state.layers ?? []).map((l) => (ids.has(l.id) ? { ...l, visible: !allVisible } : l)) })}
-                          className="rounded p-0.5 hover:bg-slate-200"
-                        >
-                          {allVisible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCollapsedLayerGroups((prev) => { const next = new Set(prev); if (next.has(group)) next.delete(group); else next.add(group); return next; })}
-                          className="flex flex-1 items-center justify-between rounded px-1 py-0.5 text-left font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-200"
-                        >
-                          <span>{group}</span>
-                          <span className="text-[10px] text-slate-400">{open ? "▼" : "▶"} {members.length}</span>
-                        </button>
-                      </div>
-                      {open && <div className="space-y-1 border-t border-slate-200 bg-white p-1">{members.map(renderRow)}</div>}
+                    <div key={`grp-${group}`} className="border-t border-slate-100 pt-1">
+                      {groupHeader(group, open, () => setCollapsedLayerGroups((prev) => { const next = new Set(prev); if (next.has(group)) next.delete(group); else next.add(group); return next; }),
+                        allVisible, (v) => history.set({ ...history.state, layers: (history.state.layers ?? []).map((l) => (ids.has(l.id) ? { ...l, visible: v } : l)) }), members.length)}
+                      {open && <div className="space-y-px pb-1">{members.map(renderRow)}</div>}
                     </div>
                   );
                 })}
                 {siteLayers.length > 0 && (
-                  <div className="rounded border border-slate-200 bg-slate-50">
-                    <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
-                      <button
-                        type="button"
-                        title={allSiteVisible ? "Hide all Site layers" : "Show all Site layers"}
-                        onClick={() => setAllSiteVisible(!allSiteVisible)}
-                        className="rounded p-0.5 hover:bg-slate-200"
-                      >
-                        {allSiteVisible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSiteLayerGroupExpanded((v) => !v)}
-                        className="flex flex-1 items-center justify-between rounded px-1 py-0.5 text-left font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-200"
-                      >
-                        <span>Site</span>
-                        <span className="text-[10px] text-slate-400">{siteLayerGroupExpanded ? "▼" : "▶"} {siteLayers.length}</span>
-                      </button>
-                    </div>
+                  <div className="border-t border-slate-100 pt-1">
+                    {groupHeader("Site", siteLayerGroupExpanded, () => setSiteLayerGroupExpanded((v) => !v), allSiteVisible, setAllSiteVisible, siteLayers.length)}
                     {siteLayerGroupExpanded && (
-                      <div className="space-y-1 border-t border-slate-200 bg-white p-1">
+                      <div className="space-y-px pb-1">
                         {siteLayers.map(renderRow)}
                       </div>
                     )}
@@ -31435,6 +31402,7 @@ User request: ${aiPrompt.trim()}`;
     { id: "image-lib", icon: <CloudDownload className="h-4 w-4 text-sky-600" />, label: "Image from Library", hint: "An underlay from the Library's Images", onSelect: () => setImportImageOpen(true) },
     { id: "map", icon: <MapPin className="h-4 w-4 text-sky-600" />, label: "Map", hint: "A .geojson site or map file", onSelect: () => geojsonInputRef.current?.click() },
     { id: "moodboard", icon: <Palette className="h-4 w-4 text-amber-600" />, label: "Moodboard", hint: "Picks from a Library moodboard", onSelect: () => setMoodboardOpen(true) },
+    { id: "project", icon: <FolderOpen className="h-4 w-4 text-emerald-600" />, label: "Project", hint: "A project from R2 Projects/ — its canvas and its pipeline's tabs", onSelect: pipelineTabs.openProject },
     { id: "pipeline", icon: <Workflow className="h-4 w-4 text-violet-600" />, label: "Pipeline", hint: "A Library pipeline's tabs (Schedule, Review, …) in the top bar", onSelect: pipelineTabs.openImport },
   ];
   const exportOptions: FilePickerOption[] = [
@@ -31644,7 +31612,7 @@ User request: ${aiPrompt.trim()}`;
       <div className="relative flex h-[calc(100%-64px)] gap-2 p-2">
         {pipelineTabs.dialog}
         {/* Left navigation bar — the R2 Library as a foldable, resizable tree (replaces Files ▸ Inspect). */}
-        {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} preferences={preferencesBody} open={navOpen} onToggle={toggleNav} planSections={navigatorPlanSections} query={navQuery} onQuery={setNavQuery} />}
+        {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} preferences={preferencesBody} open={navOpen} onToggle={toggleNav} query={navQuery} onQuery={setNavQuery} />}
         {/* Floating, draggable Drawing toolbar (SketchUp-style). Fixed-positioned over the canvas; drag
             it anywhere by the top grip handle. Hidden from Preferences ▸ Show on screen. */}
         <div
@@ -32076,6 +32044,20 @@ User request: ${aiPrompt.trim()}`;
 
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
+        {/* Drawings + Layers float on the canvas's left edge, folded behind a chevron (they belong to the canvas,
+            not the Library navigator). Clear of the default Drawing toolbar position. */}
+        <div className="absolute bottom-0 left-0 top-0 z-20 flex items-start">
+          {planPanelOpen && (
+            <div className="flex h-full w-72 flex-col gap-2 overflow-y-auto rounded-l-xl border-r border-slate-200 bg-white p-2 shadow-md">
+              {navigatorPlanSections}
+            </div>
+          )}
+          <button type="button" onClick={togglePlanPanel}
+            title={planPanelOpen ? "Hide Drawings & Layers" : "Show Drawings & Layers"} aria-label="Toggle Drawings and Layers"
+            className="ml-1 mt-1 rounded-md border border-slate-200 bg-white/95 p-1 text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900">
+            {planPanelOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        </div>
         {/* Navigation tools float at the top centre of the canvas (Phase + render mode live in Preferences). */}
         {/* Phone: docked flush to the canvas top edge, between the two edge chevrons (navigator left, Properties right). */}
         <div className={`absolute left-1/2 z-30 -translate-x-1/2 border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur ${isMobile ? "top-0 rounded-b-xl border-t-0" : "top-3 rounded-xl"}`}>
