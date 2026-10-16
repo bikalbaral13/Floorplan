@@ -230,7 +230,7 @@
    "next": "AGENT: write resolve.json (item -> object + real param ids + host + materials) to {STEPS}S4_RESOLVE/resolve.json, then queue S4_CHECK."
   },
   "S4_CHECK": {
-   "title": "Check every item is bound to a real object, params and material",
+   "title": "Apply the user's Objects sign-off (if any), then check every item is bound to a real object, params and material",
    "pull": [
     {
      "from": "{STEPS}S2_BRIEF/roombrief.json",
@@ -247,9 +247,19 @@
     {
      "from": "{STEPS}S4_RESOLVE/catalog.json",
      "to": "{WORK}/catalog.json"
+    },
+    {
+     "from": "{STEPS}S4_RESOLVE/review.json",
+     "to": "{PROJ}/review.json",
+     "optional": true
     }
    ],
    "run": [
+    [
+     "python",
+     "tools/review_apply.py",
+     "{PROJ}"
+    ],
     [
      "python",
      "tools/resolve_check.py",
@@ -261,8 +271,22 @@
     {
      "from": "{PROJ}/resolve.json",
      "to": "{STEPS}S4_RESOLVE/resolve.checked.json"
+    },
+    {
+     "from": "{PROJ}/resolve.json",
+     "to": "{STEPS}S4_RESOLVE/resolve.json"
+    },
+    {
+     "from": "{PROJ}/roombrief.json",
+     "to": "{STEPS}S2_BRIEF/roombrief.json"
+    },
+    {
+     "from": "{PROJ}/review.todo.json",
+     "to": "{STEPS}S4_RESOLVE/review.todo.json",
+     "optional": true
     }
-   ]
+   ],
+   "next": "If review.todo.json lists items, Claude rebinds their params in resolve.json and re-queues S4_CHECK; then S5_COMPOSE."
   },
   "S5_COMPOSE": {
    "title": "Place every object on the room canvas",

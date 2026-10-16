@@ -94,15 +94,16 @@ their questions and never approve a step yourself.
 | 8. Draft brief | `project.job S2_DRAFT { project, room }` (from `questions.json` `room_ids[answers.room]`) | — |
 | 9. Curate | read `steps/S2_BRIEF/roombrief.draft.json` + the slide images (`library.read Projects/<CODE>/3-build/build-from-deck/steps/S1_INTAKE/…`); write `steps/S2_BRIEF/roombrief.curated.json` (`library.write`); `project.job S2_FINALIZE` | approves **Brief** |
 | 10. Geometry | read the plan image; write `steps/S3_GEOMETRY/trace.px.json`; `project.job S3_GEOMETRY` | approves **Plan** (geometry_check.png) |
-| 11. Objects | `project.job S4_CATALOG`; read `catalog.json`; write `steps/S4_RESOLVE/resolve.json`; `project.job S4_CHECK` | approves **Objects** |
+| 11. Objects | `project.job S4_CATALOG`; read `catalog.json`; write `steps/S4_RESOLVE/resolve.json`. The **Objects** tab then shows every item as a product page; the user approves / changes / omits / asks, then **signs off** there (writes `steps/S4_RESOLVE/review.json`, event `review`). `pipeline.events { wait: true }` until `review` with `status: "approved"`; answer any questions in chat first. Then `project.job S4_CHECK` (applies the review, then checks); if `steps/S4_RESOLVE/review.todo.json` lists items, rebind their params in `resolve.json` and re-queue S4_CHECK. Never sign off for them | reviews + signs off **Objects** |
 | 12. Room | `project.job S5_COMPOSE`; load `output/<CODE>.room.canvas.json` in the editor for them | approves **Room** |
 | 13. Drawings | `project.job S6_DRAWINGS` → `output/drawings/` (+ `media/drawings/`) | approves **Drawings** |
+| 13b. 3D | `project.job S7_3D` → `output/3d/` (.blend .fbx .glb + snapshots; also `media/renders/`) | — |
 | 14. Close | `pipeline.advance` after each approval; `project.status` to report | — |
 
 The file formats for steps 9–11 are in the pipeline's `AGENTS.md` (`library/Pipelines/Build/build-from-deck-pipeline/`).
 Script stages run on **the runner** — `node tools/runner/worker.mjs` on a machine with the repo and Python. A job
 `queued` for over a minute means no runner is online: tell the user to start it; do not try to run the stage yourself.
-Render (S7) and QA (S8) are not in the runner yet.
+S7_3D (Blender) runs on the runner too; QA (S8) is not in the runner yet.
 
 ---
 

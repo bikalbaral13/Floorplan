@@ -186,14 +186,108 @@
           ["what", function (i) { return i.name || i.title || (i.text || "").split("\n")[0] || (i.object && i.object.kind) || ""; }], ["slides", function (i) { return (i.slides || []).join(", "); }]]);
     });
   }
-  function renderObjects() {
-    var f = files.has("S4_RESOLVE/resolve.json") ? "S4_RESOLVE/resolve.json" : null;
-    if (!f) { $("#objects").innerHTML = '<div class="empty">Claude writes resolve.json after the catalog snapshot.</div>'; return; }
-    readJson(STEPS + f).then(function (r) {
-      var items = (r && (r.items || r.bindings)) || [];
-      $("#objects").innerHTML = table(items, [["item", function (i) { return i.id || i.item || i.specId || ""; }], ["status", function (i) { return i.status || ""; }],
-        ["object", function (i) { return i.object || ""; }], ["material", function (i) { return (i.params && i.params.materialPath) || ""; }]]);
+  // ── Objects: the review UI (review.html — the "Reception Selections" page) in a frame. app.js builds its data from
+  // the project (roombrief + resolve + catalog, any earlier review) and answers its bp-host/* requests from R2.
+  // Sign-off writes steps/S4_RESOLVE/review.json; S4_CHECK applies it (tools/review_apply.py) before checking.
+  var REVIEW = { frame: null, sig: null, data: null };
+  var REVIEW_PATH = STEPS + "S4_RESOLVE/review.json", DRAFT_PATH = STEPS + "S4_RESOLVE/review.draft.json";
+  function hash(t) { var h1 = 5381, h2 = 52711; for (var i = 0; i < t.length; i++) { var c = t.charCodeAt(i); h1 = (h1 * 33) ^ c; h2 = (h2 * 33) ^ c; } return ((h1 >>> 0).toString(16) + (h2 >>> 0).toString(16)).slice(0, 16); }
+  var TRADE = { floor: "Floor", ceiling: "Ceiling", joinery: "Joinery", "wall-finish": "Wall finishes", wall: "Walls", partition: "Partition", furniture: "Furniture",
+    "soft-furnishing": "Soft furnishing", lighting: "Lighting", planting: "Planting", entourage: "People and entourage", services: "Services and fittings", other: "Other" };
+  function human(k) {
+    var mm = /_mm$/.test(k); k = k.replace(/_mm$/, "").replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+    return k.charAt(0).toUpperCase() + k.slice(1) + (mm ? " (mm)" : "");
+  }
+  function fieldOf(k, v) {
+    var t = typeof v === "boolean" ? "bool" : typeof v === "number" ? "number"
+      : /^#[0-9a-f]{6}$/i.test(v) ? "colour" : /^#[0-9a-f]{6}(\s*,\s*#[0-9a-f]{6})+$/i.test(v) ? "colours"
+      : /material|finish/i.test(k) || /\.json$/.test(String(v)) ? "material" : "text";
+    return { key: k, label: human(k), value: v, type: t, locked: false, deck: v };
+  }
+  function nameOf(it) {
+    if (it.name) return it.name;
+    var h = String((it.object && it.object.hint) || "").replace(/^NEW:\s*/i, "").split(/[,;(]/)[0].trim();
+    var k = String((it.object && it.object.kind) || it.id).replace(/[-_]+/g, " ");
+    var n = h || k;
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+  function buildReview() {
+    return Promise.all([readJson(STEPS + "S2_BRIEF/roombrief.json"), readJson(STEPS + "S4_RESOLVE/resolve.json"), readJson(STEPS + "S4_RESOLVE/catalog.json"), readJson(REVIEW_PATH)]).then(function (a) {
+      var brief = a[0], res = a[1] || { bindings: [] }, cat = a[2] || { objects: [], materials: [] }, prev = (a[3] && a[3].items) || {};
+      if (!brief) return null;
+      var by = {}; (res.bindings || []).forEach(function (b) { by[b.item] = b; });
+      var images = {}, cats = [];
+      var items = brief.items.map(function (it) {
+        var b = by[it.id] || {}, bp = b.params || {}, pv = prev[it.id] || null;
+        var pipe = b.pipeline || { object: b.status === "render-only" ? "render-only" : b.object || "new", material: bp.materialPath || null, status: b.status || "new-object", source: "resolve" };
+        var cur = pv && pv.library ? { object: pv.library.object, material: pv.library.material } : { object: pipe.object, material: pipe.material };
+        (it.refImages || []).forEach(function (f) { images[f] = P.url(STEPS + "S1_INTAKE/" + f); });
+        if (cats.indexOf(it.category) < 0) cats.push(it.category);
+        return { id: it.id, name: nameOf(it), category: it.category, zone: it.zone, slides: it.slides || [], note: it.note || "",
+          object: it.object || {}, productUrls: it.productUrls || [], refImages: it.refImages || [],
+          fields: Object.keys(it.params || {}).map(function (k) { return fieldOf(k, it.params[k]); }),
+          omit: b.status === "omitted", review: pv ? { decision: pv.decision, comment: pv.comment || "" } : null,
+          library: { object: pipe.object, material: pipe.material, status: pipe.status, note: b.gap || b.note || "", source: "resolve", matches: [], materialMatches: [], pipeline: pipe, current: cur } };
+      });
+      var zones = {}; (brief.zones || []).forEach(function (z) { zones[z.id] = { label: z.label, points: z.points_px || z.points || [] }; });
+      var pl = brief.plan || {};
+      var objects = (cat.objects || []).map(function (o) { return { path: o.path, title: String(o.title || o.id || o.path).split(" — ")[0], trade: "other" }; });
+      var materials = (cat.materials || []).map(function (m) { return { path: m.path.replace(/^Materials\//, ""), title: String(m.title || m.id).split(" — ").pop(), category: m.category || "" }; });
+      var data = { schema: "roombrief.review-page/1", code: P.project, project: brief.project || "", room: brief.room || "", generated: new Date().toISOString(),
+        precedence: brief.precedence || "", heights: brief.heights_mm || {}, zones: zones,
+        plan: pl.file && pl.px ? { src: P.url(STEPS + "S1_INTAKE/" + pl.file), box: pl.room_view_px || [0, 0, pl.px[0], pl.px[1]], full: pl.px } : null,
+        images: images, items: items, simulateModels: false,
+        suggest: { kinds: items.map(function (i) { return i.object.kind; }).filter(Boolean), materials: materials.map(function (m) { return m.path; }) },
+        categories: cats.map(function (c) { return { id: c, label: TRADE[c] || human(c) }; }),
+        library: { objects: objects, materials: materials, special: { "new": "None fits: needs a new library object", "render-only": "Render only (not placed on the plan)" }, tradeLabels: TRADE, source: "catalog.json" },
+        applyCmd: "Sign off here; S4_CHECK applies the decisions", previous: null, compose: null,
+        host: { decisionsPath: REVIEW_PATH, draftPath: DRAFT_PATH, composeGatePath: STEPS + "S5_COMPOSE/compose-gate.json" } };
+      data.briefSha = hash(JSON.stringify(brief.items) + JSON.stringify(res.bindings || []));
+      return data;
     });
+  }
+  function counts(dec, n) {
+    var c = { approve: 0, changed: 0, question: 0, omit: 0 };
+    Object.keys(dec.items || {}).forEach(function (k) { var d = dec.items[k].decision; if (c[d] != null) c[d]++; });
+    c.pending = n - c.approve - c.changed - c.question - c.omit; return c;
+  }
+  // the review page's host: bp-host/* requests answered from R2 through window.pipeline
+  window.addEventListener("message", function (e) {
+    var f = REVIEW.frame; if (!f || e.source !== f.contentWindow) return;
+    var m = e.data || {}, w = f.contentWindow;
+    var reply = function (o) { w.postMessage(Object.assign({ type: "bp-host/response", id: m.id }, o), "*"); };
+    var fail = function (err) { reply({ ok: false, error: String(err && err.message || err) }); };
+    if (m.type === "bp-review/want-data" && REVIEW.data) w.postMessage({ type: "bp-review/data", data: REVIEW.data }, "*");
+    else if (m.type === "bp-host/hello") w.postMessage({ type: "bp-host/ready", v: 1, capabilities: ["library.read", "library.write", "pipeline.run"], user: { name: "" } }, "*");
+    else if (m.type === "bp-host/request") {
+      var a = m.args || {};
+      if (m.op === "library.read") P.read(a.path).then(function (t) { reply({ ok: true, content: t }); }, fail);
+      else if (m.op === "library.write") P.write(a.path, a.content).then(function () { reply({ ok: true }); }, fail);
+      else if (m.op === "pipeline.run" && a.step === "review.apply") {
+        readJson(REVIEW_PATH).then(function (dec) {
+          if (!dec) throw new Error("review.json was not saved");
+          var c = counts(dec, REVIEW.data.items.length), status = c.pending || c.question ? "open" : "approved";
+          P.emit("review", { status: status, reviewer: dec.reviewer, counts: c, path: REVIEW_PATH });
+          P.notify(status === "approved" ? "Objects signed off by " + (dec.reviewer || "the reviewer") + ": S4_CHECK applies them" : "Objects review saved: " + c.pending + " to review, " + c.question + " questions", status === "approved" ? "success" : "info");
+          reply({ ok: true, result: { status: status, reviewer: dec.reviewer, counts: c } });
+        }).catch(fail);
+      } else if (m.op === "pipeline.run" && a.step === "compose") P.job("S5_COMPOSE", {}).then(function () { reply({ ok: true, result: { queued: "S5_COMPOSE" } }); }, fail);
+      else reply({ ok: false, error: "not offered here: " + m.op });
+    }
+  });
+  function renderObjects() {
+    var el = $("#objects");
+    if (!files.has("S4_RESOLVE/resolve.json")) { REVIEW.sig = null; el.innerHTML = '<div class="empty">Claude writes resolve.json after the catalog snapshot; the review opens here then.</div>'; return; }
+    var sig = [files.has("S4_RESOLVE/catalog.json"), files.has("S2_BRIEF/roombrief.json")].join();
+    if (REVIEW.sig === sig && REVIEW.frame && el.contains(REVIEW.frame)) return;
+    REVIEW.sig = sig;
+    buildReview().then(function (d) {
+      if (!d) { el.innerHTML = '<div class="empty">No room brief yet.</div>'; return; }
+      REVIEW.data = d;
+      var f = document.createElement("iframe");
+      f.className = "review"; f.title = "Objects review"; f.src = "review.html";
+      el.innerHTML = ""; el.appendChild(f); REVIEW.frame = f;
+    }, function (err) { el.innerHTML = '<div class="empty">Could not build the review: ' + esc(err && err.message || err) + "</div>"; });
   }
   function renderRoom() {
     var f = "S5_COMPOSE/" + P.project + ".room.canvas.json";

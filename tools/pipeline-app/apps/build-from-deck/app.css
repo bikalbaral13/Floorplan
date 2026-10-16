@@ -36,3 +36,4 @@ button:disabled { opacity: .45; cursor: default; }
 .table th, .table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 12px; }
 .table th { color: var(--muted); font-weight: 600; }
 .empty { padding: 16px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; margin-top: 10px; text-align: center; }
+iframe.review { width: 100%; height: calc(100vh - 150px); min-height: 520px; border: 1px solid var(--line); border-radius: 10px; background: #fff; margin-top: 10px; }

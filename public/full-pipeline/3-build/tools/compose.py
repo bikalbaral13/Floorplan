@@ -146,6 +146,9 @@ def main(project_dir):
 
     for b in res["bindings"]:
         it, st, path, h = b["item"], b["status"], b["object"], b["host"]
+        if st == "omitted":
+            C.log.append(f"{it}: omitted in the review")
+            continue
         if st == "render-only":
             C.log.append(f"{it}: render-only ({b.get('note', '')})")
             continue

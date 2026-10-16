@@ -43,7 +43,7 @@ def main(project_dir, catalog_path):
             problems.append(f"{it['id']}: no binding")
     for b in res["bindings"]:
         tag = b["item"]
-        if b["status"] == "render-only":
+        if b["status"] in ("render-only", "omitted"):
             continue
         params = objects.get(b["object"])
         if params is None:
