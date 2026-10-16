@@ -84,6 +84,14 @@ def main(project_dir, deck_dir):
     code = P.name
     tr = json.loads((P / "trace.px.json").read_text(encoding="utf-8"))
     brief = json.loads((P / "roombrief.json").read_text(encoding="utf-8"))
+    # The deck's drawn zone can be a callout, not the room outline (a short deck extract): the trace may give the real
+    # ring for a zone — trace.zones [{ id, ring_px, why }] — which then replaces the brief's points for this stage.
+    for zt in tr.get("zones", []):
+        z = next((z for z in brief["zones"] if z["id"] == zt["id"]), None)
+        if z is None:
+            raise SystemExit(f"trace zone {zt['id']} is not a zone of the brief ({[z['id'] for z in brief['zones']]})")
+        z["points_px"] = [list(map(float, p)) for p in zt["ring_px"]]
+        z["outline_src"] = f"trace ({zt.get('why', 'measured on the plan')})"
     items = {i["id"]: i for i in brief["items"]}
     findings = []
 
@@ -94,6 +102,9 @@ def main(project_dir, deck_dir):
     ox, oy = tr["origin_px"]
     W = lambda p: [round((p[0] - ox) * m_per_px, 4), round((oy - p[1]) * m_per_px, 4)]
     findings.append(f"scale {m_per_px * 1000:.2f} mm/px ({tr['scale']['method']})")
+    for z in brief["zones"]:
+        if z.get("outline_src"):
+            findings.append(f"zone {z['id']} outline from the {z['outline_src']}")
 
     # walls must sit on the designer's zone outlines
     rings = [z["points_px"] for z in brief["zones"]]
@@ -189,7 +200,12 @@ def check_png(D, brief, plan, ox, oy, ppm, tr, out):
     from PIL import Image, ImageDraw
     im = Image.open(D / brief["plan"]["file"]).convert("RGB")
     S = 4
-    x0, y0, x1, y1 = 380, 425, 640, 615
+    # crop around what was traced (walls, zones, hints) + a margin — not a fixed window
+    xs = [p[0] for w in tr["walls"] for p in (w["a"], w["b"])] + [p[0] for z in brief["zones"] for p in z["points_px"]]
+    ys = [p[1] for w in tr["walls"] for p in (w["a"], w["b"])] + [p[1] for z in brief["zones"] for p in z["points_px"]]
+    W0, H0 = im.size
+    x0, y0 = max(0, int(min(xs)) - 25), max(0, int(min(ys)) - 25)
+    x1, y1 = min(W0, int(max(xs)) + 25), min(H0, int(max(ys)) + 25)
     im = im.crop((x0, y0, x1, y1)).resize(((x1 - x0) * S, (y1 - y0) * S), Image.LANCZOS)
     d = ImageDraw.Draw(im, "RGBA")
     P = lambda p: ((p[0] * ppm + ox - x0) * S, (-p[1] * ppm + oy - y0) * S)

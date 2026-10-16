@@ -1,0 +1,46 @@
+{
+ "schema": "runner/1",
+ "pipeline": "floorplan-tracer",
+ "phase": "program",
+ "note": "The Floorplan Tracer driven through the runner (tools/runner/worker.mjs) from a chat: the project's whole state (projects/<CODE>/ incl. its work dir) lives in R2 at {DIR}state/; every stage pulls it, runs, and pushes it back. The agent writes scope.json (the USER's answers), reading.json and layout.json into {DIR}state/ with library.write and reads the measuring aids from {DIR}steps/aids/. Gated tasks carry the USER's approval words in args.approved — never the agent's.",
+ "stages": {
+  "T_NEW": {
+   "title": "Start the tracer project from a plan image (optionally cropped to the part to trace)",
+   "args": { "source": "R2 key of the plan image, e.g. Projects/<CODE>/3-build/build-from-deck/steps/S1_INTAKE/images/<file>.png", "crop": "optional x0,y0,x1,y1 in source px", "title": "optional" },
+   "pull": [
+    { "from": "{ARG:source}", "to": "{WORK}/source/{BASENAME:source}" },
+    { "from": "{DIR}state/", "to": "{ROOT}/projects/{CODE}/", "clean": true, "optional": true }
+   ],
+   "run": [ ["python", "tools/runner_intake.py", "{CODE}", "{WORK}/source/{BASENAME:source}", "{IF:crop:--crop}", "{ARG?:crop}", "{IF:title:--title}", "{ARG?:title}"] ],
+   "push": [ { "from": "{ROOT}/projects/{CODE}/", "to": "{DIR}state/" } ],
+   "next": "Ask the USER the scope questions (source kind, who sets the scale, what to place); write their answers to {DIR}state/scope.json (answered_by: user), then queue T_TASK { task: S0_SCOPE, approved: \"<their words>\" }."
+  },
+  "T_TASK": {
+   "title": "Run one tracer task (S0_SCOPE … S8_REVIEW); gated ones need args.approved = the user's words",
+   "args": { "task": "S0_SCOPE | S1_INTAKE | S2_READ | S3_DIMENSIONS | S4_LAYOUT | S5_BUILD | S6_VERIFY | S7_EXPORT | S8_REVIEW", "approved": "the USER's approval, verbatim + date (gated tasks only)" },
+   "pull": [ { "from": "{DIR}state/", "to": "{ROOT}/projects/{CODE}/", "clean": true } ],
+   "run": [ ["python", "tools/run_task.py", "{CODE}", "--task", "{ARG:task}", "{IF:approved:--approved}", "{ARG?:approved}"] ],
+   "push": [
+    { "from": "{ROOT}/projects/{CODE}/", "to": "{DIR}state/" },
+    { "from": "{ROOT}/projects/{CODE}/work/out/*", "to": "{OUT}", "optional": true },
+    { "from": "{ROOT}/projects/{CODE}/work/*.png", "to": "{STEPS}{ARG:task}/", "optional": true },
+    { "from": "{ROOT}/projects/{CODE}/work/qc.md", "to": "{STEPS}{ARG:task}/qc.md", "optional": true }
+   ]
+  },
+  "T_WALLBANDS": {
+   "title": "Measure wall bands, openings and columns on the project's plan image (pixels)",
+   "args": { "image": "path inside the project, default inputs/plan.png", "dark": "optional gray threshold (default 105)", "min_run": "optional (default 32)" },
+   "pull": [ { "from": "{DIR}state/", "to": "{ROOT}/projects/{CODE}/", "clean": true } ],
+   "run": [ ["python", "tools/wallbands.py", "{ROOT}/projects/{CODE}/inputs/plan.png", "{WORK}/aids/wallbands.json", "{IF:dark:--dark}", "{ARG?:dark}", "{IF:min_run:--min-run}", "{ARG?:min_run}"] ],
+   "push": [ { "from": "{WORK}/aids/*", "to": "{STEPS}aids/" } ],
+   "next": "Read {STEPS}aids/wallbands.json and its .png (bands magenta, gaps green, columns violet) — write reading.json from them."
+  },
+  "T_ZOOM": {
+   "title": "A gridded zoom crop of the project's plan image, to read doors / symbols in exact image pixels",
+   "args": { "x0": "", "y0": "", "x1": "", "y1": "crop of inputs/plan.png (its own px)", "scale": "optional (default 4)", "name": "output name, e.g. door-n" },
+   "pull": [ { "from": "{DIR}state/", "to": "{ROOT}/projects/{CODE}/", "clean": true } ],
+   "run": [ ["python", "tools/grid_crops.py", "{ROOT}/projects/{CODE}/inputs/plan.png", "{ARG:x0}", "{ARG:y0}", "{ARG:x1}", "{ARG:y1}", "{WORK}/aids/zoom-{ARG:name}.png", "{IF:scale:--scale}", "{ARG?:scale}"] ],
+   "push": [ { "from": "{WORK}/aids/zoom-{ARG:name}.png", "to": "{STEPS}aids/zoom-{ARG:name}.png" } ]
+  }
+ }
+}

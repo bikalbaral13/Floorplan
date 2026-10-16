@@ -2,109 +2,348 @@
  "schema": "runner/1",
  "pipeline": "build-from-deck",
  "phase": "build",
- "note": "The script stages tools/runner/worker.mjs runs when a job file Projects/<CODE>/3-build/build-from-deck/jobs/<STAGE>.json is queued (connector project.job, or the Build app). Judgement stages are the chat agent's: it reads steps/ files with library.read and writes its answer to the 'agent writes' key, then queues the next script stage. Placeholders: {CODE} {WORK} (local scratch) {PROJ} (local project dir) {STEPS} {OUT} {DIR} (R2 keys) {ARG:x} {BASENAME:x} {REPO}. pull from a key ending '/' copies the whole prefix.",
+ "note": "The script stages tools/runner/worker.mjs runs when a job file Projects/<CODE>/3-build/build-from-deck/jobs/<STAGE>.json is queued (connector project.job, or the Build app). Judgement stages are the chat agent's: it reads steps/ files with library.read and writes its answer to the 'agent writes' key, then queues the next script stage. Placeholders: {CODE} {WORK} (local scratch) {PROJ} (local project dir) {STEPS} {OUT} {DIR} (R2 keys) {ARG:x} {BASENAME:x} {REPO}. pull from a key ending '/' copies the whole prefix. S3 walls come from the Floorplan Tracer pipeline (S3_FROM_TRACER), never hand-read pixels.",
  "stages": {
   "S1_INTAKE": {
    "title": "Read the deck (PPTX or PDF) and list the questions",
-   "args": { "deck": "inputs/decks/<file> (relative to the project)" },
-   "pull": [ { "from": "Projects/{CODE}/{ARG:deck}", "to": "{WORK}/input/{BASENAME:deck}" } ],
+   "args": {
+    "deck": "inputs/decks/<file> (relative to the project)"
+   },
+   "pull": [
+    {
+     "from": "Projects/{CODE}/{ARG:deck}",
+     "to": "{WORK}/input/{BASENAME:deck}"
+    }
+   ],
    "run": [
-    ["python", "tools/intake.py", "{WORK}/input/{BASENAME:deck}", "{WORK}/deck"],
-    ["python", "tools/questions.py", "{WORK}/deck", "{WORK}/deck/questions.json"]
+    [
+     "python",
+     "tools/intake.py",
+     "{WORK}/input/{BASENAME:deck}",
+     "{WORK}/deck"
+    ],
+    [
+     "python",
+     "tools/questions.py",
+     "{WORK}/deck",
+     "{WORK}/deck/questions.json"
+    ]
    ],
    "push": [
-    { "from": "{WORK}/deck/deck.json", "to": "{STEPS}S1_INTAKE/deck.json" },
-    { "from": "{WORK}/deck/questions.json", "to": "{STEPS}S1_INTAKE/questions.json" },
-    { "from": "{WORK}/deck/images/*", "to": "{STEPS}S1_INTAKE/images/" },
-    { "from": "{WORK}/deck/pages/*", "to": "{STEPS}S1_INTAKE/pages/" }
+    {
+     "from": "{WORK}/deck/deck.json",
+     "to": "{STEPS}S1_INTAKE/deck.json"
+    },
+    {
+     "from": "{WORK}/deck/questions.json",
+     "to": "{STEPS}S1_INTAKE/questions.json"
+    },
+    {
+     "from": "{WORK}/deck/images/*",
+     "to": "{STEPS}S1_INTAKE/images/"
+    },
+    {
+     "from": "{WORK}/deck/pages/*",
+     "to": "{STEPS}S1_INTAKE/pages/"
+    }
    ],
    "next": "The USER answers the Questions tab (answers/main in the app store). Then queue S2_DRAFT with { project, room } from their answer."
   },
   "S2_DRAFT": {
    "title": "Draft the room brief from the deck",
-   "args": { "project": "project title (questions room_ids[...].project)", "room": "room id (room_ids[...].room)" },
-   "pull": [ { "from": "{STEPS}S1_INTAKE/", "to": "{WORK}/deck/" } ],
-   "run": [ ["python", "tools/brief.py", "{WORK}/deck", "{ARG:project}", "{ARG:room}", "{PROJ}/roombrief.draft.json"] ],
-   "push": [ { "from": "{PROJ}/roombrief.draft.json", "to": "{STEPS}S2_BRIEF/roombrief.draft.json" } ],
+   "args": {
+    "project": "project title (questions room_ids[...].project)",
+    "room": "room id (room_ids[...].room)"
+   },
+   "pull": [
+    {
+     "from": "{STEPS}S1_INTAKE/",
+     "to": "{WORK}/deck/"
+    }
+   ],
+   "run": [
+    [
+     "python",
+     "tools/brief.py",
+     "{WORK}/deck",
+     "{ARG:project}",
+     "{ARG:room}",
+     "{PROJ}/roombrief.draft.json"
+    ]
+   ],
+   "push": [
+    {
+     "from": "{PROJ}/roombrief.draft.json",
+     "to": "{STEPS}S2_BRIEF/roombrief.draft.json"
+    }
+   ],
    "next": "AGENT: read the draft + the slide images, write roombrief.curated.json (typed params per item, zones, cameras, checks) to {STEPS}S2_BRIEF/roombrief.curated.json, then queue S2_FINALIZE. The user approves the Brief tab."
   },
   "S2_FINALIZE": {
    "title": "Check the curated brief covers every room slide",
    "pull": [
-    { "from": "{STEPS}S2_BRIEF/roombrief.draft.json", "to": "{PROJ}/roombrief.draft.json" },
-    { "from": "{STEPS}S2_BRIEF/roombrief.curated.json", "to": "{PROJ}/roombrief.curated.json" }
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.draft.json",
+     "to": "{PROJ}/roombrief.draft.json"
+    },
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.curated.json",
+     "to": "{PROJ}/roombrief.curated.json"
+    }
    ],
-   "run": [ ["python", "tools/brief.py", "finalize", "{PROJ}/roombrief.draft.json", "{PROJ}/roombrief.curated.json", "{PROJ}/roombrief.json"] ],
+   "run": [
+    [
+     "python",
+     "tools/brief.py",
+     "finalize",
+     "{PROJ}/roombrief.draft.json",
+     "{PROJ}/roombrief.curated.json",
+     "{PROJ}/roombrief.json"
+    ]
+   ],
    "push": [
-    { "from": "{PROJ}/roombrief.json", "to": "{STEPS}S2_BRIEF/roombrief.json" },
-    { "from": "{PROJ}/roombrief.json", "to": "{OUT}roombrief.json" }
+    {
+     "from": "{PROJ}/roombrief.json",
+     "to": "{STEPS}S2_BRIEF/roombrief.json"
+    },
+    {
+     "from": "{PROJ}/roombrief.json",
+     "to": "{OUT}roombrief.json"
+    }
    ]
+  },
+  "S3_FROM_TRACER": {
+   "title": "Walls, openings and the room outline from the Floorplan Tracer (its approved trace) → trace.px.json",
+   "args": {
+    "tracer_code": "the tracer project = this project's code (default)",
+    "scale_ref": "optional: the user's scale reference",
+    "scale_mm": "optional"
+   },
+   "pull": [
+    {
+     "from": "Projects/{CODE}/1-program/floorplan-tracer/state/",
+     "to": "{WORK}/tracer/",
+     "clean": true
+    },
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.json",
+     "to": "{PROJ}/roombrief.json"
+    }
+   ],
+   "run": [
+    [
+     "python",
+     "tools/from_tracer.py",
+     "{WORK}/tracer",
+     "{PROJ}/roombrief.json",
+     "{PROJ}/trace.px.json",
+     "{IF:scale_ref:--scale-ref}",
+     "{ARG?:scale_ref}",
+     "{IF:scale_mm:--scale-mm}",
+     "{ARG?:scale_mm}"
+    ]
+   ],
+   "push": [
+    {
+     "from": "{PROJ}/trace.px.json",
+     "to": "{STEPS}S3_GEOMETRY/trace.px.json"
+    }
+   ],
+   "next": "Plan tracing comes from the Floorplan Tracer (its S8 approved by the user). Queue S3_GEOMETRY next."
   },
   "S3_GEOMETRY": {
    "title": "Walls, openings and zones from the traced plan",
    "pull": [
-    { "from": "{STEPS}S1_INTAKE/", "to": "{WORK}/deck/" },
-    { "from": "{STEPS}S2_BRIEF/roombrief.json", "to": "{PROJ}/roombrief.json" },
-    { "from": "{STEPS}S3_GEOMETRY/trace.px.json", "to": "{PROJ}/trace.px.json" }
+    {
+     "from": "{STEPS}S1_INTAKE/",
+     "to": "{WORK}/deck/"
+    },
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.json",
+     "to": "{PROJ}/roombrief.json"
+    },
+    {
+     "from": "{STEPS}S3_GEOMETRY/trace.px.json",
+     "to": "{PROJ}/trace.px.json"
+    }
    ],
-   "run": [ ["python", "tools/geometry.py", "{PROJ}", "{WORK}/deck"] ],
+   "run": [
+    [
+     "python",
+     "tools/geometry.py",
+     "{PROJ}",
+     "{WORK}/deck"
+    ]
+   ],
    "push": [
-    { "from": "{PROJ}/plan.json", "to": "{STEPS}S3_GEOMETRY/plan.json" },
-    { "from": "{PROJ}/{CODE}.canvas.json", "to": "{STEPS}S3_GEOMETRY/{CODE}.canvas.json" },
-    { "from": "{PROJ}/*.png", "to": "{STEPS}S3_GEOMETRY/" },
-    { "from": "{PROJ}/*.txt", "to": "{STEPS}S3_GEOMETRY/" }
+    {
+     "from": "{PROJ}/plan.json",
+     "to": "{STEPS}S3_GEOMETRY/plan.json"
+    },
+    {
+     "from": "{PROJ}/{CODE}.canvas.json",
+     "to": "{STEPS}S3_GEOMETRY/{CODE}.canvas.json"
+    },
+    {
+     "from": "{PROJ}/*.png",
+     "to": "{STEPS}S3_GEOMETRY/"
+    },
+    {
+     "from": "{PROJ}/*.txt",
+     "to": "{STEPS}S3_GEOMETRY/"
+    }
    ],
    "next": "The user checks geometry_check.png (Plan tab) and approves."
   },
   "S4_CATALOG": {
    "title": "Snapshot the library's objects and materials",
-   "run": [ ["node", "tools/catalog.mjs", "{WORK}/catalog.json"] ],
-   "push": [ { "from": "{WORK}/catalog.json", "to": "{STEPS}S4_RESOLVE/catalog.json" } ],
+   "run": [
+    [
+     "node",
+     "tools/catalog.mjs",
+     "{WORK}/catalog.json"
+    ]
+   ],
+   "push": [
+    {
+     "from": "{WORK}/catalog.json",
+     "to": "{STEPS}S4_RESOLVE/catalog.json"
+    }
+   ],
    "next": "AGENT: write resolve.json (item -> object + real param ids + host + materials) to {STEPS}S4_RESOLVE/resolve.json, then queue S4_CHECK."
   },
   "S4_CHECK": {
    "title": "Check every item is bound to a real object, params and material",
    "pull": [
-    { "from": "{STEPS}S2_BRIEF/roombrief.json", "to": "{PROJ}/roombrief.json" },
-    { "from": "{STEPS}S3_GEOMETRY/trace.px.json", "to": "{PROJ}/trace.px.json" },
-    { "from": "{STEPS}S4_RESOLVE/resolve.json", "to": "{PROJ}/resolve.json" },
-    { "from": "{STEPS}S4_RESOLVE/catalog.json", "to": "{WORK}/catalog.json" }
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.json",
+     "to": "{PROJ}/roombrief.json"
+    },
+    {
+     "from": "{STEPS}S3_GEOMETRY/trace.px.json",
+     "to": "{PROJ}/trace.px.json"
+    },
+    {
+     "from": "{STEPS}S4_RESOLVE/resolve.json",
+     "to": "{PROJ}/resolve.json"
+    },
+    {
+     "from": "{STEPS}S4_RESOLVE/catalog.json",
+     "to": "{WORK}/catalog.json"
+    }
    ],
-   "run": [ ["python", "tools/resolve_check.py", "{PROJ}", "{WORK}/catalog.json"] ],
-   "push": [ { "from": "{PROJ}/resolve.json", "to": "{STEPS}S4_RESOLVE/resolve.checked.json" } ]
+   "run": [
+    [
+     "python",
+     "tools/resolve_check.py",
+     "{PROJ}",
+     "{WORK}/catalog.json"
+    ]
+   ],
+   "push": [
+    {
+     "from": "{PROJ}/resolve.json",
+     "to": "{STEPS}S4_RESOLVE/resolve.checked.json"
+    }
+   ]
   },
   "S5_COMPOSE": {
    "title": "Place every object on the room canvas",
    "pull": [
-    { "from": "{STEPS}S2_BRIEF/roombrief.json", "to": "{PROJ}/roombrief.json" },
-    { "from": "{STEPS}S3_GEOMETRY/trace.px.json", "to": "{PROJ}/trace.px.json" },
-    { "from": "{STEPS}S3_GEOMETRY/plan.json", "to": "{PROJ}/plan.json" },
-    { "from": "{STEPS}S3_GEOMETRY/{CODE}.canvas.json", "to": "{PROJ}/{CODE}.canvas.json" },
-    { "from": "{STEPS}S4_RESOLVE/resolve.json", "to": "{PROJ}/resolve.json" }
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.json",
+     "to": "{PROJ}/roombrief.json"
+    },
+    {
+     "from": "{STEPS}S3_GEOMETRY/trace.px.json",
+     "to": "{PROJ}/trace.px.json"
+    },
+    {
+     "from": "{STEPS}S3_GEOMETRY/plan.json",
+     "to": "{PROJ}/plan.json"
+    },
+    {
+     "from": "{STEPS}S3_GEOMETRY/{CODE}.canvas.json",
+     "to": "{PROJ}/{CODE}.canvas.json"
+    },
+    {
+     "from": "{STEPS}S4_RESOLVE/resolve.json",
+     "to": "{PROJ}/resolve.json"
+    }
    ],
-   "run": [ ["python", "tools/compose.py", "{PROJ}"] ],
+   "run": [
+    [
+     "python",
+     "tools/compose.py",
+     "{PROJ}"
+    ]
+   ],
    "push": [
-    { "from": "{PROJ}/{CODE}.room.canvas.json", "to": "{STEPS}S5_COMPOSE/{CODE}.room.canvas.json" },
-    { "from": "{PROJ}/{CODE}.room.canvas.json", "to": "{OUT}{CODE}.room.canvas.json" },
-    { "from": "{PROJ}/compose.report.txt", "to": "{STEPS}S5_COMPOSE/compose.report.txt", "optional": true }
+    {
+     "from": "{PROJ}/{CODE}.room.canvas.json",
+     "to": "{STEPS}S5_COMPOSE/{CODE}.room.canvas.json"
+    },
+    {
+     "from": "{PROJ}/{CODE}.room.canvas.json",
+     "to": "{OUT}{CODE}.room.canvas.json"
+    },
+    {
+     "from": "{PROJ}/compose.report.txt",
+     "to": "{STEPS}S5_COMPOSE/compose.report.txt",
+     "optional": true
+    }
    ],
    "next": "Open {OUT}{CODE}.room.canvas.json in the editor (Room tab) for the user to check, then queue S6_DRAWINGS."
   },
   "S6_DRAWINGS": {
    "title": "Bake the room and draw plan, RCP, elevations and schedules",
    "pull": [
-    { "from": "{STEPS}S2_BRIEF/roombrief.json", "to": "{PROJ}/roombrief.json" },
-    { "from": "{STEPS}S4_RESOLVE/resolve.json", "to": "{PROJ}/resolve.json" },
-    { "from": "{STEPS}S5_COMPOSE/{CODE}.room.canvas.json", "to": "{PROJ}/{CODE}.room.canvas.json" }
+    {
+     "from": "{STEPS}S2_BRIEF/roombrief.json",
+     "to": "{PROJ}/roombrief.json"
+    },
+    {
+     "from": "{STEPS}S4_RESOLVE/resolve.json",
+     "to": "{PROJ}/resolve.json"
+    },
+    {
+     "from": "{STEPS}S5_COMPOSE/{CODE}.room.canvas.json",
+     "to": "{PROJ}/{CODE}.room.canvas.json"
+    }
    ],
    "run": [
-    ["node", "tools/bakeplan/run.mjs", "{PROJ}/{CODE}.room.canvas.json", "--out", "{WORK}/baked.json", { "cwd": "{REPO}" }],
-    ["python", "tools/drawings.py", "{PROJ}", "{WORK}/baked.json", "{WORK}/dwg"]
+    [
+     "node",
+     "tools/bakeplan/run.mjs",
+     "{PROJ}/{CODE}.room.canvas.json",
+     "--out",
+     "{WORK}/baked.json",
+     {
+      "cwd": "{REPO}"
+     }
+    ],
+    [
+     "python",
+     "tools/drawings.py",
+     "{PROJ}",
+     "{WORK}/baked.json",
+     "{WORK}/dwg"
+    ]
    ],
    "push": [
-    { "from": "{WORK}/dwg/*", "to": "{STEPS}S6_DRAWINGS/" },
-    { "from": "{WORK}/dwg/*", "to": "{OUT}drawings/" },
-    { "from": "{WORK}/dwg/*.pdf", "to": "Projects/{CODE}/media/drawings/", "optional": true }
+    {
+     "from": "{WORK}/dwg/*",
+     "to": "{STEPS}S6_DRAWINGS/"
+    },
+    {
+     "from": "{WORK}/dwg/*",
+     "to": "{OUT}drawings/"
+    },
+    {
+     "from": "{WORK}/dwg/*.pdf",
+     "to": "Projects/{CODE}/media/drawings/",
+     "optional": true
+    }
    ]
   }
  }

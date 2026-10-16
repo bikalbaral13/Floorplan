@@ -29,7 +29,7 @@ import { listObjectsDetailed, getObjectText, putObject, signedRequest, r2ConfigF
 
 const REPO = path.resolve(import.meta.dirname, "..", "..");
 /** --source repo: the repo's own copies (development). */
-const REPO_PIPELINES = { "build-from-deck": "public/full-pipeline/3-build" };
+const REPO_PIPELINES = { "build-from-deck": "public/full-pipeline/3-build", "floorplan-tracer": "public/floorplan-tracer-pipeline" };
 const CACHE = path.join(REPO, "pipeline-work", "runner-cache");
 const APPROVALS = path.join(os.homedir(), ".builderpluss", "runner-approved.json");
 const sha256 = (b) => crypto.createHash("sha256").update(b).digest("hex");
@@ -61,12 +61,26 @@ const readJson = async (key) => { try { return JSON.parse((await getObjectText(c
 const putJson = (key, v) => putObject(cfg, key, JSON.stringify(v, null, 1), "application/json");
 const getBytes = async (key) => Buffer.from(await (await signedRequest(cfg, "GET", key)).arrayBuffer());
 
+/** Placeholders: {ARG:x} (required), {ARG?:x} (optional: "" when absent), {IF:x:literal} (literal only when args.x is
+ *  set — e.g. a flag before an optional value), {BASENAME:x}, and {CODE} {WORK} {PROJ} {ROOT} {STEPS} {OUT} {DIR} {REPO}.
+ *  A command argument that expands to "" is dropped. */
 function expand(s, ctx) {
-  return String(s).replace(/\{(ARG|BASENAME):([a-z_]+)\}/gi, (_, k, a) => {
-    const v = ctx.args[a];
-    if (v == null || v === "") throw new Error(`the job needs args.${a}`);
-    return k.toUpperCase() === "BASENAME" ? path.posix.basename(String(v)) : String(v);
-  }).replace(/\{(CODE|WORK|PROJ|STEPS|OUT|DIR|REPO)\}/g, (_, k) => ctx[k]);
+  return String(s).replace(/\{IF:([a-z_]+):([^}]*)\}/gi, (_, a, lit) => (ctx.args[a] == null || ctx.args[a] === "" ? "" : lit))
+    .replace(/\{(ARG\?|ARG|BASENAME):([a-z_]+)\}/gi, (_, k, a) => {
+      const v = ctx.args[a];
+      if (v == null || v === "") { if (k === "ARG?") return ""; throw new Error(`the job needs args.${a}`); }
+      return k.toUpperCase() === "BASENAME" ? path.posix.basename(String(v)) : String(v);
+    }).replace(/\{(CODE|WORK|PROJ|ROOT|STEPS|OUT|DIR|REPO)\}/g, (_, k) => ctx[k]);
+}
+
+/** Every file under a local folder, as [absolute path, path relative to the folder]. */
+function walkLocal(dir, base = dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const f = path.join(dir, e.name);
+    if (e.isDirectory()) return e.name === "__pycache__" ? [] : walkLocal(f, base);
+    return [[f, path.relative(base, f).split(path.sep).join("/")]];
+  });
 }
 
 /** A local glob with * in the last segment only. */
@@ -184,11 +198,12 @@ async function runJob(key, job) {
     hb = setInterval(() => void write({ status: "running", heartbeat: new Date().toISOString() }).catch(() => {}), 20_000);
     const dir = `Projects/${code}/${phaseDir}/${pipeline}/`;
     const WORK = path.join(REPO, "pipeline-work", "runner", code, pipeline);
-    const ctx = { CODE: code, WORK, PROJ: path.join(WORK, "project", code), STEPS: dir + "steps/", OUT: dir + "output/", DIR: dir, REPO, args: job.args ?? {} };
+    const ctx = { CODE: code, WORK, PROJ: path.join(WORK, "project", code), ROOT: root, STEPS: dir + "steps/", OUT: dir + "output/", DIR: dir, REPO, args: job.args ?? {} };
     fs.mkdirSync(ctx.PROJ, { recursive: true });
     for (const p of st.pull ?? []) {
       const from = expand(p.from, ctx), to = expand(p.to, ctx);
       if (from.endsWith("/")) {
+        if (p.clean) fs.rmSync(to, { recursive: true, force: true });       // a project's state: exactly what R2 holds
         const objs = (await listObjectsDetailed(cfg, from)).filter((o) => !o.key.endsWith("/"));
         if (!objs.length && !p.optional) throw new Error(`nothing in R2 under ${from} — has the stage before run?`);
         for (const o of objs) { const dst = path.join(to, ...o.key.slice(from.length).split("/")); fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.writeFileSync(dst, await getBytes(o.key)); }
@@ -199,9 +214,17 @@ async function runJob(key, job) {
         fs.mkdirSync(path.dirname(to), { recursive: true }); fs.writeFileSync(to, b); log(`pulled ${from} (${b.length} B)`);
       }
     }
-    for (const c of st.run ?? []) await runCmd(c.map((x) => (typeof x === "string" ? expand(x, ctx) : { ...x, cwd: x.cwd ? expand(x.cwd, ctx) : undefined })), root, log);
+    for (const c of st.run ?? []) await runCmd(c.map((x) => (typeof x === "string" ? expand(x, ctx) : { ...x, cwd: x.cwd ? expand(x.cwd, ctx) : undefined })).filter((x) => x !== ""), root, log);
     const outputs = [];
     for (const p of st.push ?? []) {
+      if (p.from.endsWith("/")) {   // a whole folder (recursive), e.g. a pipeline project's state
+        const dirFrom = expand(p.from, ctx), to = expand(p.to, ctx);
+        for (const [f, rel] of walkLocal(dirFrom)) {
+          await putObject(cfg, to + rel, fs.readFileSync(f), MIME[path.extname(f).toLowerCase()] ?? "application/octet-stream");
+          outputs.push(to + rel);
+        }
+        continue;
+      }
       const files = globLocal(expand(p.from, ctx)), to = expand(p.to, ctx);
       if (!files.length) { if (p.optional || p.from.includes("*")) continue; throw new Error(`the stage did not make ${expand(p.from, ctx)}`); }
       for (const f of files) {

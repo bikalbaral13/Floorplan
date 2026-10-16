@@ -2,7 +2,7 @@
  "schema": "pipeline/1",
  "id": "floorplan-tracer",
  "title": "Floorplan Tracer Pipeline",
- "version": "0.1.0",
+ "version": "0.2.0",
  "phase": "plan",
  "entry": {
   "agents": "AGENTS.md",
