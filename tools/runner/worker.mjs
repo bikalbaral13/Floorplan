@@ -65,8 +65,8 @@ const getBytes = async (key) => Buffer.from(await (await signedRequest(cfg, "GET
  *  set — e.g. a flag before an optional value), {BASENAME:x}, and {CODE} {WORK} {PROJ} {ROOT} {STEPS} {OUT} {DIR} {REPO}.
  *  A command argument that expands to "" is dropped. */
 function expand(s, ctx) {
-  return String(s).replace(/\{IF:([a-z_]+):([^}]*)\}/gi, (_, a, lit) => (ctx.args[a] == null || ctx.args[a] === "" ? "" : lit))
-    .replace(/\{(ARG\?|ARG|BASENAME):([a-z_]+)\}/gi, (_, k, a) => {
+  return String(s).replace(/\{IF:([a-z0-9_]+):([^}]*)\}/gi, (_, a, lit) => (ctx.args[a] == null || ctx.args[a] === "" ? "" : lit))
+    .replace(/\{(ARG\?|ARG|BASENAME):([a-z0-9_]+)\}/gi, (_, k, a) => {
       const v = ctx.args[a];
       if (v == null || v === "") { if (k === "ARG?") return ""; throw new Error(`the job needs args.${a}`); }
       return k.toUpperCase() === "BASENAME" ? path.posix.basename(String(v)) : String(v);
@@ -213,6 +213,11 @@ async function runJob(key, job) {
         try { b = await getBytes(from); } catch (e) { if (p.optional) continue; throw new Error(`missing ${from} — ${/404|NoSuchKey/.test(e.message) ? "not written yet" : e.message}`); }
         fs.mkdirSync(path.dirname(to), { recursive: true }); fs.writeFileSync(to, b); log(`pulled ${from} (${b.length} B)`);
       }
+    }
+    // the folders a stage writes into exist before it runs (tools need not create their output folder)
+    for (const p of st.push ?? []) {
+      const f = expand(p.from, ctx);
+      if (!/^Projects\//.test(f)) fs.mkdirSync(f.endsWith("/") ? f : path.dirname(f), { recursive: true });
     }
     for (const c of st.run ?? []) await runCmd(c.map((x) => (typeof x === "string" ? expand(x, ctx) : { ...x, cwd: x.cwd ? expand(x.cwd, ctx) : undefined })).filter((x) => x !== ""), root, log);
     const outputs = [];

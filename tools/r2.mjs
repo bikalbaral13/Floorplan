@@ -81,12 +81,23 @@ export async function signedRequest(cfg, method, key, body = "", extraHeaders = 
 
   // A request that never answers (an R2 hiccup) must not hang its caller forever — the runner's loop, a server
   // function. 5 minutes covers a large file; R2_TIMEOUT_MS overrides.
-  const response = await fetch(`${url.origin}${canonicalUri}${cq ? `?${cq}` : ""}`, {
-    method,
-    headers: { ...headers, Authorization: authorization },
-    body: method === "GET" || method === "HEAD" ? undefined : payload,
-    signal: AbortSignal.timeout(Number(globalThis.process?.env?.R2_TIMEOUT_MS) || 300_000),
-  });
+  // R2 now and then answers 500 "internal error" or drops the connection: retry those (3 more tries, backing off).
+  // The signature stays valid for 15 minutes, so the same signed request is simply sent again. 4xx are not retried.
+  let response;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      response = await fetch(`${url.origin}${canonicalUri}${cq ? `?${cq}` : ""}`, {
+        method,
+        headers: { ...headers, Authorization: authorization },
+        body: method === "GET" || method === "HEAD" ? undefined : payload,
+        signal: AbortSignal.timeout(Number(globalThis.process?.env?.R2_TIMEOUT_MS) || 300_000),
+      });
+      if (response.status < 500 || attempt >= 3) break;
+    } catch (e) {
+      if (attempt >= 3) throw new Error(`R2 ${method} ${key} failed: ${e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+  }
 
   if (!response.ok) {
     // S3 reports failures as an XML document. The message inside it is the useful part —
