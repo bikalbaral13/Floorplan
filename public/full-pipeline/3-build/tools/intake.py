@@ -204,6 +204,25 @@ def segment(slides):
         r["category"] = category(r)
         if room is not None:
             room["slides"].append(r["slide"])
+        else:
+            proj.setdefault("_orphans", []).append(r)
+    # Slides that came before any divider (a deck EXTRACT, or a divider placed at the end): give each to the room its
+    # first line names ("Collab 1 Ceiling" → COLLAB 01), else — one room only — to that room. Never guessed across rooms.
+    for p in projects:
+        for r in p.pop("_orphans", []):
+            first = norm((r["texts"][0]["text"].split("\n")[0]) if r["texts"] else "")
+            hit = next((rm for rm in p["rooms"] if first and first.startswith(rm["id"])), None)
+            if hit is None and len(p["rooms"]) == 1:
+                hit = p["rooms"][0]
+            if hit is None:
+                known = {norm(x): x for x in p["room_list"]}
+                rid = next((k for k in known if first.startswith(k)), None)
+                if rid:
+                    hit = {"name": known[rid], "id": rid, "slides": []}
+                    p["rooms"].append(hit)
+            if hit is not None:
+                hit["slides"] = sorted(set(hit["slides"]) | {r["slide"]})
+                r["assigned"] = "by title" if len(p["rooms"]) > 1 or first.startswith(hit["id"]) else "only room"
     return projects
 
 
@@ -215,7 +234,7 @@ def plan_images(projects, by_slide):
         if not cnt:
             continue
         md5, n = cnt.most_common(1)[0]
-        if n < 3:
+        if n < 2:          # the plan is the cropped picture that recurs; 2 slides is enough in a short deck extract
             continue
         pic0 = next(pic for s in nums for pic in by_slide[s]["pictures"] if pic["md5"] == md5)
         p["plan"] = {"md5": md5, "file": pic0["file"], "px": pic0["px"], "slides": n}
