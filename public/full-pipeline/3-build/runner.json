@@ -191,6 +191,15 @@
     {
      "from": "{PROJ}/*.txt",
      "to": "{STEPS}S3_GEOMETRY/"
+    },
+    {
+     "from": "{WORK}/deck/images/*",
+     "to": "{OUT}images/",
+     "optional": true
+    },
+    {
+     "from": "{PROJ}/{CODE}.canvas.json",
+     "to": "{OUT}{CODE}.canvas.json"
     }
    ],
    "next": "The user checks geometry_check.png (Plan tab) and approves."
@@ -269,6 +278,11 @@
     {
      "from": "{STEPS}S4_RESOLVE/resolve.json",
      "to": "{PROJ}/resolve.json"
+    },
+    {
+     "from": "{STEPS}S1_INTAKE/",
+     "to": "{WORK}/deck/",
+     "optional": true
     }
    ],
    "run": [
@@ -290,6 +304,11 @@
     {
      "from": "{PROJ}/compose.report.txt",
      "to": "{STEPS}S5_COMPOSE/compose.report.txt",
+     "optional": true
+    },
+    {
+     "from": "{WORK}/deck/images/*",
+     "to": "{OUT}images/",
      "optional": true
     }
    ],

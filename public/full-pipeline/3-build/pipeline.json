@@ -2,7 +2,7 @@
  "schema": "pipeline/1",
  "id": "build-from-deck",
  "title": "Build (from roombrief or Plan Deck)",
- "version": "0.3.3",
+ "version": "0.3.4",
  "phase": "build",
  "entry": {
   "agents": "AGENTS.md",
