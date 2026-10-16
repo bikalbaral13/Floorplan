@@ -1,0 +1,8 @@
+{
+ "schema": "token-rates/1",
+ "model": "claude-opus-5-5",
+ "note": "USD per million tokens — edit to your contract prices. INR = USD x usd_inr x (1 + markup).",
+ "usd_per_mtok": { "input": 5, "output": 25, "cache_write": 6.25, "cache_read": 0.5 },
+ "usd_inr": 88,
+ "markup": 0.30
+}

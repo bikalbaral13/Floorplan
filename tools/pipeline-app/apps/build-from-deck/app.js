@@ -23,8 +23,10 @@
     S4_CHECK: { title: "Check object bindings", needs: [{ file: "S4_RESOLVE/catalog.json", who: "S4 catalog" }, { file: "S4_RESOLVE/resolve.json", who: "Claude" }] },
     S5_COMPOSE: { title: "Compose the room canvas", needs: [{ file: "S3_GEOMETRY/plan.json", who: "S3" }, { file: "S4_RESOLVE/resolve.json", who: "Claude" }] },
     S6_DRAWINGS: { title: "Draw the drawing set", needs: [{ file: "S5_COMPOSE/" + P.project + ".room.canvas.json", who: "S5" }] },
+    S3_FROM_TRACER: { title: "Take the trace from the Floorplan Tracer", needs: [] },
+    S7_3D: { title: "3D model and snapshots", needs: [{ file: "S5_COMPOSE/" + P.project + ".room.canvas.json", who: "S5" }] },
   };
-  var jobs = {}, files = new Set(), answers = {}, questions = null, decks = [], chosenDeck = null, active = "deck";
+  var usage = null, jobs = {}, files = new Set(), answers = {}, questions = null, decks = [], chosenDeck = null, active = "deck";
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   var readJson = function (rel) { return P.read(rel).then(function (t) { return JSON.parse(t); }, function () { return null; }); };
@@ -210,6 +212,25 @@
     var pill = $("#runner-pill");
     pill.className = "pill " + (run ? "warn" : stale ? "bad" : "ok");
     pill.textContent = run ? "runner: " + run.stage + " running" : stale ? "runner: offline?" : "runner: idle";
+    renderUsage();
+  }
+  // usage.json (tools/runner/usage.mjs): runner time + Claude tokens per stage, cost in INR with the markup
+  function hms(s) { if (s == null) return "–"; s = Math.round(s); return s >= 60 ? Math.floor(s / 60) + " min " + (s % 60) + " s" : s + " s"; }
+  function num(n) { return Number(n || 0).toLocaleString("en-IN"); }
+  function rupees(n) { return "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function renderUsage() {
+    var el = $("#usage");
+    if (!usage) { el.innerHTML = '<div class="empty">No usage yet — Claude writes usage.json after the stages run.</div>'; return; }
+    var r = usage.rates || {}, p = r.usd_per_mtok || {}, k = (r.usd_inr || 0) * (1 + (r.markup || 0));
+    var rate = function (usd) { return rupees(usd * k) + "/M"; };
+    var rows = usage.stages.concat([{ stage: "TOTAL", seconds: usage.total.seconds, tokens: { total: usage.total.tokens }, inr: usage.total.inr, total: true }]);
+    el.innerHTML = table(rows, [["stage", function (s) { return s.stage; }], ["runner time", function (s) { return hms(s.seconds); }],
+      ["input", function (s) { return s.total ? "" : num(s.tokens.input); }], ["output", function (s) { return s.total ? "" : num(s.tokens.output); }],
+      ["cache write", function (s) { return s.total ? "" : num(s.tokens.cache_write); }], ["cache read", function (s) { return s.total ? "" : num(s.tokens.cache_read); }],
+      ["tokens", function (s) { return num(s.tokens.total); }], ["cost (INR)", function (s) { return rupees(s.inr); }]]) +
+      '<p class="muted">Rate (' + esc(r.model || "") + ', incl. ' + Math.round((r.markup || 0) * 100) + '% extra, $1 = ₹' + esc(r.usd_inr) + '): input ' + rate(p.input) + ' · output ' + rate(p.output) +
+      ' · cache write ' + rate(p.cache_write) + ' · cache read ' + rate(p.cache_read) + ' tokens. Runner scripts use no tokens; a stage’s tokens are Claude’s work from queuing it until the next stage was queued. Updated ' + esc(String(usage.at || "").slice(0, 16).replace("T", " ")) + '.</p>';
+    var last = el.querySelector("tr:last-child"); if (last) last.style.fontWeight = "600";
   }
 
   function refresh() {
@@ -224,7 +245,7 @@
   }
 
   function poll() {
-    return Promise.all([loadJobs(), loadFiles()]).then(function () {
+    return Promise.all([loadJobs(), loadFiles(), readJson(DIR + "usage.json").then(function (u) { usage = u; })]).then(function () {
       if (!questions && files.has("S1_INTAKE/questions.json")) return readJson(STEPS + "S1_INTAKE/questions.json").then(function (q) { questions = q; });
     }).then(refresh, function () {});
   }
