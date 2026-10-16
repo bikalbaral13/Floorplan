@@ -128,6 +128,29 @@ export function CloudInspectDialog({ open, onOpenChange, variant = "dialog", que
     void load();
   }, [open, load]);
 
+  // Projects made elsewhere (the connector's project.create, another tab) must show up without a manual refresh.
+  // Every 15 s while the tab is visible, read the small Projects/index.json the create writes; when it has
+  // changed, re-read the tree keeping what is folded open. Coming back to the tab re-reads too.
+  useEffect(() => {
+    if (!open) return;
+    let last: string | null = null, busy = false;
+    const check = async (force = false) => {
+      if (busy || document.hidden) return;
+      busy = true;
+      try {
+        const r = await fetchBucketFileText("Projects/index.json");
+        const text = r.ok ? r.text ?? "" : null;
+        if (text !== null && last !== null && (force || text !== last)) await load(true);
+        if (text !== null) last = text;
+      } finally { busy = false; }
+    };
+    void check();
+    const t = window.setInterval(() => void check(), 15000);
+    const onVisible = () => { if (!document.hidden) void check(true); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
+  }, [open, load]);
+
   const json = useMemo(() => (data ? JSON.stringify(data, null, 2) : ""), [data]);
 
   /** Every key in the bucket, for the overwrite check. */
