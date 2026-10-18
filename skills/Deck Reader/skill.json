@@ -2,7 +2,7 @@
  "schema": "skill/1",
  "id": "deck-reader",
  "title": "Deck Reader",
- "version": "1.0.0",
+ "version": "1.0.1",
  "entry": "SKILL.md",
  "about": "A plan-phase deck (.pptx or .pdf) → the room brief (roombrief.v1): slides, images, the user's questions, a curated brief checked against every room slide.",
  "inputs": {

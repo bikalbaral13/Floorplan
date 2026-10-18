@@ -69,6 +69,9 @@ def finalize(draft_path, curated_path, out):
     cur = json.loads(Path(curated_path).read_text(encoding="utf-8"))
     src = {x["slide"]: x for x in draft["items"] + draft["dimension_sheets"] + draft["reviews"]}
     for z in cur["zones"]:
+        # an outline the curator traced wins: a slide's freeforms can be callout arrows, not the zone (collab3 s3)
+        if len(z.get("points_px") or []) >= 3:
+            continue
         s = src[z["from_slide"]]
         z["points_px"] = next(o["points_px"] for o in s["zones_px"] if len(o["points_px"]) >= 3)
     for it in cur["items"]:
