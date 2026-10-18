@@ -35,7 +35,8 @@ def main():
     L = plan["levels"][0]
 
     # group collinear pieces (walls + openings) into lines
-    pieces = [dict(p, _k="wall") for p in L["walls"]] + [dict(p, _k="opening") for p in L["openings"]]
+    # only real walls: a tracer "line" (a drawn edge, a shower screen) is not a wall in Build
+    pieces = [dict(p, _k="wall") for p in L["walls"] if p.get("kind", "wall") == "wall"] + [dict(p, _k="opening") for p in L["openings"]]
     def key(p):
         (ax, ay), (bx, by) = p["a"], p["b"]
         ang = math.atan2(by - ay, bx - ax) % math.pi
