@@ -10,8 +10,9 @@ from core import paths, tasks, stage as S
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("code"); ap.add_argument("--title", default=""); ap.add_argument("--standards", default="DEFAULT"); ap.add_argument("--work-dir", default="")
     a = ap.parse_args(); d = paths.project_dir(a.code)
-    if os.path.exists(d): sys.exit(f"{d} exists")
-    shutil.copytree(paths.project_dir("_TEMPLATE"), d)
+    # an EMPTY folder is fine: the pipeline runner creates the folders a stage pushes from before it runs
+    if os.path.exists(d) and os.listdir(d): sys.exit(f"{d} exists")
+    shutil.copytree(paths.project_dir("_TEMPLATE"), d, dirs_exist_ok=True)
     pj = {"code": a.code, "title": a.title, "standards": a.standards, "work_dir": a.work_dir or f"../../../../pipeline-work/tracer/{a.code}", "underlay_src": ""}
     paths.save_json(os.path.join(d, "project.json"), pj)
     for f in ("PROJECT.md", "REPORT.md"):
