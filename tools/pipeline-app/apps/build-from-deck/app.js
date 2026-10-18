@@ -2,31 +2,45 @@
    The user uploads the deck, answers the questions and approves each step; script stages run on the runner
    (tools/runner/worker.mjs) through jobs/<STAGE>.json; Claude writes the judgement files (curated brief, trace,
    resolve) into steps/ through the connector. Everything lives in R2 under Projects/<CODE>/ — this page only reads
-   it (pipeline.read / list / url) and queues jobs (pipeline.job). Store: answers/main (the user's answers). */
+   it (pipeline.read / list / url) and queues jobs (pipeline.job). Store: answers/main (the user's answers).
+   0.2: five stages, each one skill — S1 Brief (Deck Reader) · S2 Plan (Floorplan Tracer) · S3 Objects (Object
+   Resolver) · S4 Fit-out (Floorplan Improver) · S5 3D (Floorplan Renderer). Every stage tab opens with its live
+   progress card: stages/<Sn>/progress.json (the runner, from the scripts' @@progress lines) + agent-progress.json
+   (Claude, during its own steps), checked every 3 s while the stage runs. The user approves each stage in the
+   editor's step bar; the runner refuses a stage until the one before it is approved (run.json). */
 (function () {
   "use strict";
   var P = window.pipeline;
   var DIR = P.dir || "3-build/build-from-deck/";
   var STEPS = DIR + "steps/";
   var TABS = [
-    { id: "deck", label: "Deck" }, { id: "questions", label: "Questions" }, { id: "brief", label: "Brief" },
-    { id: "plan", label: "Plan" }, { id: "objects", label: "Objects" }, { id: "room", label: "Room" },
-    { id: "drawings", label: "Drawings" }, { id: "runner", label: "Runner" },
+    { id: "deck", label: "Deck" }, { id: "brief", label: "S1 Brief" }, { id: "plan", label: "S2 Plan" },
+    { id: "objects", label: "S3 Objects" }, { id: "fitout", label: "S4 Fit-out" }, { id: "3d", label: "S5 3D" },
+    { id: "runner", label: "Runner" },
+  ];
+  // the five stages: which tab shows them, the skill, and the step-bar step the user approves
+  var GROUPS = [
+    { id: "S1", tab: "brief", title: "Brief", skill: "Deck Reader", gate: "brief" },
+    { id: "S2", tab: "plan", title: "Plan", skill: "Floorplan Tracer", gate: "plan" },
+    { id: "S3", tab: "objects", title: "Objects", skill: "Object Resolver", gate: "objects" },
+    { id: "S4", tab: "fitout", title: "Fit-out", skill: "Floorplan Improver", gate: "fitout" },
+    { id: "S5", tab: "3d", title: "3D", skill: "Floorplan Renderer", gate: "3d" },
   ];
   // what each script stage needs before it can run, and who makes it
+  var ROOM = "S5_COMPOSE/" + P.project + ".room.canvas.json";
   var STAGES = {
-    S1_INTAKE: { title: "Read the deck", needs: [] },
-    S2_DRAFT: { title: "Draft the brief", needs: [{ file: "S1_INTAKE/deck.json", who: "S1" }] },
-    S2_FINALIZE: { title: "Finalize the brief", needs: [{ file: "S2_BRIEF/roombrief.draft.json", who: "S2 draft" }, { file: "S2_BRIEF/roombrief.curated.json", who: "Claude" }] },
-    S3_GEOMETRY: { title: "Build the plan geometry", needs: [{ file: "S2_BRIEF/roombrief.json", who: "S2" }, { file: "S3_GEOMETRY/trace.px.json", who: "Claude" }] },
-    S4_CATALOG: { title: "Snapshot the library", needs: [] },
-    S4_CHECK: { title: "Check object bindings", needs: [{ file: "S4_RESOLVE/catalog.json", who: "S4 catalog" }, { file: "S4_RESOLVE/resolve.json", who: "Claude" }] },
-    S5_COMPOSE: { title: "Compose the room canvas", needs: [{ file: "S3_GEOMETRY/plan.json", who: "S3" }, { file: "S4_RESOLVE/resolve.json", who: "Claude" }] },
-    S6_DRAWINGS: { title: "Draw the drawing set", needs: [{ file: "S5_COMPOSE/" + P.project + ".room.canvas.json", who: "S5" }] },
-    S3_FROM_TRACER: { title: "Take the trace from the Floorplan Tracer", needs: [] },
-    S7_3D: { title: "3D model and snapshots", needs: [{ file: "S5_COMPOSE/" + P.project + ".room.canvas.json", who: "S5" }] },
+    S1_INTAKE: { group: "S1", step: "INTAKE", title: "Read the deck", needs: [] },
+    S1_DRAFT: { group: "S1", step: "DRAFT", title: "Draft the brief", needs: [{ file: "S1_INTAKE/deck.json", who: "S1 intake" }] },
+    S1_FINALIZE: { group: "S1", step: "FINALIZE", title: "Finalize the brief", needs: [{ file: "S2_BRIEF/roombrief.draft.json", who: "S1 draft" }, { file: "S2_BRIEF/roombrief.curated.json", who: "Claude" }] },
+    S2_FROM_TRACER: { group: "S2", step: "FROM_TRACER", title: "Take the Floorplan Tracer's trace", needs: [{ file: "S2_BRIEF/roombrief.json", who: "S1" }] },
+    S2_GEOMETRY: { group: "S2", step: "GEOMETRY", title: "Walls, openings and zones", needs: [{ file: "S3_GEOMETRY/trace.px.json", who: "S2 trace" }] },
+    S3_CATALOG: { group: "S3", step: "CATALOG", title: "Snapshot the library", needs: [] },
+    S3_CHECK: { group: "S3", step: "CHECK", title: "Check object bindings", needs: [{ file: "S4_RESOLVE/catalog.json", who: "S3 catalog" }, { file: "S4_RESOLVE/resolve.json", who: "Claude" }] },
+    S4_PLACE: { group: "S4", step: "PLACE", title: "Place every object on the room canvas", needs: [{ file: "S3_GEOMETRY/plan.json", who: "S2" }, { file: "S4_RESOLVE/resolve.json", who: "S3" }] },
+    S5_3D: { group: "S5", step: "RENDER", title: "3D model and snapshots", needs: [{ file: ROOM, who: "S4" }] },
   };
   var usage = null, jobs = {}, files = new Set(), answers = {}, questions = null, decks = [], chosenDeck = null, active = "deck";
+  var progress = {}, agentProg = {}, runDoc = null, checked = {}, lastPoll = 0;
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   var readJson = function (rel) { return P.read(rel).then(function (t) { return JSON.parse(t); }, function () { return null; }); };
@@ -35,7 +49,7 @@
   function show(id) {
     active = id;
     document.querySelectorAll("section[data-panel]").forEach(function (s) { s.classList.toggle("on", s.dataset.panel === id); });
-    P.setTabs(TABS.map(function (t) { return { id: t.id, label: t.label, count: t.id === "runner" ? Object.keys(jobs).filter(function (k) { return jobs[k].status === "queued" || jobs[k].status === "running"; }).length : 0, amber: t.id === "questions" && questions && !answers.saved }; }), id);
+    P.setTabs(TABS.map(function (t) { return { id: t.id, label: t.label, count: t.id === "runner" ? Object.keys(jobs).filter(function (k) { return jobs[k].status === "queued" || jobs[k].status === "running"; }).length : 0, amber: t.id === "brief" && questions && !answers.saved }; }), id);
     refresh();
   }
   window.PIPELINE_UI = { tab: show };
@@ -60,7 +74,7 @@
   // ── a stage card: status, log, Run ──
   function argsFor(stage) {
     if (stage === "S1_INTAKE") return chosenDeck ? { deck: "inputs/decks/" + chosenDeck } : null;
-    if (stage === "S2_DRAFT") {
+    if (stage === "S1_DRAFT") {
       if (!questions || !answers.room) return null;
       var q = (questions.questions || []).filter(function (x) { return x.key === "room"; })[0];
       var r = q && q.room_ids && q.room_ids[answers.room];
@@ -271,7 +285,7 @@
           P.notify(status === "approved" ? "Objects signed off by " + (dec.reviewer || "the reviewer") + ": S4_CHECK applies them" : "Objects review saved: " + c.pending + " to review, " + c.question + " questions", status === "approved" ? "success" : "info");
           reply({ ok: true, result: { status: status, reviewer: dec.reviewer, counts: c } });
         }).catch(fail);
-      } else if (m.op === "pipeline.run" && a.step === "compose") P.job("S5_COMPOSE", {}).then(function () { reply({ ok: true, result: { queued: "S5_COMPOSE" } }); }, fail);
+      } else if (m.op === "pipeline.run" && a.step === "compose") P.job("S4_PLACE", {}).then(function () { reply({ ok: true, result: { queued: "S4_PLACE" } }); }, fail);
       else reply({ ok: false, error: "not offered here: " + m.op });
     }
   });
@@ -327,19 +341,100 @@
     var last = el.querySelector("tr:last-child"); if (last) last.style.fontWeight = "600";
   }
 
+  // ── live progress: one card at the top of each stage tab ──
+  // Steps come from the skill (progress.json order/weights/kinds, written by the runner); script steps from the
+  // runner, agent steps from agent-progress.json (Claude), user steps from the answers and the step-bar approvals.
+  function approvedAt(gate) {
+    var ev = ((runDoc && runDoc.events) || []).filter(function (e) { return e.type === "approve" && e.step === gate; });
+    return ev.length ? Math.max.apply(null, ev.map(function (e) { return e.at; })) : null;
+  }
+  function stageView(g) {
+    var pr = progress[g.id] || null, ag = agentProg[g.id] || null;
+    var order = (pr && pr.order) || Object.keys(STAGES).filter(function (k) { return STAGES[k].group === g.id; }).map(function (k) { return STAGES[k].step; });
+    var kinds = (pr && pr.kinds) || {}, weights = (pr && pr.weights) || {}, titles = (pr && pr.titles) || {};
+    var lastScript = null;
+    Object.keys(STAGES).forEach(function (k) { var j = jobs[k]; if (STAGES[k].group === g.id && j && j.finished && (!lastScript || j.finished > lastScript)) lastScript = j.finished; });
+    var okAt = approvedAt(g.gate), stale = okAt && lastScript && Date.parse(lastScript) > okAt + 1000;
+    var steps = order.map(function (id) {
+      var s = (pr && pr.steps && pr.steps[id]) || null, kind = kinds[id] || "script", st = { id: id, kind: kind, title: titles[id] || id, state: "todo", pct: 0, msg: "", secs: null };
+      if (s) { st.state = s.state === "running" ? "running" : s.state === "failed" ? "failed" : "done"; st.pct = s.pct || 0; st.msg = s.msg || ""; st.secs = s.secs; st.started = s.started; }
+      if (kind === "agent" && ag && ag.step === id) { st.state = ag.done ? "done" : "running"; st.pct = ag.done ? 100 : (ag.pct || 0); st.msg = ag.msg || ""; st.started = ag.started; }
+      if (kind === "user") {
+        var isApprove = /APPROVE/.test(id);
+        st.state = isApprove ? (okAt && !stale ? "done" : "wait") : (answers.saved ? "done" : questions ? "wait" : "todo");
+        st.msg = isApprove ? (okAt && !stale ? "approved " + new Date(okAt).toLocaleString() : stale ? "re-run after approval: approve again" : "waiting for your approval in the step bar") : (answers.saved ? "answers saved" : "waiting for your answers");
+      }
+      return st;
+    });
+    // agent steps before a finished script step are done; a "wait" before anything that has not run is just todo
+    var seenDone = false;
+    for (var i = steps.length - 1; i >= 0; i--) { if (steps[i].state === "done" || steps[i].state === "running") seenDone = true; else if (seenDone && steps[i].kind === "agent") { steps[i].state = "done"; steps[i].pct = 100; } }
+    var total = 0, got = 0;
+    steps.forEach(function (st) { var w = weights[st.id] != null ? weights[st.id] : (st.kind === "user" ? 0 : 1); total += w; got += w * (st.state === "done" ? 100 : st.state === "running" || st.state === "failed" ? st.pct : 0) / 100; });
+    var pct = total ? Math.round(100 * got / total) : 0;
+    var running = steps.filter(function (s) { return s.state === "running"; })[0];
+    var failed = steps.filter(function (s) { return s.state === "failed"; })[0];
+    var waiting = steps.filter(function (s) { return s.state === "wait"; })[0];
+    var state = failed ? "failed" : running ? "running" : okAt && !stale ? "approved" : stale ? "stale" : waiting ? "waiting" : pct > 0 ? "paused" : "not started";
+    var eta = null;
+    if (running && running.started && running.pct >= 5 && running.pct < 100) { var el = (Date.now() - Date.parse(running.started)) / 1000; eta = Math.round(el * (100 - running.pct) / running.pct); }
+    var log = ((pr && pr.log) || []).concat(ag && ag.log ? ag.log : ag && ag.msg ? [{ t: ag.at, step: ag.step, msg: ag.msg }] : []).sort(function (a, b) { return String(a.t).localeCompare(String(b.t)); });
+    var beat = pr && (pr.heartbeat || pr.updated);
+    return { g: g, pr: pr, steps: steps, pct: pct, state: state, running: running, failed: failed, eta: eta, log: log, beat: beat, stale: stale };
+  }
+  var ICON = { done: "✓", running: "▸", failed: "✕", wait: "⏸", todo: "·" };
+  function ago(t) { if (!t) return "–"; var s = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 1000)); return s < 60 ? s + " s ago" : Math.round(s / 60) + " min ago"; }
+  function hm(t) { return t ? String(new Date(t).toLocaleTimeString()) : ""; }
+  function renderProgress(g) {
+    var els = document.querySelectorAll('.progress[data-group="' + g.id + '"]');
+    if (!els.length) return;
+    var v = stageView(g);
+    els.forEach(function (el) { paint(el, g, v); });
+  }
+  function paint(el, g, v) {
+    var cls = v.state === "failed" ? "bad" : v.state === "running" ? "warn" : v.state === "approved" ? "ok" : v.state === "stale" ? "bad" : "";
+    var every = v.state === "running" ? 3 : 15;
+    var silent = v.state === "running" && v.beat && Date.now() - Date.parse(v.beat) > 60000;
+    var open = el.querySelector("details.log") ? el.querySelector("details.log").open : v.state === "running" || v.state === "failed";
+    el.innerHTML = '<div class="phead"><b>' + esc(g.id + " " + g.title) + '</b><span class="muted">' + esc(g.skill + (v.pr && v.pr.skill ? " " + v.pr.skill.split("@")[1] : "")) + "</span>" +
+      '<span class="pill ' + cls + '">' + esc(v.state) + "</span><span class=\"pct\">" + v.pct + " %</span>" + (v.eta != null ? '<span class="muted">~' + esc(hms(v.eta)) + " left in this step</span>" : "") + "</div>" +
+      '<div class="bar"><i style="width:' + v.pct + '%" class="' + cls + '"></i></div>' +
+      (v.running ? '<div class="now">' + esc(v.running.title) + (v.running.msg ? " — " + esc(v.running.msg) : "") + " · " + v.running.pct + " %</div>" : "") +
+      (v.failed ? '<div class="now bad">Failed in ' + esc(v.failed.title) + ": " + esc(v.failed.msg) + "</div>" : "") +
+      (silent ? '<div class="now bad">Runner not responding (no heartbeat for ' + esc(ago(v.beat)) + ") — is node tools/runner/worker.mjs running?</div>" : "") +
+      (v.stale ? '<div class="now bad">This stage was re-run after you approved it — check it and approve again.</div>' : "") +
+      '<ol class="steps">' + v.steps.map(function (st) {
+        return '<li class="' + st.state + '"><span class="ic">' + ICON[st.state] + '</span><span class="t">' + esc(st.title) + (st.kind === "agent" ? ' <em>(Claude)</em>' : st.kind === "user" ? " <em>(you)</em>" : "") + "</span>" +
+          '<span class="m">' + esc(st.state === "running" ? st.pct + " %" : st.msg) + "</span>" + (st.secs != null ? '<span class="s">' + esc(hms(st.secs)) + "</span>" : "") + "</li>";
+      }).join("") + "</ol>" +
+      "<details class=\"log\"" + (open ? " open" : "") + "><summary class=\"muted\">log · " + v.log.length + " lines</summary><pre>" +
+      esc(v.log.slice(-40).map(function (l) { return hm(l.t) + "  " + (l.step ? "[" + l.step + "] " : "") + l.msg; }).join("\n") || "(nothing yet)") + "</pre></details>" +
+      '<div class="foot muted">last update ' + esc(ago(v.pr && v.pr.updated)) + " · checking every " + every + " s</div>";
+  }
+  function loadProgress(force) {
+    var now = Date.now();
+    return Promise.all(GROUPS.map(function (g) {
+      var running = progress[g.id] && progress[g.id].state === "running" || agentProg[g.id] && !agentProg[g.id].done;
+      var every = g.tab === active || running ? 3000 : 15000;
+      if (!force && checked[g.id] && now - checked[g.id] < every - 200) return null;
+      checked[g.id] = now;
+      return Promise.all([readJson(DIR + "stages/" + g.id + "/progress.json"), readJson(DIR + "stages/" + g.id + "/agent-progress.json")]).then(function (a) { progress[g.id] = a[0]; agentProg[g.id] = a[1]; });
+    })).then(function () { return readJson(DIR + "run.json").then(function (r) { runDoc = r; }); });
+  }
+
   function refresh() {
+    GROUPS.forEach(renderProgress);
     document.querySelectorAll(".stage[data-stage]").forEach(renderStage);
     renderDeck(); renderQuestions(); renderJobs();
     if (active === "brief") renderBrief();
     if (active === "objects") renderObjects();
-    if (active === "room") renderRoom();
+    if (active === "fitout") renderRoom();
     if (active === "plan") $("#plan").innerHTML = imgs("S3_GEOMETRY/", /\.png$/);
-    if (active === "drawings") $("#drawings").innerHTML = imgs("S6_DRAWINGS/", /\.png$/) +
-      Array.from(files).filter(function (f) { return /^S6_DRAWINGS\/.+\.(pdf|dxf)$/.test(f); }).map(function (f) { return '<a target="_blank" href="' + P.url(STEPS + f) + '"><span>⬇ ' + esc(f.split("/").pop()) + "</span></a>"; }).join("");
+    if (active === "3d") $("#model").innerHTML = imgs("S7_3D/", /\.png$/);
   }
 
   function poll() {
-    return Promise.all([loadJobs(), loadFiles(), readJson(DIR + "usage.json").then(function (u) { usage = u; })]).then(function () {
+    return Promise.all([loadJobs(), loadFiles(), loadProgress(), readJson(DIR + "usage.json").then(function (u) { usage = u; })]).then(function () {
       if (!questions && files.has("S1_INTAKE/questions.json")) return readJson(STEPS + "S1_INTAKE/questions.json").then(function (q) { questions = q; });
     }).then(refresh, function () {});
   }
@@ -347,5 +442,6 @@
   $("#code").textContent = P.project || "";
   P.db.doc("answers/main").onSnapshot(function (snap) { answers = snap.exists ? snap.data() || {} : {}; if (answers.saved) $("#qstate").textContent = "Saved " + String(answers.saved).slice(0, 16).replace("T", " "); refresh(); });
   show("deck");
+  setInterval(function () { GROUPS.forEach(renderProgress); }, 1000);   // the "x s ago" and ETA tick between polls
   Promise.all([loadDecks(), poll()]).then(function () { setInterval(poll, 3000); setInterval(loadDecks, 15000); });
 })();

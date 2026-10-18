@@ -1,0 +1,65 @@
+{
+ "schema": "skill/1",
+ "id": "floorplan-renderer",
+ "title": "Floorplan Renderer",
+ "version": "1.0.0",
+ "entry": "render-a-floorplan.md",
+ "about": "A room canvas → .blend / .fbx / .glb and snapshot images (Blender headless on the runner).",
+ "inputs": {
+  "room": {
+   "schema": "canvas.v1",
+   "required": true
+  }
+ },
+ "outputs": {
+  "model": {
+   "file": "3d/*"
+  },
+  "stills": {
+   "file": "3d/*.png",
+   "review": true
+  }
+ },
+ "steps": {
+  "RENDER": {
+   "kind": "script",
+   "title": "Bake, build the scene, render the cameras, export",
+   "weight": 100,
+   "run": [
+    [
+     "node",
+     "tools/bakeplan/run.mjs",
+     "{PROJ}/{CODE}.room.canvas.json",
+     "--out",
+     "{WORK}/baked.json",
+     {
+      "cwd": "{REPO}"
+     }
+    ],
+    [
+     "blender",
+     "-b",
+     "--factory-startup",
+     "--python",
+     "tools/export_3d.py",
+     "--",
+     "{WORK}/baked.json",
+     "{WORK}/3d",
+     "{CODE}",
+     "{IF:res:--res}",
+     "{ARG?:res}",
+     "{IF:samples:--samples}",
+     "{ARG?:samples}"
+    ]
+   ]
+  },
+  "APPROVE": {
+   "kind": "user",
+   "title": "The user accepts the snapshots",
+   "gate": "approve",
+   "review": [
+    "3d/*.png"
+   ]
+  }
+ }
+}

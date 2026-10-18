@@ -13,10 +13,15 @@ Conventions measured on the engine (S5 notes in AGENTS.md):
   are hosted on FACE LINES: a non-wall segment on the room-side face, ordered so the room is on -v.
 - sofa / chair backs are on +v; the reception desk's visitor side is -v.
 """
-import json, math, sys
+import json, math, os, sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Skills this step reads from (the runner names every skill the pipeline pins as BP_SKILL_<ID>; beside it in the
+# repo's skills/ folder otherwise): the tracer's geometry.provenance, and the Object Resolver's own objects.
+SKILLS = Path(__file__).resolve().parent.parent.parent
+TRACER = Path(os.environ.get("BP_SKILL_FLOORPLAN_TRACER") or SKILLS / "Floorplan Tracer")
+RESOLVER = Path(os.environ.get("BP_SKILL_OBJECT_RESOLVER") or SKILLS / "Object Resolver")
+sys.path.insert(0, str(TRACER / "tools"))
 from geometry import provenance  # noqa: E402
 
 LAYERS_EXTRA = [("finish", "Finish", "#a16207"), ("ceiling", "Ceiling", "#0369a1"), ("lighting", "Lighting", "#ca8a04"),
@@ -110,15 +115,12 @@ def main(project_dir):
     # an object's own material binding lives in its definition; the renderer reads only the attachment's
     # params, so copy the defaults onto every attachment that does not state its own
     defaults = {}
-    # the S4 catalog: <pipeline>/work/catalog.json, else pipeline-work/build-from-deck/catalog.json in any parent folder
-    root = Path(__file__).resolve().parent.parent
-    cat = next((c for c in [root / "work" / "catalog.json",
-                            *(p / "pipeline-work" / "build-from-deck" / "catalog.json" for p in root.parents)] if c.exists()),
-               root / "work" / "catalog.json")
+    # the S3 catalog: <project>/catalog.json (the stage pulls it), else the Object Resolver's work/catalog.json
+    cat = next((c for c in [P / "catalog.json", RESOLVER / "work" / "catalog.json"] if c.exists()), P / "catalog.json")
     if cat.exists():
         for o in json.loads(cat.read_text(encoding="utf-8"))["objects"]:
             defaults[o["path"]] = {q["id"]: q["value"] for q in o["params"] if q["id"] in ("materialPath", "finishes") and q["value"]}
-    for f in (Path(__file__).resolve().parent.parent / "objects" / "out").glob("*.json"):
+    for f in (RESOLVER / "objects" / "out").glob("*.json"):
         if f.name.startswith("_"):
             continue
         d = json.loads(f.read_text(encoding="utf-8"))

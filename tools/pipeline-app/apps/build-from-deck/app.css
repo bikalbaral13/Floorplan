@@ -37,3 +37,22 @@ button:disabled { opacity: .45; cursor: default; }
 .table th { color: var(--muted); font-weight: 600; }
 .empty { padding: 16px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; margin-top: 10px; text-align: center; }
 iframe.review { width: 100%; height: calc(100vh - 150px); min-height: 520px; border: 1px solid var(--line); border-radius: 10px; background: #fff; margin-top: 10px; }
+/* live progress card (0.2) */
+.progress:empty { display: none; }
+.progress { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); position: sticky; top: 49px; z-index: 1; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+.progress .phead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.progress .pct { font-weight: 700; font-variant-numeric: tabular-nums; margin-left: auto; }
+.progress .bar { height: 8px; border-radius: 99px; background: #e2e8f0; overflow: hidden; margin: 8px 0 6px; }
+.progress .bar i { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+.progress .bar i.ok { background: var(--ok); } .progress .bar i.bad { background: var(--bad); } .progress .bar i.warn { background: var(--accent); }
+.progress .now { font-size: 12px; margin: 2px 0; } .progress .now.bad { color: var(--bad); }
+.progress ol.steps { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 2px; }
+.progress ol.steps li { display: grid; grid-template-columns: 16px 1fr auto auto; gap: 8px; align-items: baseline; font-size: 12px; padding: 2px 0; }
+.progress ol.steps li .ic { text-align: center; color: var(--muted); }
+.progress ol.steps li.done .ic { color: var(--ok); } .progress ol.steps li.running .ic { color: var(--accent); } .progress ol.steps li.failed .ic { color: var(--bad); } .progress ol.steps li.wait .ic { color: var(--warn); }
+.progress ol.steps li.todo { color: var(--muted); }
+.progress ol.steps li .m { color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress ol.steps li .s { color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress ol.steps em { font-style: normal; color: var(--muted); font-size: 11px; }
+.progress pre { margin: 6px 0 0; max-height: 200px; overflow: auto; font: 11px/1.4 ui-monospace, Consolas, monospace; background: #0f172a; color: #e2e8f0; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
+.progress .foot { font-size: 11px; margin-top: 4px; }

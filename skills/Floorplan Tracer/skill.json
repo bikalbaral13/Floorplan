@@ -1,0 +1,87 @@
+{
+ "schema": "skill/1",
+ "id": "floorplan-tracer",
+ "title": "Floorplan Tracer",
+ "version": "1.0.0",
+ "entry": "scope-the-trace.md",
+ "about": "A raster plan / drawing PDF → a traced plan (the Floorplan Tracer pipeline's S0–S8, its own approvals), then the room geometry a build needs: walls cut at openings, zones, the empty room canvas.",
+ "inputs": {
+  "image": {
+   "type": "image|pdf"
+  },
+  "brief": {
+   "type": "roombrief.v1"
+  }
+ },
+ "outputs": {
+  "trace": {
+   "file": "trace.px.json"
+  },
+  "plan": {
+   "file": "plan.json"
+  },
+  "canvas": {
+   "file": "{CODE}.canvas.json",
+   "schema": "canvas.v1"
+  },
+  "proof": {
+   "file": "geometry_check.png",
+   "review": true
+  }
+ },
+ "questions": [
+  {
+   "file": "trace-scope.questions.json",
+   "prefill": {
+    "which_plan": "brief.room"
+   }
+  }
+ ],
+ "steps": {
+  "TRACE": {
+   "kind": "agent",
+   "title": "Trace the plan (Floorplan Tracer S0–S8, the user approves its gates)",
+   "weight": 60,
+   "doc": "scope-the-trace.md"
+  },
+  "FROM_TRACER": {
+   "kind": "script",
+   "title": "Take the approved trace",
+   "weight": 10,
+   "run": [
+    [
+     "python",
+     "tools/from_tracer.py",
+     "{WORK}/tracer",
+     "{PROJ}/roombrief.json",
+     "{PROJ}/trace.px.json",
+     "{IF:scale_ref:--scale-ref}",
+     "{ARG?:scale_ref}",
+     "{IF:scale_mm:--scale-mm}",
+     "{ARG?:scale_mm}"
+    ]
+   ]
+  },
+  "GEOMETRY": {
+   "kind": "script",
+   "title": "Walls, openings and zones",
+   "weight": 30,
+   "run": [
+    [
+     "python",
+     "tools/geometry.py",
+     "{PROJ}",
+     "{WORK}/deck"
+    ]
+   ]
+  },
+  "APPROVE": {
+   "kind": "user",
+   "title": "The user checks geometry_check.png",
+   "gate": "approve",
+   "review": [
+    "geometry_check.png"
+   ]
+  }
+ }
+}

@@ -1,0 +1,64 @@
+{
+ "schema": "skill/1",
+ "id": "floorplan-improver",
+ "title": "Floorplan Improver",
+ "version": "1.0.0",
+ "entry": "improve-traced-plan.md",
+ "about": "A traced canvas → a furnished, tiled, lit, render-ready canvas. In a pipeline the Object Resolver's resolve.json is LOCKED: PLACE puts those items as given; IMPROVE only adds what the brief did not list.",
+ "inputs": {
+  "canvas": {
+   "schema": "canvas.v1",
+   "required": true
+  },
+  "locked": {
+   "file": "resolve.json"
+  },
+  "brief": {
+   "type": "roombrief.v1"
+  }
+ },
+ "outputs": {
+  "room": {
+   "file": "{CODE}.room.canvas.json",
+   "schema": "canvas.v1",
+   "review": true
+  }
+ },
+ "questions": [
+  {
+   "file": "improve-scope.questions.json",
+   "hide_when_locked": [
+    "fitout"
+   ]
+  }
+ ],
+ "steps": {
+  "PLACE": {
+   "kind": "script",
+   "title": "Place every resolved object on the room canvas",
+   "weight": 40,
+   "run": [
+    [
+     "python",
+     "tools/compose.py",
+     "{PROJ}"
+    ]
+   ]
+  },
+  "IMPROVE": {
+   "kind": "agent",
+   "title": "Claude adds floors, lighting, trims (optional, keeps locked items)",
+   "weight": 60,
+   "doc": "improve-traced-plan.md",
+   "optional": true
+  },
+  "APPROVE": {
+   "kind": "user",
+   "title": "The user checks the room canvas",
+   "gate": "approve",
+   "review": [
+    "{CODE}.room.canvas.json"
+   ]
+  }
+ }
+}

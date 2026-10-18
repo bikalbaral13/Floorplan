@@ -14,8 +14,11 @@ async function getJson(key) {
   try { return JSON.parse(r.text); } catch { return null; }
 }
 
+const progress = (pct, msg) => console.log("@@progress " + JSON.stringify({ pct: Math.round(pct), msg }));
 const objects = [];
-for (const key of (await r2.listObjects(cfg, "library/Objects/")).filter(k => k.endsWith(".json"))) {
+const objKeys = (await r2.listObjects(cfg, "library/Objects/")).filter(k => k.endsWith(".json"));
+for (const [i, key] of objKeys.entries()) {
+  if (i % 10 === 0) progress(80 * i / objKeys.length, `Reading library objects: ${i} of ${objKeys.length}`);
   const d = await getJson(key);
   if (!d?.nodes) continue;
   const props = d.nodes.flatMap(n => n.data?.tool === "input-props" ? n.data.params.props : []);
@@ -25,6 +28,7 @@ for (const key of (await r2.listObjects(cfg, "library/Objects/")).filter(k => k.
     params: props.filter(p => p.id !== "P").map(p => ({ id: p.id, name: p.name, type: p.type, value: p.value, ...(p.options?.length ? { options: p.options } : {}) })),
   });
 }
+progress(80, `Reading library materials`);
 const materials = [];
 for (const key of (await r2.listObjects(cfg, "library/Materials/")).filter(k => k.endsWith(".json"))) {
   const d = await getJson(key);

@@ -89,21 +89,28 @@ their questions and never approve a step yourself.
 | 3. Offer the pipeline | "Run the Build pipeline?" — wait for yes | yes / no |
 | 4. Open the link | `session { op: "open" }` → give the link; `pipeline { op: "run", pipeline: "build-from-deck", code }` | opens it; the Build tabs appear |
 | 5. Upload | tell them to use the **Deck** tab (PPTX or PDF; saved to `inputs/decks/`); `pipeline.events { wait: true }` until `deck_uploaded` | uploads |
-| 6. Read the deck | `project { op: "job", code, pipeline: "build-from-deck", stage: "S1_INTAKE", args: { deck: "inputs/decks/<file>" } }`, then `project.jobs` until `done` (or they press **Run**) | — |
-| 7. Questions | point them to the **Questions** tab; `pipeline.events { wait: true }` until `answers`; read them with `pipeline.state { keys: ["answers"] }` | answers + approves |
-| 8. Draft brief | `project.job S2_DRAFT { project, room }` (from `questions.json` `room_ids[answers.room]`) | — |
-| 9. Curate | read `steps/S2_BRIEF/roombrief.draft.json` + the slide images (`library.read Projects/<CODE>/3-build/build-from-deck/steps/S1_INTAKE/…`); write `steps/S2_BRIEF/roombrief.curated.json` (`library.write`); `project.job S2_FINALIZE` | approves **Brief** |
-| 10. Geometry | read the plan image; write `steps/S3_GEOMETRY/trace.px.json`; `project.job S3_GEOMETRY` | approves **Plan** (geometry_check.png) |
-| 11. Objects | `project.job S4_CATALOG`; read `catalog.json`; write `steps/S4_RESOLVE/resolve.json`. The **Objects** tab then shows every item as a product page; the user approves / changes / omits / asks, then **signs off** there (writes `steps/S4_RESOLVE/review.json`, event `review`). `pipeline.events { wait: true }` until `review` with `status: "approved"`; answer any questions in chat first. Then `project.job S4_CHECK` (applies the review, then checks); if `steps/S4_RESOLVE/review.todo.json` lists items, rebind their params in `resolve.json` and re-queue S4_CHECK. Never sign off for them | reviews + signs off **Objects** |
-| 12. Room | `project.job S5_COMPOSE`; load `output/<CODE>.room.canvas.json` in the editor for them | approves **Room** |
-| 13. Drawings | `project.job S6_DRAWINGS` → `output/drawings/` (+ `media/drawings/`) | approves **Drawings** |
-| 13b. 3D | `project.job S7_3D` → `output/3d/` (.blend .fbx .glb + snapshots; also `media/renders/`) | — |
-| 14. Close | `pipeline.advance` after each approval; `project.status` to report | — |
+| 6. S1 Brief: read the deck | `project { op: "job", code, pipeline: "build-from-deck", stage: "S1_INTAKE", args: { deck: "inputs/decks/<file>" } }`, then `project.jobs` until `done` (or they press **Run**) | watches the progress panel |
+| 7. S1 questions | point them to the **Brief** tab's questions; `pipeline.events { wait: true }` until `answers`; read them with `pipeline.state { keys: ["answers"] }` | answers |
+| 8. S1 draft + curate | `project.job S1_DRAFT { project, room }` (from `questions.json` `room_ids[answers.room]`); read `steps/S2_BRIEF/roombrief.draft.json` + the slide images; write `steps/S2_BRIEF/roombrief.curated.json` (skill **Deck Reader**, `curate-the-brief.md`); `project.job S1_FINALIZE` | approves **S1 Brief** in the step bar |
+| 9. S2 Plan | trace the deck's plan page with the **Floorplan Tracer** (its pipeline's tasks and gates, same CODE); `project.job S2_FROM_TRACER`, then `S2_GEOMETRY` | approves the tracer's gates, then **S2 Plan** (geometry_check.png) |
+| 10. S3 Objects | `project.job S3_CATALOG`; read `catalog.json`; write `steps/S4_RESOLVE/resolve.json` (skill **Object Resolver**). The **Objects** tab shows every item; the user signs off there (`review` event, `status: "approved"`). Then `project.job S3_CHECK`; if `steps/S4_RESOLVE/review.todo.json` lists items, rebind them and re-queue S3_CHECK. Never sign off for them | signs off, approves **S3 Objects** |
+| 11. S4 Fit-out | `project.job S4_PLACE` (skill **Floorplan Improver**, places the resolved items as given); load `output/<CODE>.room.canvas.json` in the editor. Optional IMPROVE: tiles, lighting, trims — never moves a resolved item | approves **S4 Fit-out** |
+| 12. S5 3D | `project.job S5_3D` (skill **Floorplan Renderer**) → `output/3d/` (.blend .fbx .glb + snapshots) | approves **S5 3D** |
+| 13. Close | `pipeline.advance` after each approval; `project.status` to report | — |
 
-The file formats for steps 9–11 are in the pipeline's `AGENTS.md` (`library/Pipelines/Build/build-from-deck-pipeline/`).
+**Gates are enforced by the runner**: a job of stage Sn fails with "waits for the user to approve S(n-1)" until the
+user pressed **Approve step** for S(n-1) — and again if S(n-1) was re-run after that approval. Never approve yourself.
+
+**Progress**: the right panel of every stage shows a live bar and log from `stages/<Sn>/progress.json` (the runner
+writes it from `@@progress` lines). While YOU do an agent step (curate, trace, resolve, improve), report what you are
+doing every few items: `library.write Projects/<CODE>/3-build/build-from-deck/stages/<Sn>/agent-progress.json`
+`{ "schema": "agent-progress/1", "step": "CURATE", "pct": 40, "msg": "Typing items 9–16 of 24", "at": "<ISO time>", "done": false }`
+(`done: true` at the end). The user is watching it.
+
+Each stage's work is a **skill** in `library/Skills/<Name>/` (skill.json: the steps, who does each, the docs to read).
+The pipeline pins each skill's version in its `pipeline.json` `skills`.
 Script stages run on **the runner** — `node tools/runner/worker.mjs` on a machine with the repo and Python. A job
 `queued` for over a minute means no runner is online: tell the user to start it; do not try to run the stage yourself.
-S7_3D (Blender) runs on the runner too; QA (S8) is not in the runner yet.
 
 ---
 

@@ -1,0 +1,1197 @@
+{
+ "id": "improve-scope",
+ "name": "Scope the fit-out",
+ "version": 1,
+ "job": "floorplan-improve",
+ "briefTitle": "Improve",
+ "briefSubject": "plan",
+ "intro": "Answer these before a single object is placed. Every answer decides which steps of the pipeline run and what the build script emits — nothing here is a preference. Leave a question blank and the run uses the documented default and says so in the report.",
+ "pipeline": [
+  "read-the-plan-and-brief",
+  "choose-the-fitout-set",
+  "lay-out-tiles-and-floor-finishes",
+  "light-the-rooms",
+  "dress-ceiling-walls-and-trims",
+  "wire-services-and-render-kit",
+  "emit-improved-canvas-json",
+  "verify-the-improvement",
+  "floorplan-improver-scripts"
+ ],
+ "always": [
+  "read-the-plan-and-brief",
+  "choose-the-fitout-set",
+  "emit-improved-canvas-json",
+  "verify-the-improvement",
+  "floorplan-improver-scripts"
+ ],
+ "brief": [
+  {
+   "label": "Plan",
+   "q": "plan"
+  },
+  {
+   "label": "Level",
+   "q": "level"
+  },
+  {
+   "label": "Rooms",
+   "q": "scope",
+   "also": "scope_rooms"
+  },
+  {
+   "label": "Style",
+   "q": "style"
+  },
+  {
+   "label": "Palette",
+   "q": "palette"
+  },
+  {
+   "label": "Hardware",
+   "q": "hardware"
+  },
+  {
+   "label": "Floor",
+   "q": "floor_finish",
+   "also": "floor_size"
+  },
+  {
+   "label": "Bond",
+   "q": "floor_pattern"
+  },
+  {
+   "label": "Grout",
+   "q": "grout"
+  },
+  {
+   "label": "Wet floors",
+   "q": "wet_floor"
+  },
+  {
+   "label": "Light mood",
+   "q": "light_mood"
+  },
+  {
+   "label": "Colour temp",
+   "q": "kelvin"
+  },
+  {
+   "label": "Ceiling",
+   "q": "ceiling"
+  },
+  {
+   "label": "Fans",
+   "q": "fans"
+  },
+  {
+   "label": "Trim",
+   "q": "trim"
+  },
+  {
+   "label": "Feature wall",
+   "q": "feature"
+  },
+  {
+   "label": "Services",
+   "q": "services"
+  },
+  {
+   "label": "Render kit",
+   "q": "render_kit"
+  },
+  {
+   "label": "Cameras",
+   "q": "cameras"
+  },
+  {
+   "label": "Deliver",
+   "q": "deliverable"
+  }
+ ],
+ "sections": [
+  {
+   "id": "job",
+   "title": "The job",
+   "lead": "Which plan is being improved, how far the fit-out goes, and what comes back.",
+   "questions": [
+    {
+     "id": "plan",
+     "ask": "Which plan?",
+     "note": "the traced canvas JSON — a path on disk, or library/Designs/<Name>.json",
+     "input": "text",
+     "default": "",
+     "sets": [
+      {
+       "path": "options.input",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "level",
+     "ask": "How far should the fit-out go?",
+     "input": "choice",
+     "default": "render",
+     "options": [
+      {
+       "label": "Render-ready",
+       "hint": "everything: furniture, tiles, lighting, ceiling, trims, decor, services, cameras and render-look",
+       "value": "render",
+       "steps": [
+        "lay-out-tiles-and-floor-finishes",
+        "light-the-rooms",
+        "dress-ceiling-walls-and-trims",
+        "wire-services-and-render-kit"
+       ]
+      },
+      {
+       "label": "Furnished",
+       "hint": "furniture, tiles, lighting, ceiling and trims — no services, no cameras, no render-look",
+       "value": "furnished",
+       "steps": [
+        "lay-out-tiles-and-floor-finishes",
+        "light-the-rooms",
+        "dress-ceiling-walls-and-trims"
+       ]
+      },
+      {
+       "label": "Shell plus",
+       "hint": "tiles, skirting and a single ceiling light per room — the minimum that stops it reading as a blank shell",
+       "value": "shell",
+       "steps": [
+        "lay-out-tiles-and-floor-finishes"
+       ]
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.level",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "scope",
+     "ask": "Which rooms?",
+     "input": "choice",
+     "default": "all",
+     "options": [
+      {
+       "label": "Every space in the plan",
+       "value": "all"
+      },
+      {
+       "label": "Only the ones I name",
+       "value": "named"
+      },
+      {
+       "label": "Everything except the ones I name",
+       "value": "except"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.scope",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "scope_rooms",
+     "ask": "Which ones?",
+     "note": "room labels as they appear in the plan, comma separated",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "all": [
+       {
+        "q": "scope",
+        "is": "named"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.rooms",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "scope_except",
+     "ask": "Which to leave alone?",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "all": [
+       {
+        "q": "scope",
+        "is": "except"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.skipRooms",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "deliverable",
+     "ask": "What do you want back?",
+     "note": "choose any",
+     "input": "multi",
+     "default": [
+      "json"
+     ],
+     "options": [
+      {
+       "label": "Improved canvas JSON",
+       "hint": "always produced",
+       "value": "json"
+      },
+      {
+       "label": "A copy with the image embedded",
+       "hint": "~320 KB, for anyone without bucket access",
+       "value": "embedded"
+      },
+      {
+       "label": "Uploaded to library/Designs/",
+       "value": "upload"
+      },
+      {
+       "label": "A per-room schedule of what was added",
+       "value": "schedule"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.emit",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "existing",
+     "ask": "The plan already has some objects in it. What should happen to them?",
+     "input": "choice",
+     "default": "keep",
+     "options": [
+      {
+       "label": "Keep them and fill the gaps",
+       "hint": "the default; nothing already placed is touched",
+       "value": "keep"
+      },
+      {
+       "label": "Keep them but re-bind their materials",
+       "value": "rebind"
+      },
+      {
+       "label": "Replace the fit-out, keep the shell",
+       "hint": "walls, openings and spaces are never touched either way",
+       "value": "replace"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.existing",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "style",
+   "title": "Style",
+   "lead": "These words end up in every object's `semantics`, which is what the renderer actually reads.",
+   "questions": [
+    {
+     "id": "style",
+     "ask": "What is the look?",
+     "input": "choice",
+     "default": "contemporary",
+     "options": [
+      {
+       "label": "Contemporary",
+       "hint": "flush trims, shadow gaps, handleless joinery",
+       "value": "contemporary"
+      },
+      {
+       "label": "Warm hotel",
+       "hint": "oak, linen, cove light, warm dim",
+       "value": "hotel"
+      },
+      {
+       "label": "Minimal",
+       "hint": "no cornice, no skirting, shadow gap only, very little decor",
+       "value": "minimal"
+      },
+      {
+       "label": "Classical",
+       "hint": "stepped cornice, tall skirting, panelled joinery",
+       "value": "classical"
+      },
+      {
+       "label": "Budget / builder finish",
+       "hint": "vitrified tile, painted MDF skirting, ceiling fan and tube, no cove",
+       "value": "budget"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.style",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "palette",
+     "ask": "Palette?",
+     "input": "choice",
+     "default": "warm-neutral",
+     "options": [
+      {
+       "label": "Warm neutral",
+       "hint": "ivory, oak, brass",
+       "value": "warm-neutral"
+      },
+      {
+       "label": "Cool neutral",
+       "hint": "white, grey, steel",
+       "value": "cool-neutral"
+      },
+      {
+       "label": "Dark and warm",
+       "hint": "walnut, bronze, deep upholstery",
+       "value": "dark-warm"
+      },
+      {
+       "label": "From an image I'll give you",
+       "hint": "palette and materials only — never dimensions",
+       "value": "image"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.palette",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "reference",
+     "ask": "Any reference to work from?",
+     "note": "a mood-board image, a finishes schedule, a BOQ, or a sentence. Anything named by size or model here wins over every default.",
+     "input": "text",
+     "default": "",
+     "sets": [
+      {
+       "path": "options.reference",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "hardware",
+     "ask": "Ironmongery and plate finish?",
+     "input": "choice",
+     "default": "white",
+     "options": [
+      {
+       "label": "Matt white",
+       "value": "white"
+      },
+      {
+       "label": "Brushed steel",
+       "value": "steel"
+      },
+      {
+       "label": "Brass",
+       "value": "brass"
+      },
+      {
+       "label": "Matt black",
+       "value": "black"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.hardware",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "floors",
+   "title": "Floors",
+   "lead": "Tile size and set-out. A tile that does not divide the room leaves a splinter at one wall, and that single detail is what makes a render look amateur.",
+   "questions": [
+    {
+     "id": "floor_finish",
+     "ask": "Main floor finish?",
+     "input": "choice",
+     "default": "vitrified",
+     "options": [
+      {
+       "label": "Vitrified / porcelain tile",
+       "hint": "Finishes/tile.json",
+       "value": "vitrified"
+      },
+      {
+       "label": "Marble",
+       "hint": "Finishes/marble.json",
+       "value": "marble"
+      },
+      {
+       "label": "Terrazzo",
+       "hint": "Finishes/terrazzo.json",
+       "value": "terrazzo"
+      },
+      {
+       "label": "Timber plank",
+       "hint": "Finishes/light-oak.json, laid as a running bond",
+       "value": "timber"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.floor",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "floor_size",
+     "ask": "Tile size, in mm?",
+     "note": "600, 800, 1200 for vitrified; 200 x 1200 for plank; leave blank for the per-room default",
+     "input": "text",
+     "default": "800",
+     "sets": [
+      {
+       "path": "options.tileSize",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "floor_pattern",
+     "ask": "Bond?",
+     "input": "choice",
+     "default": "straight",
+     "options": [
+      {
+       "label": "Straight / grid",
+       "hint": "pattern Square",
+       "value": "straight"
+      },
+      {
+       "label": "Running bond",
+       "hint": "pattern Brick — half-tile offset each row",
+       "value": "brick"
+      },
+      {
+       "label": "Diagonal",
+       "hint": "pattern Square at angle 45",
+       "value": "diagonal"
+      },
+      {
+       "label": "Hexagon",
+       "hint": "pattern Hexagon — feature floors only",
+       "value": "hexagon"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.bond",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "setout",
+     "ask": "Set-out?",
+     "input": "choice",
+     "default": "centred",
+     "options": [
+      {
+       "label": "Centred",
+       "hint": "equal cuts at opposite walls, no cut thinner than half a tile — the professional default",
+       "value": "centred"
+      },
+      {
+       "label": "From a corner",
+       "hint": "a full tile at the entry corner, whatever is left at the far wall",
+       "value": "corner"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.setout",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "grout",
+     "ask": "Grout width?",
+     "input": "choice",
+     "default": "2",
+     "options": [
+      {
+       "label": "2 mm — rectified",
+       "value": "2"
+      },
+      {
+       "label": "3 mm — standard",
+       "value": "3"
+      },
+      {
+       "label": "5 mm — ceramic / wet area",
+       "value": "5"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.grout",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "wet_floor",
+     "ask": "Wet rooms — sunk floor and drain?",
+     "note": "bathroom floors drop 15 mm and get a drain at the low point with its fall zone kept clear",
+     "input": "bool",
+     "default": true,
+     "sets": [
+      {
+       "path": "options.wetFloor",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "skirting_mat",
+     "ask": "Skirting follows...",
+     "input": "choice",
+     "default": "wall",
+     "options": [
+      {
+       "label": "The wall — painted MDF",
+       "value": "wall"
+      },
+      {
+       "label": "The floor — tile skirting",
+       "value": "floor"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.skirtingMaterial",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lighting",
+   "title": "Lighting",
+   "lead": "Layers, a lux target and the groups the render can switch. A ring of six downlights at a guessed pitch is not a lighting design.",
+   "questions": [
+    {
+     "id": "light_mood",
+     "ask": "What is the lighting for?",
+     "input": "choice",
+     "default": "layered",
+     "options": [
+      {
+       "label": "Layered",
+       "hint": "ambient + task + accent + decorative, each its own switchable group",
+       "value": "layered"
+      },
+      {
+       "label": "Bright and even",
+       "hint": "an ambient grid to the lux target and little else",
+       "value": "even"
+      },
+      {
+       "label": "Photographic",
+       "hint": "layered, plus wall washers and accent on every feature surface",
+       "value": "photo"
+      },
+      {
+       "label": "Minimum",
+       "hint": "one ceiling point per room",
+       "value": "minimum"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.lightMood",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "kelvin",
+     "ask": "Colour temperature for the house?",
+     "note": "one decision for the whole plan — mixing 3000 K and 4000 K between adjoining rooms is the commonest tell of an auto-generated plan",
+     "input": "choice",
+     "default": "3000",
+     "options": [
+      {
+       "label": "2700 K warm",
+       "hint": "bedroom, living, hospitality",
+       "value": "2700"
+      },
+      {
+       "label": "3000 K warm white",
+       "hint": "the general-purpose default",
+       "value": "3000"
+      },
+      {
+       "label": "4000 K neutral",
+       "hint": "only if the whole home is meant to read clinical",
+       "value": "4000"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.kelvin",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "lux",
+     "ask": "Override the lux targets?",
+     "note": "leave blank for the table: bedroom 130, living 175, kitchen 300, bath 200, study 300, corridor 100",
+     "input": "text",
+     "default": "",
+     "sets": [
+      {
+       "path": "options.lux",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "daylight",
+     "ask": "Put a daylight portal on every window?",
+     "note": "without one the interior renders black at the glass",
+     "input": "bool",
+     "default": true,
+     "sets": [
+      {
+       "path": "options.daylight",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "fans",
+     "ask": "Ceiling fans?",
+     "input": "choice",
+     "default": "habitable",
+     "options": [
+      {
+       "label": "Every habitable room",
+       "value": "habitable"
+      },
+      {
+       "label": "Bedrooms only",
+       "value": "bedrooms"
+      },
+      {
+       "label": "None",
+       "hint": "air conditioning only",
+       "value": "none"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.fans",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "detail",
+   "title": "Ceiling, trims and services",
+   "lead": "The cheap objects that do the most work — and the layers that make the plan buildable.",
+   "questions": [
+    {
+     "id": "ceiling",
+     "ask": "False ceiling?",
+     "input": "choice",
+     "default": "band",
+     "options": [
+      {
+       "label": "Perimeter band with cove LED",
+       "hint": "band 305 mm, panel above, warm tape in the cove",
+       "value": "band"
+      },
+      {
+       "label": "Flat drop, no cove",
+       "value": "flat"
+      },
+      {
+       "label": "None",
+       "hint": "objects mount to the structural soffit",
+       "value": "none"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.ceiling",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "trim",
+     "ask": "Wall base detail?",
+     "note": "skirting and shadow gap are alternatives — never both on the same run",
+     "input": "choice",
+     "default": "skirting",
+     "options": [
+      {
+       "label": "Skirting",
+       "hint": "76-100 mm, painted",
+       "value": "skirting"
+      },
+      {
+       "label": "Shadow gap",
+       "hint": "12 mm recess, contemporary",
+       "value": "shadow"
+      },
+      {
+       "label": "Neither",
+       "value": "none"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.trim",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "cornice",
+     "ask": "Cornice at the wall head?",
+     "input": "bool",
+     "default": false,
+     "sets": [
+      {
+       "path": "options.cornice",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "feature",
+     "ask": "Feature walls?",
+     "note": "one per room at most, and only where the furniture gives it a reason",
+     "input": "multi",
+     "default": [
+      "headboard"
+     ],
+     "options": [
+      {
+       "label": "Upholstered panel behind beds",
+       "value": "headboard"
+      },
+      {
+       "label": "Fluted panel behind the TV",
+       "value": "tv"
+      },
+      {
+       "label": "Fluted or plain panel in the entry",
+       "value": "entry"
+      },
+      {
+       "label": "None",
+       "value": "none"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.feature",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "curtains",
+     "ask": "Curtains?",
+     "input": "choice",
+     "default": "track",
+     "options": [
+      {
+       "label": "On a recessed track",
+       "value": "track"
+      },
+      {
+       "label": "Behind a pelmet with a concealed strip",
+       "value": "pelmet"
+      },
+      {
+       "label": "On a visible rod",
+       "value": "rod"
+      },
+      {
+       "label": "None",
+       "value": "none"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.curtains",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "services",
+     "ask": "Electrical and MEP?",
+     "input": "multi",
+     "default": [
+      "switches",
+      "sockets",
+      "ac"
+     ],
+     "options": [
+      {
+       "label": "Switch plates",
+       "hint": "1.15 m, beside the door, gangs = light groups in the room",
+       "value": "switches"
+      },
+      {
+       "label": "Socket outlets",
+       "hint": "0.30 m, 1.10 m over a counter",
+       "value": "sockets"
+      },
+      {
+       "label": "AC grilles",
+       "value": "ac"
+      },
+      {
+       "label": "Water heaters and floor drains",
+       "value": "wet"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.services",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "styling",
+     "ask": "Styling?",
+     "note": "the last 5 % that reads as 50 % in a render",
+     "input": "multi",
+     "default": [
+      "rugs",
+      "plants",
+      "decor",
+      "bedding"
+     ],
+     "options": [
+      {
+       "label": "Rugs",
+       "value": "rugs"
+      },
+      {
+       "label": "Plants",
+       "value": "plants"
+      },
+      {
+       "label": "Decor clusters on every bare surface",
+       "value": "decor"
+      },
+      {
+       "label": "Bedding and cushions",
+       "value": "bedding"
+      },
+      {
+       "label": "Wall art",
+       "value": "art"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.styling",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "render",
+   "title": "The render kit",
+   "lead": "What makes the output drop straight into the Blender pipeline instead of needing a second pass.",
+   "questions": [
+    {
+     "id": "render_kit",
+     "ask": "Include the render kit?",
+     "note": "render-look, a sun, exterior context and cameras",
+     "input": "bool",
+     "default": true,
+     "sets": [
+      {
+       "path": "options.renderKit",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "time_of_day",
+     "ask": "Time of day?",
+     "input": "choice",
+     "default": "golden",
+     "showWhen": {
+      "all": [
+       {
+        "q": "render_kit",
+        "is": true
+       }
+      ]
+     },
+     "options": [
+      {
+       "label": "Golden hour",
+       "hint": "hourOfDay 15.5, warm low rake",
+       "value": "golden"
+      },
+      {
+       "label": "Flat daylight",
+       "hint": "hourOfDay 10.0, neutral",
+       "value": "day"
+      },
+      {
+       "label": "Dusk",
+       "hint": "hourOfDay 19.0, the cove and lamps doing the work",
+       "value": "dusk"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.timeOfDay",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "site",
+     "ask": "Site latitude, longitude?",
+     "note": "so the sun angle is real — e.g. 27.7172, 85.3240",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "all": [
+       {
+        "q": "render_kit",
+        "is": true
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.site",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "cameras",
+     "ask": "How many cameras per room?",
+     "input": "choice",
+     "default": "3",
+     "showWhen": {
+      "all": [
+       {
+        "q": "render_kit",
+        "is": true
+       }
+      ]
+     },
+     "options": [
+      {
+       "label": "One hero shot",
+       "value": "1"
+      },
+      {
+       "label": "Three",
+       "hint": "hero, wardrobe or feature wall, window",
+       "value": "3"
+      },
+      {
+       "label": "Five",
+       "hint": "adds a detail and a 360 panorama",
+       "value": "5"
+      },
+      {
+       "label": "None",
+       "value": "0"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.cameras",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "notes",
+   "title": "Anything else",
+   "lead": "Per-room overrides and whatever the questions above did not ask.",
+   "questions": [
+    {
+     "id": "room_overrides",
+     "ask": "Per-room overrides?",
+     "note": "one per line, e.g. 'BED 2 = single bed, no wardrobe' or 'KITCHEN = 600 anti-skid, counter on the north wall'",
+     "input": "text",
+     "default": "",
+     "sets": [
+      {
+       "path": "options.roomOverrides",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "notes",
+     "ask": "Anything about this plan I should know?",
+     "input": "text",
+     "default": "",
+     "sets": [
+      {
+       "path": "options.notes",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "flags": [
+  {
+   "id": "minimal_with_cornice",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "style",
+      "is": "minimal"
+     },
+     {
+      "q": "cornice",
+      "is": true
+     }
+    ]
+   },
+   "says": "A minimal brief and a cornice at every wall head are pulling in opposite directions.",
+   "resolution": "Drop the cornice, or pick the classical style, which is what a cornice belongs to."
+  },
+  {
+   "id": "skirting_and_shadow",
+   "severity": "blocker",
+   "when": {
+    "all": [
+     {
+      "q": "trim",
+      "is": "shadow"
+     },
+     {
+      "q": "skirting_mat",
+      "is": "floor"
+     }
+    ]
+   },
+   "says": "You have asked for a shadow gap at the wall base and for tile skirting. A shadow gap IS the skirting detail — stacking them gives a 12 mm reveal above a 76 mm tile and reads as a modelling error.",
+   "resolution": "Pick one: shadow gap, or skirting in tile."
+  },
+  {
+   "id": "no_ceiling_with_cove",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "ceiling",
+      "is": "none"
+     },
+     {
+      "q": "light_mood",
+      "is": "photo"
+     }
+    ]
+   },
+   "says": "A photographic lighting brief usually leans on a cove, and there is no false ceiling to put one in.",
+   "resolution": "Allow the perimeter band, or accept that the accent layer will be surface-mounted track only."
+  },
+  {
+   "id": "render_no_cameras",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "render_kit",
+      "is": true
+     },
+     {
+      "q": "cameras",
+      "is": "0"
+     }
+    ]
+   },
+   "says": "The render kit is on but no cameras were asked for, so nothing can be shot without adding one by hand later.",
+   "resolution": "Ask for at least one hero camera per room worth shooting."
+  },
+  {
+   "id": "timber_in_wet",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "floor_finish",
+      "is": "timber"
+     }
+    ]
+   },
+   "says": "Timber plank is the main floor finish. Bathrooms, balconies and utility rooms will still be tiled — timber is not used in a wet room whatever the brief says.",
+   "resolution": "Nothing to do; this is a note so the per-room schedule does not surprise you."
+  },
+  {
+   "id": "budget_with_render",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "style",
+      "is": "budget"
+     },
+     {
+      "q": "light_mood",
+      "is": "photo"
+     }
+    ]
+   },
+   "says": "A builder-finish brief with photographic lighting will produce a plan whose lighting costs more than its joinery.",
+   "resolution": "Either lift the style, or drop the lighting to layered."
+  }
+ ]
+}

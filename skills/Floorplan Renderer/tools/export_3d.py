@@ -141,8 +141,12 @@ scene.render.resolution_x, scene.render.resolution_y = RES
 scene.render.image_settings.file_format = "PNG"
 scene.view_settings.view_transform = "AgX" if "AgX" in [v.identifier for v in scene.view_settings.bl_rna.properties["view_transform"].enum_items] else "Filmic"
 
+import json
+def progress(pct, msg): print("@@progress " + json.dumps({"pct": round(pct, 1), "msg": msg}), flush=True)
+progress(10, f"Scene built: {n_obj} objects; rendering {len(cams)} cameras")
 shots = []
-for cam in cams:
+for k, cam in enumerate(cams):
+    progress(10 + 75 * k / max(len(cams), 1), f"Rendering {cam.name} ({k + 1} of {len(cams)})")
     # the TOP view hides the ceiling objects (anything above 2.0 m) so the plan reads
     hidden = []
     if cam.name == "TOP":
@@ -156,6 +160,7 @@ for cam in cams:
     shots.append(os.path.basename(scene.render.filepath))
 print(f"snapshots ({eng}): {', '.join(shots)}")
 
+progress(88, "Saving .blend, exporting .fbx and .glb")
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, f"{CODE}.blend"))
 bpy.ops.object.select_all(action="DESELECT")
 for ob in root.objects: ob.select_set(True)

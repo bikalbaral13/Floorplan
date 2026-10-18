@@ -13,9 +13,9 @@ import importlib.util, json, math, os, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-# the Floorplan Tracer's canvas exporter: beside this pipeline in the repo, or — when the runner runs a copy
-# fetched from R2 (pipeline-work/runner-cache/) — in the repo the runner names with BP_REPO
-TRACER = (Path(os.environ["BP_REPO"]) / "public" / "floorplan-tracer-pipeline") if os.environ.get("BP_REPO") else HERE.parent.parent / "floorplan-tracer-pipeline"
+# the Floorplan Tracer's canvas exporter, shipped inside this skill (tools/exporters/canvas.py, a copy of the tracer
+# pipeline's exporters/canvas.py — one place knows the editor format)
+TRACER = HERE
 TOL_PX = 3.0
 R2_PROJECTS = "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/Projects"  # images: Projects/<CODE>/3-build/build-from-deck/output/images/
 

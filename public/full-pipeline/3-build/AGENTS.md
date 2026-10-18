@@ -1,5 +1,25 @@
 # AGENTS.md — Build from Plan Deck
 
+## 0.4: five stages, each one skill
+| Stage | Skill (R2 library/Skills/) | Runner jobs | The user |
+|---|---|---|---|
+| S1 Brief | Deck Reader | S1_INTAKE → (answers) → S1_DRAFT → Claude curates → S1_FINALIZE | answers the questions, approves **S1 Brief** |
+| S2 Plan | Floorplan Tracer | Claude traces with the tracer pipeline (its gates) → S2_FROM_TRACER → S2_GEOMETRY | approves the tracer's gates, then **S2 Plan** |
+| S3 Objects | Object Resolver | S3_CATALOG → Claude writes resolve.json → (Objects sign-off) → S3_CHECK | signs off, approves **S3 Objects** |
+| S4 Fit-out | Floorplan Improver | S4_PLACE (compose: the resolved items as given) → optional Claude IMPROVE | approves **S4 Fit-out** |
+| S5 3D | Floorplan Renderer | S5_3D (Blender) | approves **S5 3D** |
+
+- The scripts live in the skills (`skills/<Name>/` in the repo), not here: `pipeline.json` pins each skill's version
+  and `runner.json` stages say `"uses": "<alias>:<STEP>"`. Publish a skill with `node tools/skills/publish.mjs`.
+- The runner refuses a job of Sn until the user approved S(n-1) in the step bar (and again after a re-run).
+- Progress: scripts print `@@progress {"pct":…,"msg":…}`; the runner writes `stages/<Sn>/progress.json`. During your
+  own steps write `stages/<Sn>/agent-progress.json` (`agent-progress/1`: step, pct, msg, at, done) every few items.
+- R2 data folders under `steps/` keep their 0.3 names (S1_INTAKE, S2_BRIEF, S3_GEOMETRY, S4_RESOLVE, S5_COMPOSE, S7_3D).
+- Not in 0.4: S6 drawings and S8 QA (tools/drawings.py, tools/qa.py stay here for a later Drawing Set skill).
+
+The notes below are from 0.3 (stage numbers there: S2 = brief, S3 = geometry, S4 = resolve, S5 = compose, S7 = 3D);
+the facts still hold, the scripts they name now live in the skills.
+
 Turns a **plan-phase deck (.pptx)** into Build-phase outputs for **one room the user picks**:
 canvas JSON, 2D drawings, a realistic .blend and low-quality preview stills.
 Pilot: INFRA (Competition) 2024 → RECEPTION (`projects/INFRA_RECEPTION`).

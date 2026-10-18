@@ -8,6 +8,7 @@ No guessing is written as fact: every item keeps its slide number.
     python tools/intake.py <deck.pptx> <out_dir>
 """
 import hashlib, json, re, sys
+import json
 from collections import Counter
 from pathlib import Path
 from pptx import Presentation
@@ -30,6 +31,11 @@ REVIEW_START = re.compile(r"^\s*(change|add|increase|decrease|reduce|remove|make
                           re.I | re.M)
 REVIEW_ANY = re.compile(r"\b(looks? (too|to)|pixelat|overlap|too low|too high|make sure|to be added|to be adjusted|"
                         r"to be brought|to be as same|need to be|needs to be|be incorporated)\b", re.I)
+
+
+def progress(pct, msg):
+    """One line the pipeline runner turns into the app's live progress (progress/1)."""
+    print("@@progress " + json.dumps({"pct": round(pct, 1), "msg": msg}), flush=True)
 
 
 def is_review(texts):
@@ -288,6 +294,7 @@ def read_pdf(deck, img_dir, seen):
         size = size or [W, H]
         rec = {"slide": i, "texts": [], "pictures": [], "shapes": [], "tables": [], "page_png": f"pages/page-{i:02d}.png"}
         page.get_pixmap(dpi=110).save(str(img_dir.parent / rec["page_png"]))
+        progress(90 * i / len(doc), f"Reading page {i} of {len(doc)}")
         for x0, y0, x1, y1, txt, *_ in page.get_text("blocks"):
             if txt.strip():
                 rec["texts"].append({"text": txt.strip(), "box": [round(x0 / W, 4), round(y0 / H, 4), round((x1 - x0) / W, 4), round((y1 - y0) / H, 4)]})
@@ -333,7 +340,10 @@ def main(deck, out):
     else:
         prs = Presentation(deck)
         W, H = prs.slide_width, prs.slide_height
-        slides = [read_slide(i, s, W, H, out / "images", seen) for i, s in enumerate(prs.slides, 1)]
+        slides, n = [], len(prs.slides)
+        for i, s in enumerate(prs.slides, 1):
+            slides.append(read_slide(i, s, W, H, out / "images", seen))
+            progress(90 * i / n, f"Reading slide {i} of {n}")
     projects = segment(slides) or fallback_project(slides, Path(deck).stem)
     by_slide = {r["slide"]: r for r in slides}
     plan_images(projects, by_slide)

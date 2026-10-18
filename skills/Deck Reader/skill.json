@@ -1,0 +1,98 @@
+{
+ "schema": "skill/1",
+ "id": "deck-reader",
+ "title": "Deck Reader",
+ "version": "1.0.0",
+ "entry": "SKILL.md",
+ "about": "A plan-phase deck (.pptx or .pdf) → the room brief (roombrief.v1): slides, images, the user's questions, a curated brief checked against every room slide.",
+ "inputs": {
+  "deck": {
+   "type": "pptx|pdf",
+   "required": true
+  }
+ },
+ "outputs": {
+  "deck": {
+   "file": "deck.json"
+  },
+  "questions": {
+   "file": "questions.json"
+  },
+  "brief": {
+   "file": "roombrief.json",
+   "schema": "roombrief.v1",
+   "review": true
+  }
+ },
+ "steps": {
+  "INTAKE": {
+   "kind": "script",
+   "title": "Read the deck and list the questions",
+   "weight": 20,
+   "run": [
+    [
+     "python",
+     "tools/intake.py",
+     "{WORK}/input/{BASENAME:deck}",
+     "{WORK}/deck"
+    ],
+    [
+     "python",
+     "tools/questions.py",
+     "{WORK}/deck",
+     "{WORK}/deck/questions.json"
+    ]
+   ]
+  },
+  "ANSWER": {
+   "kind": "user",
+   "title": "The user answers the questions",
+   "gate": "answers",
+   "questions": "{STEPS}S1_INTAKE/questions.json"
+  },
+  "DRAFT": {
+   "kind": "script",
+   "title": "Draft the room brief",
+   "weight": 10,
+   "run": [
+    [
+     "python",
+     "tools/brief.py",
+     "{WORK}/deck",
+     "{ARG:project}",
+     "{ARG:room}",
+     "{PROJ}/roombrief.draft.json"
+    ]
+   ]
+  },
+  "CURATE": {
+   "kind": "agent",
+   "title": "Claude curates the brief",
+   "weight": 50,
+   "doc": "curate-the-brief.md"
+  },
+  "FINALIZE": {
+   "kind": "script",
+   "title": "Check the brief covers every room slide",
+   "weight": 20,
+   "run": [
+    [
+     "python",
+     "tools/brief.py",
+     "finalize",
+     "{PROJ}/roombrief.draft.json",
+     "{PROJ}/roombrief.curated.json",
+     "{PROJ}/roombrief.json"
+    ]
+   ]
+  },
+  "APPROVE": {
+   "kind": "user",
+   "title": "The user approves the brief",
+   "gate": "approve",
+   "review": [
+    "roombrief.json"
+   ]
+  }
+ }
+}

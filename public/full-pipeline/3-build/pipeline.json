@@ -2,11 +2,11 @@
  "schema": "pipeline/1",
  "id": "build-from-deck",
  "title": "Build (from roombrief or Plan Deck)",
- "version": "0.3.7",
+ "version": "0.4.0",
  "phase": "build",
  "entry": {
   "agents": "AGENTS.md",
-  "run": "see STAGES.json (S1 intake … S8 QA); in the Full Pipeline S1–S2 are skipped when projects/{CODE}/roombrief.json came from Plan/Design"
+  "run": "five stages S1 Brief · S2 Plan · S3 Objects · S4 Fit-out · S5 3D, each one skill; runner.json"
  },
  "kit": "0.3.2",
  "inputs": [
@@ -51,33 +51,20 @@
     "local": "project:{CODE}.room.canvas.json",
     "to": "{OUT}{CODE}.room.canvas.json",
     "schema": "canvas.v1",
-    "after": "S5_COMPOSE"
+    "after": "S4_PLACE"
    },
    {
     "id": "resolve",
     "local": "project:resolve.json",
     "to": "{OUT}resolve.json",
-    "after": "S4_RESOLVE"
+    "after": "S3_CHECK"
    },
    {
-    "id": "drawings",
-    "local": "project:drawings/*",
-    "to": "{OUT}drawings/",
+    "id": "model",
+    "local": "3d/*",
+    "to": "{OUT}3d/",
     "binary": true,
-    "after": "S6_DRAWINGS"
-   },
-   {
-    "id": "blend",
-    "local": "render/{CODE}.blend",
-    "to": "{OUT}{CODE}.blend",
-    "binary": true,
-    "after": "S7_RENDER"
-   },
-   {
-    "id": "qa",
-    "local": "project:QA.md",
-    "to": "{OUT}QA.md",
-    "after": "S8_QA"
+    "after": "S5_3D"
    }
   ],
   "temp": [
@@ -86,5 +73,64 @@
    "render/stills/**",
    "*.baked.json"
   ]
- }
+ },
+ "skills": {
+  "deck": {
+   "id": "deck-reader",
+   "version": "1.0.0"
+  },
+  "tracer": {
+   "id": "floorplan-tracer",
+   "version": "1.0.0"
+  },
+  "resolver": {
+   "id": "object-resolver",
+   "version": "1.0.0"
+  },
+  "improver": {
+   "id": "floorplan-improver",
+   "version": "1.0.0"
+  },
+  "renderer": {
+   "id": "floorplan-renderer",
+   "version": "1.0.0"
+  }
+ },
+ "stages": [
+  {
+   "id": "S1",
+   "title": "Brief",
+   "skill": "deck",
+   "gate": "brief",
+   "tab": "brief"
+  },
+  {
+   "id": "S2",
+   "title": "Plan",
+   "skill": "tracer",
+   "gate": "plan",
+   "tab": "plan"
+  },
+  {
+   "id": "S3",
+   "title": "Objects",
+   "skill": "resolver",
+   "gate": "objects",
+   "tab": "objects"
+  },
+  {
+   "id": "S4",
+   "title": "Fit-out",
+   "skill": "improver",
+   "gate": "fitout",
+   "tab": "fitout"
+  },
+  {
+   "id": "S5",
+   "title": "3D",
+   "skill": "renderer",
+   "gate": "3d",
+   "tab": "3d"
+  }
+ ]
 }

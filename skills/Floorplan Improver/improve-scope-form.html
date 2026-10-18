@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scope the fit-out</title>
+<style>
+  :root{
+    --paper:#EDECE8; --ivory:#FAF9F6; --ink:#25262B; --mute:#6B6D74;
+    --line:#D6D4CE; --blue:#3E5C76; --blue-soft:#DCE4EC; --sage:#7E8B7A;
+    --warn:#B4762A; --block:#A8443A; --r:5px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{transition:none!important}}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:88px}
+  h1,h2{font-weight:600;margin:0;letter-spacing:-.01em}
+  h1{font-size:1.9rem;line-height:1.15}
+  h2{font-size:1.25rem;margin-bottom:.25rem}
+  p{margin:0}
+  code{font:13px ui-monospace,Menlo,Consolas,monospace;background:#E3E1DB;padding:1px 5px;border-radius:3px}
+
+  .wrap{max-width:820px;margin:0 auto;padding:40px 22px 40px}
+  header{margin-bottom:8px}
+  header p.intro{color:var(--mute);margin-top:10px;max-width:62ch}
+  .loader{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.9rem;color:var(--mute)}
+  .loader input[type=file]{font:inherit;font-size:.88rem}
+
+  section{padding:28px 0;border-top:1px solid var(--line)}
+  section>p.lead{color:var(--mute);margin-bottom:20px;max-width:64ch}
+  .q{margin-bottom:22px}
+  .q.hidden{display:none}
+  .q h3{font-weight:500;font-size:1rem;margin:0 0 3px}
+  .q .note{color:var(--mute);font-size:.86rem;margin-bottom:9px;max-width:64ch}
+  .opts{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+  .opt{position:relative;display:block;cursor:pointer}
+  .opt input{position:absolute;opacity:0;inset:0;width:100%;height:100%;cursor:pointer;margin:0}
+  .opt .c{background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);
+    padding:10px 12px;min-height:54px;display:flex;flex-direction:column;gap:3px;transition:border-color .15s,background .15s}
+  .opt .c b{font-weight:500}
+  .opt .c span{font-size:.8rem;color:var(--mute);line-height:1.35}
+  .opt input:checked+.c{border-color:var(--blue);background:#fff;box-shadow:inset 0 0 0 1px var(--blue)}
+  .opt input:focus-visible+.c{outline:2px solid var(--sage);outline-offset:2px}
+  input[type=number],input[type=text],textarea{font:inherit;color:var(--ink);background:var(--ivory);
+    border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;width:100%;max-width:520px}
+  input[type=number]{max-width:140px}
+  textarea{min-height:68px;resize:vertical}
+  input:focus-visible,textarea:focus-visible{outline:2px solid var(--sage);outline-offset:1px}
+
+  .out{margin-top:28px;background:var(--ink);color:#EDEBE5;border-radius:var(--r);padding:22px}
+  .out h2{color:#fff}
+  .out p{color:#B9BAC0;margin:7px 0 15px;font-size:.9rem}
+  .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .tabs button{font:inherit;font-size:.84rem;cursor:pointer;border:1px solid #4A4C53;background:transparent;
+    color:#EDEBE5;border-radius:4px;padding:5px 11px}
+  .tabs button[aria-selected=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+  pre{white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;
+    background:#1B1C20;color:#E2E0DA;padding:14px;border-radius:4px;max-height:420px;overflow:auto;margin:0 0 14px}
+  .btns{display:flex;gap:9px;flex-wrap:wrap}
+  button.act{font:inherit;font-weight:500;cursor:pointer;border-radius:var(--r);padding:10px 16px;border:1px solid transparent}
+  .primary{background:var(--blue);color:#fff}
+  .primary:hover{background:#334C62}
+  .ghost{background:transparent;color:#EDEBE5;border-color:#4A4C53}
+  .ghost:hover{border-color:#7C7E86}
+  .toast{font-size:.88rem;color:#B9BAC0;margin-top:9px;min-height:1.4em}
+
+  .rail{position:fixed;left:0;right:0;bottom:0;background:rgba(250,249,246,.96);
+    border-top:1px solid var(--line);backdrop-filter:blur(6px);z-index:20}
+  .rail .inner{max-width:820px;margin:0 auto;padding:10px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .progress{flex:1;min-width:140px;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+  .progress i{display:block;height:100%;width:0;background:var(--blue);transition:width .3s}
+  .count{font-size:.85rem;color:var(--mute);white-space:nowrap}
+  .pill{font-size:.8rem;border-radius:20px;padding:3px 11px;white-space:nowrap}
+  .pill.block{background:#F5E7E5;color:#7A2F27;border:1px solid var(--block)}
+  .pill.warn{background:#F6EDDE;color:#77501C;border:1px solid var(--warn)}
+  .pill.ok{background:#E9EEE8;color:#44543F;border:1px solid var(--sage)}
+  .flags{display:grid;gap:8px;margin:18px 0 0}
+  .flag{font-size:.87rem;border-radius:var(--r);padding:10px 12px;border-left:3px solid}
+  .flag.blocker{background:#F5E7E5;border-color:var(--block);color:#7A2F27}
+  .flag.warning{background:#F6EDDE;border-color:var(--warn);color:#77501C}
+  .flag b{display:block;font-weight:600;margin-bottom:2px}
+  .flag em{display:block;font-style:normal;margin-top:4px;opacity:.85}
+  .empty{color:var(--mute);padding:36px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Scope the fit-out</h1>
+    <p class="intro" id="intro">Load a scope file to begin.</p>
+    <div class="loader">
+      <input type="file" id="file" accept=".json,application/json">
+      <span>or open with <code>?q=improve-scope.questions.json</code></span>
+    </div>
+    <div class="flags" id="flags"></div>
+  </header>
+
+  <div id="body"><p class="empty">Nothing loaded yet.</p></div>
+
+  <div class="out" id="out" hidden>
+    <h2>The run plan</h2>
+    <p>Hand this to the agent before it measures anything. The brief is the readable version of the same thing.</p>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="brief" aria-selected="true">Brief</button>
+      <button role="tab" data-tab="run" aria-selected="false">Run plan JSON</button>
+      <button role="tab" data-tab="answers" aria-selected="false">Answers</button>
+    </div>
+    <pre id="pre"></pre>
+    <div class="btns">
+      <button class="act primary" id="copy">Copy</button>
+      <button class="act ghost" id="dl">Download run plan</button>
+      <button class="act ghost" id="reset">Reset to defaults</button>
+    </div>
+    <div class="toast" id="toast" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="rail" id="rail" hidden>
+  <div class="inner">
+    <div class="progress"><i id="bar"></i></div>
+    <div class="count" id="count">0 of 0</div>
+    <div id="pills"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const el = (t, a = {}, ...kids) => { const n = document.createElement(t);
+  for (const [k, v] of Object.entries(a)) k === "class" ? n.className = v : n.setAttribute(k, v);
+  kids.flat().forEach(c => c != null && n.append(c)); return n; };
+
+let DOC = null, answers = {}, tab = "brief";
+
+/* ── predicates: `all` / `any` of leaves. No expression language, no eval. ─────────────────── */
+const num = v => typeof v === "number" ? v : v === true ? 1 : v === false ? 0 : Number(v);
+const cmp = v => (v && typeof v === "object" && "q" in v) ? num(answers[v.q]) + (v.margin || 0) : v;
+function leaf(p) {
+  const a = answers[p.q];
+  if ("is" in p) return a === cmp(p.is);
+  if ("isNot" in p) return a !== cmp(p.isNot);
+  if ("includes" in p) return Array.isArray(a) && a.includes(p.includes);
+  if ("lt" in p) return num(a) < num(cmp(p.lt));
+  if ("gt" in p) return num(a) > num(cmp(p.gt));
+  if ("lte" in p) return num(a) <= num(cmp(p.lte));
+  if ("gte" in p) return num(a) >= num(cmp(p.gte));
+  return false;
+}
+function test(node) {
+  if (!node) return true;
+  if (Array.isArray(node.all)) return node.all.every(test);
+  if (Array.isArray(node.any)) return node.any.some(test);
+  return leaf(node);
+}
+const questions = () => DOC.sections.flatMap(s => s.questions);
+const visible = q => test(q.showWhen);
+const blank = a => a === undefined || a === "" || (Array.isArray(a) && !a.length);
+
+/* ── the run plan. `sets` write dot-paths; `steps` name skill files, ordered by `pipeline`. ── */
+function setPath(o, path, v) {
+  const ks = String(path).split(".");
+  let n = o;
+  for (let i = 0; i < ks.length - 1; i++) n = (n[ks[i]] ||= {});
+  n[ks[ks.length - 1]] = v;
+}
+function runPlan() {
+  const run = { mode: null, entry: null, steps: [], options: {} };
+  const steps = new Set(DOC.always || []);
+  const open = [];
+  for (const q of questions()) {
+    if (!visible(q)) continue;
+    const a = answers[q.id];
+    if (blank(a)) { open.push(q.id); continue; }
+    // An option's own `sets` / `steps` REPLACE the question's — only meaningful for `choice`.
+    const opt = q.input === "choice" ? (q.options || []).find(o => o.value === a) : null;
+    for (const s of (opt?.sets ?? q.sets ?? [])) setPath(run, s.path, s.value === "$" ? a : s.value);
+    for (const st of (opt?.steps ?? q.steps ?? [])) steps.add(st);
+  }
+  run.steps = (DOC.pipeline || []).filter(s => steps.has(s));
+  return { run, open };
+}
+// A flag fires when `when` holds and `unless` does not.
+const fired = () => (DOC.flags || []).filter(f => test(f.when) && !(f.unless && test(f.unless)));
+
+/* ── fields ────────────────────────────────────────────────────────────────────────────────── */
+const card = (o) => el("div", { class: "c" }, el("b", {}, o.label), o.hint ? el("span", {}, o.hint) : null);
+function fChoice(q) {
+  const box = el("div", { class: "opts" });
+  for (const o of q.options || []) {
+    const i = el("input", { type: "radio", name: q.id });
+    if (answers[q.id] === o.value) i.checked = true;
+    i.onchange = () => { answers[q.id] = o.value; draw(); };
+    box.append(el("label", { class: "opt" }, i, card(o)));
+  }
+  return box;
+}
+function fMulti(q) {
+  const box = el("div", { class: "opts" });
+  const cur = new Set(answers[q.id] || []);
+  for (const o of q.options || []) {
+    const i = el("input", { type: "checkbox" });
+    if (cur.has(o.value)) i.checked = true;
+    i.onchange = () => { i.checked ? cur.add(o.value) : cur.delete(o.value); answers[q.id] = [...cur]; draw(); };
+    box.append(el("label", { class: "opt" }, i, card(o)));
+  }
+  return box;
+}
+function fBool(q) {
+  const box = el("div", { class: "opts" });
+  for (const [label, val] of [["Yes", true], ["No", false]]) {
+    const i = el("input", { type: "radio", name: q.id });
+    if (answers[q.id] === val) i.checked = true;
+    i.onchange = () => { answers[q.id] = val; draw(); };
+    box.append(el("label", { class: "opt" }, i, el("div", { class: "c" }, el("b", {}, label))));
+  }
+  return box;
+}
+function fNumber(q) {
+  const n = el("input", { type: "number", value: String(answers[q.id] ?? q.default ?? 0) });
+  ["min", "max", "step"].forEach(k => q[k] !== undefined && n.setAttribute(k, q[k]));
+  n.oninput = () => { answers[q.id] = +n.value; draw(); };
+  return n;
+}
+function fText(q) {
+  const t = el(q.note && q.note.length > 40 ? "textarea" : "input", { type: "text" });
+  t.value = answers[q.id] ?? "";
+  t.oninput = () => { answers[q.id] = t.value; draw(); };
+  return t;
+}
+const FIELD = { choice: fChoice, multi: fMulti, bool: fBool, number: fNumber, text: fText };
+
+/* ── the readable brief ────────────────────────────────────────────────────────────────────
+   Data-driven, unlike the trace form's hardcoded one: `DOC.brief` is a list of
+   { label, q } rows and the labels resolve through each question's own options, so adding a
+   question to the JSON adds a line here without touching this file. ──────────────────────── */
+function brief() {
+  const { run, open } = runPlan();
+  const qs = new Map(questions().map(q => [q.id, q]));
+  const label = id => {
+    const q = qs.get(id), a = answers[id];
+    if (a === undefined || a === null || a === "") return "";
+    if (!q) return String(a);
+    if (Array.isArray(a)) return a.map(v => (q.options || []).find(o => o.value === v)?.label ?? v).join(", ");
+    if (typeof a === "boolean") return a ? "yes" : "no";
+    return (q.options || []).find(o => o.value === a)?.label ?? String(a);
+  };
+  const L = [];
+  L.push(`${(DOC.briefTitle || DOC.name || "RUN").toUpperCase()}: ${answers[DOC.briefSubject] || "(no plan named)"}`, "");
+  const rows = DOC.brief || questions().map(q => ({ label: q.ask, q: q.id }));
+  const w = Math.max(...rows.map(r => r.label.length));
+  for (const r of rows) {
+    if (r.q && !qs.has(r.q)) continue;
+    if (r.q && !visible(qs.get(r.q))) continue;
+    const v = r.q ? label(r.q) : "";
+    const extra = r.also && !blank(answers[r.also]) ? " — " + label(r.also) : "";
+    L.push(`${r.label.padEnd(w)}  ${v || "—"}${extra}`);
+  }
+  L.push("", "READ THESE, IN THIS ORDER:", ...run.steps.map((s, i) => `  ${i + 1}. ${s}`));
+  if (run.options.emit) L.push("", "EMIT: " + [].concat(run.options.emit).join(", "));
+  if (run.options.rooms) L.push("", "PER-ROOM OVERRIDES:", "  " + String(run.options.rooms).split(";").join("\n  "));
+  const f = fired();
+  if (f.length) {
+    L.push("", "BEFORE STARTING:");
+    for (const x of f) L.push(`  [${x.severity}] ${x.says}`, `           → ${x.resolution}`);
+  }
+  if (open.length) L.push("", "UNANSWERED: " + open.map(id => qs.get(id)?.ask ?? id).join(" · "));
+  return L.join("\n");
+}
+
+/* ── render ────────────────────────────────────────────────────────────────────────────────── */
+function build() {
+  $("#title").textContent = DOC.name || DOC.id;
+  $("#intro").textContent = DOC.intro || "";
+  const body = $("#body"); body.textContent = "";
+  for (const s of DOC.sections) {
+    const sec = el("section");
+    sec.append(el("h2", {}, s.title));
+    if (s.lead) sec.append(el("p", { class: "lead" }, s.lead));
+    for (const q of s.questions) {
+      const w = el("div", { class: "q", "data-q": q.id }, el("h3", {}, q.ask));
+      if (q.note) w.append(el("p", { class: "note" }, q.note));
+      w.append((FIELD[q.input] || fText)(q));
+      sec.append(w);
+    }
+    body.append(sec);
+  }
+  $("#out").hidden = false;
+  $("#rail").hidden = false;
+  draw();
+}
+
+function draw() {
+  for (const q of questions()) {
+    const n = document.querySelector(`[data-q="${q.id}"]`);
+    if (n) n.classList.toggle("hidden", !visible(q));
+  }
+  const vis = questions().filter(visible);
+  const done = vis.filter(q => !blank(answers[q.id]));
+  $("#bar").style.width = (vis.length ? done.length / vis.length * 100 : 0) + "%";
+  $("#count").textContent = `${done.length} of ${vis.length}`;
+
+  const f = fired();
+  const nb = f.filter(x => x.severity === "blocker").length;
+  const nw = f.length - nb;
+  const pills = $("#pills"); pills.textContent = "";
+  if (nb) pills.append(el("span", { class: "pill block" }, `${nb} blocker${nb > 1 ? "s" : ""}`));
+  if (nw) pills.append(el("span", { class: "pill warn" }, `${nw} to check`));
+  if (!f.length) pills.append(el("span", { class: "pill ok" }, "nothing blocking"));
+
+  const box = $("#flags"); box.textContent = "";
+  for (const x of f) box.append(el("div", { class: "flag " + x.severity },
+    el("b", {}, x.severity === "blocker" ? "Sort this out first" : "Worth knowing"),
+    x.says, el("em", {}, x.resolution)));
+  show();
+}
+
+function show() {
+  const { run } = runPlan();
+  $("#pre").textContent = tab === "run" ? JSON.stringify({
+      job: DOC.job, scopedAt: new Date().toISOString(),
+      questionnaire: { id: DOC.id, version: DOC.version },
+      run, answers, open: runPlan().open,
+      flags: fired().map(f => ({ id: f.id, severity: f.severity, says: f.says }))
+    }, null, 2)
+    : tab === "answers" ? JSON.stringify(answers, null, 2)
+    : brief();
+}
+
+function seed() {
+  answers = {};
+  for (const q of questions()) if (q.default !== undefined)
+    answers[q.id] = Array.isArray(q.default) ? [...q.default] : q.default;
+}
+const load = doc => { DOC = doc; seed(); build(); };
+
+$("#file").onchange = e => { const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => { try { load(JSON.parse(t)); } catch (err) { alert("Not a scope file: " + err.message); } }); };
+$("#reset").onclick = () => { seed(); build(); $("#toast").textContent = "Back to the defaults."; };
+$("#copy").onclick = async () => { try { await navigator.clipboard.writeText($("#pre").textContent); $("#toast").textContent = "Copied."; }
+  catch { $("#toast").textContent = "Copy blocked — select the text above."; } };
+$("#dl").onclick = () => {
+  const { run, open } = runPlan();
+  const doc = { job: DOC.job, scopedAt: new Date().toISOString(),
+    questionnaire: { id: DOC.id, version: DOC.version }, run, answers, open,
+    flags: fired().map(f => ({ id: f.id, severity: f.severity, says: f.says })) };
+  const a = el("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
+  a.download = `${DOC.id}_run.json`; a.click();
+  $("#toast").textContent = `Saved ${DOC.id}_run.json`;
+};
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  show();
+});
+
+const P = new URLSearchParams(location.search);
+const qp = P.get("q") || "improve-scope.questions.json";
+const preset = P.get("preset");
+fetch(qp).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(async doc => {
+    load(doc);
+    if (!preset) return;
+    try {
+      const seedVals = await (await fetch(preset)).json();
+      const known = new Set(questions().map(q => q.id));
+      for (const [k, v] of Object.entries(seedVals)) if (known.has(k)) answers[k] = v;
+      build();
+    } catch {}
+  })
+  .catch(e => { $("#body").innerHTML = `<p class="empty">Could not load <code>${qp}</code> — ${e.message}. Pick a file above instead.</p>`; });
+})();
+</script>
+</body>
+</html>

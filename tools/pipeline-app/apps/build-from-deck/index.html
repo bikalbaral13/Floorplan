@@ -21,52 +21,54 @@
       <span id="upload-state" class="muted"></span>
     </label>
     <div id="decks" class="list"></div>
+    <div class="progress" data-group="S1"></div>
     <div class="stage" data-stage="S1_INTAKE"></div>
     <div id="pages" class="thumbs"></div>
   </section>
 
-  <section data-panel="questions">
-    <h2>2 · Questions</h2>
-    <p class="muted">What the deck cannot settle by itself. Your answers go to Claude and to the next stages.</p>
+  <section data-panel="brief">
+    <div class="progress" data-group="S1"></div>
+    <h2>S1 · Brief <span class="muted">— skill Deck Reader</span></h2>
+    <p class="muted">What the deck cannot settle by itself: answer, save, then Claude drafts and curates the room brief. Approve the brief in the step bar.</p>
     <form id="qform" class="form"></form>
     <div class="row"><button id="qsave" class="primary" type="button">Save answers</button><span id="qstate" class="muted"></span></div>
-  </section>
-
-  <section data-panel="brief">
-    <h2>3 · Room brief</h2>
-    <p class="muted">The draft collects everything the deck says about the room; Claude types each item's params (curated); finalize checks every slide is covered.</p>
-    <div class="stage" data-stage="S2_DRAFT"></div>
-    <div class="stage" data-stage="S2_FINALIZE"></div>
+    <div class="stage" data-stage="S1_DRAFT"></div>
+    <div class="stage" data-stage="S1_FINALIZE"></div>
     <div id="brief" class="table"></div>
   </section>
 
   <section data-panel="plan">
-    <h2>4 · Plan geometry</h2>
-    <p class="muted">Claude traces walls and openings on the deck's plan (trace.px.json); the script scales and checks them against the zone outlines.</p>
-    <div class="stage" data-stage="S3_GEOMETRY"></div>
+    <div class="progress" data-group="S2"></div>
+    <h2>S2 · Plan <span class="muted">— skill Floorplan Tracer</span></h2>
+    <p class="muted">Claude traces the deck's plan with the Floorplan Tracer (you approve its scale and overlay); the scripts turn the trace into walls, openings and zones. Check geometry_check.png, then approve.</p>
+    <div class="stage" data-stage="S2_FROM_TRACER"></div>
+    <div class="stage" data-stage="S2_GEOMETRY"></div>
     <div id="plan" class="thumbs big"></div>
   </section>
 
   <section data-panel="objects">
-    <h2>5 · Objects &amp; materials</h2>
-    <p class="muted">Each brief item bound to a library object with its real parameters and a material.</p>
-    <div class="stage" data-stage="S4_CATALOG"></div>
-    <div class="stage" data-stage="S4_CHECK"></div>
+    <div class="progress" data-group="S3"></div>
+    <h2>S3 · Objects <span class="muted">— skill Object Resolver</span></h2>
+    <p class="muted">Each brief item bound to a library object with its real parameters and a material. Sign off below, then approve.</p>
+    <div class="stage" data-stage="S3_CATALOG"></div>
+    <div class="stage" data-stage="S3_CHECK"></div>
     <div id="objects"></div>
   </section>
 
-  <section data-panel="room">
-    <h2>6 · Room canvas</h2>
-    <p class="muted">Every object placed on the canvas with the deck's spec values. Open it in the editor to check.</p>
-    <div class="stage" data-stage="S5_COMPOSE"></div>
+  <section data-panel="fitout">
+    <div class="progress" data-group="S4"></div>
+    <h2>S4 · Fit-out <span class="muted">— skill Floorplan Improver</span></h2>
+    <p class="muted">Every signed-off object placed as given; Claude may add floors, lighting and trims around them. Open the room canvas to check, then approve.</p>
+    <div class="stage" data-stage="S4_PLACE"></div>
     <div id="room"></div>
   </section>
 
-  <section data-panel="drawings">
-    <h2>7 · Drawings</h2>
-    <p class="muted">Plan, RCP, elevations and schedules drawn from the baked 3D model (DXF + PDF + PNG).</p>
-    <div class="stage" data-stage="S6_DRAWINGS"></div>
-    <div id="drawings" class="thumbs big"></div>
+  <section data-panel="3d">
+    <div class="progress" data-group="S5"></div>
+    <h2>S5 · 3D <span class="muted">— skill Floorplan Renderer</span></h2>
+    <p class="muted">The room as .blend / .fbx / .glb with snapshots from the deck's cameras, two corners and the top (Blender on the runner).</p>
+    <div class="stage" data-stage="S5_3D"></div>
+    <div id="model" class="thumbs big"></div>
   </section>
 
   <section data-panel="runner">

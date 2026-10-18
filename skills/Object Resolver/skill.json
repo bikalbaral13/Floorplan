@@ -1,0 +1,72 @@
+{
+ "schema": "skill/1",
+ "id": "object-resolver",
+ "title": "Object Resolver",
+ "version": "1.0.0",
+ "entry": "SKILL.md",
+ "about": "Every brief item → a real library object with its real params, host and material (resolve.json); the user signs each off in the Objects review.",
+ "inputs": {
+  "brief": {
+   "type": "roombrief.v1",
+   "required": true
+  },
+  "trace": {
+   "file": "trace.px.json"
+  }
+ },
+ "outputs": {
+  "catalog": {
+   "file": "catalog.json"
+  },
+  "resolve": {
+   "file": "resolve.json",
+   "review": true
+  }
+ },
+ "steps": {
+  "CATALOG": {
+   "kind": "script",
+   "title": "Snapshot the library's objects and materials",
+   "weight": 15,
+   "run": [
+    [
+     "node",
+     "tools/catalog.mjs",
+     "{WORK}/catalog.json"
+    ]
+   ]
+  },
+  "RESOLVE": {
+   "kind": "agent",
+   "title": "Claude binds each item (resolve.json)",
+   "weight": 60,
+   "doc": "resolve-items-to-objects.md"
+  },
+  "CHECK": {
+   "kind": "script",
+   "title": "Apply the sign-off, check every binding",
+   "weight": 25,
+   "run": [
+    [
+     "python",
+     "tools/review_apply.py",
+     "{PROJ}"
+    ],
+    [
+     "python",
+     "tools/resolve_check.py",
+     "{PROJ}",
+     "{WORK}/catalog.json"
+    ]
+   ]
+  },
+  "APPROVE": {
+   "kind": "user",
+   "title": "The user signs off the Objects review",
+   "gate": "approve",
+   "review": [
+    "review.json"
+   ]
+  }
+ }
+}
