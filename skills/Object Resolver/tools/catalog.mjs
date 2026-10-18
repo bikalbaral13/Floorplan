@@ -20,6 +20,13 @@ const objKeys = (await r2.listObjects(cfg, "library/Objects/")).filter(k => k.en
 for (const [i, key] of objKeys.entries()) {
   if (i % 10 === 0) progress(80 * i / objKeys.length, `Reading library objects: ${i} of ${objKeys.length}`);
   const d = await getJson(key);
+  // object/2 (Python) objects: parameters [{key, label, kind, default, options}] instead of an input-props node
+  if (d?.version === 2 && d?.python) {
+    objects.push({ path: key.replace(/^library\//, ""), id: d.meta?.id ?? key.split("/").pop().replace(/\.json$/, ""), title: d.meta?.name ?? d.title, hostKind: d.hostKind ?? "node", runtime: "python",
+      about: String(d.description ?? "").slice(0, 240),
+      params: (d.parameters ?? []).map((p) => ({ id: p.key, name: p.label ?? p.key, type: p.kind ?? "number", value: p.default ?? null, ...(p.options?.length ? { options: p.options } : {}) })) });
+    continue;
+  }
   if (!d?.nodes) continue;
   const props = d.nodes.flatMap(n => n.data?.tool === "input-props" ? n.data.params.props : []);
   objects.push({

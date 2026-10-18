@@ -2,12 +2,12 @@
  "schema": "skill/1",
  "id": "deck-reader",
  "title": "Deck Reader",
- "version": "1.0.1",
+ "version": "1.1.0",
  "entry": "SKILL.md",
- "about": "A plan-phase deck (.pptx or .pdf) → the room brief (roombrief.v1): slides, images, the user's questions, a curated brief checked against every room slide.",
+ "about": "A plan-phase deck (.pptx / .pdf) or a moodboard IMAGE (.png / .jpg / .webp) → the room brief (roombrief.v1): slides (or the image's panels, marked by Claude and cropped one per item), the user's questions, a curated brief checked against every slide.",
  "inputs": {
   "deck": {
-   "type": "pptx|pdf",
+   "type": "pptx|pdf|png|jpg|webp",
    "required": true
   }
  },
@@ -22,6 +22,10 @@
    "file": "roombrief.json",
    "schema": "roombrief.v1",
    "review": true
+  },
+  "panels": {
+   "file": "panels.json",
+   "only": "image decks"
   }
  },
  "steps": {
@@ -34,6 +38,31 @@
      "python",
      "tools/intake.py",
      "{WORK}/input/{BASENAME:deck}",
+     "{WORK}/deck"
+    ],
+    [
+     "python",
+     "tools/questions.py",
+     "{WORK}/deck",
+     "{WORK}/deck/questions.json"
+    ]
+   ]
+  },
+  "MARK": {
+   "kind": "agent",
+   "title": "Claude marks the image's panels (image decks only)",
+   "weight": 20,
+   "doc": "read-an-image-deck.md",
+   "optional": true
+  },
+  "PANELS": {
+   "kind": "script",
+   "title": "Cut the panels into slides, list the questions",
+   "weight": 10,
+   "run": [
+    [
+     "python",
+     "tools/panels.py",
      "{WORK}/deck"
     ],
     [

@@ -331,10 +331,31 @@ def fallback_project(slides, name):
              "rooms": [{"name": name, "id": norm(name) or "room", "slides": [r["slide"] for r in slides]}]}]
 
 
+def read_image_deck(deck, out):
+    """A moodboard / plan IMAGE instead of a deck: one 'board' page. What is on it (plan, items, swatches, views) is
+    marked by Claude in panels.json and cut into slides by panels.py (step PANELS) — pixels alone cannot say which
+    picture is the sofa and which is the floor sample."""
+    from PIL import Image
+    im = Image.open(deck).convert("RGB")
+    (out / "pages").mkdir(parents=True, exist_ok=True)
+    im.save(out / "pages" / "page-01.png")
+    progress(60, f"Image deck {im.size[0]}x{im.size[1]} px — one board page")
+    name = Path(deck).stem
+    slide = {"slide": 1, "kind": "board", "texts": [], "shapes": [], "tables": [], "urls": [], "dims_mm": [], "levels_mm": [],
+             "page_png": "pages/page-01.png", "pictures": [{"md5": "", "file": "pages/page-01.png", "px": list(im.size), "box": [0, 0, 1, 1], "crop": [0, 0, 0, 0]}]}
+    deck_json = {"schema": "deck/1", "source": Path(deck).name, "kind": "image", "needs_panels": True,
+                 "board": {"file": "pages/page-01.png", "px": list(im.size)}, "slide_size_emu": list(im.size), "slide_count": 1,
+                 "projects": fallback_project([slide], name), "slides": [slide]}
+    (out / "deck.json").write_text(json.dumps(deck_json, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"image deck {Path(deck).name}: {im.size[0]}x{im.size[1]} px — Claude marks its panels (panels.json), then PANELS cuts them into slides -> {out}")
+
+
 def main(deck, out):
     out = Path(out)
     (out / "images").mkdir(parents=True, exist_ok=True)
     seen = {}
+    if Path(deck).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+        return read_image_deck(deck, out)
     if str(deck).lower().endswith(".pdf"):
         slides, (W, H) = read_pdf(deck, out / "images", seen)
     else:

@@ -14,10 +14,10 @@
 <main id="panels">
   <section data-panel="deck">
     <h2>1 · The deck</h2>
-    <p class="muted">Upload the plan-phase deck — PowerPoint (.pptx) or PDF. It is saved in the project's <code>inputs/decks/</code>.</p>
+    <p class="muted">Upload the plan-phase deck — PowerPoint (.pptx) or PDF — or one moodboard image (.png .jpg .webp): Claude marks its plan, items and swatches. It is saved in the project's <code>inputs/decks/</code>.</p>
     <label id="drop" class="drop">
-      <input id="file" type="file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
-      <span>Drop the deck here, or <u>choose a file</u></span>
+      <input id="file" type="file" accept=".pptx,.pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
+      <span>Drop the deck or moodboard image here, or <u>choose a file</u></span>
       <span id="upload-state" class="muted"></span>
     </label>
     <div id="decks" class="list"></div>
@@ -30,6 +30,7 @@
     <div class="progress" data-group="S1"></div>
     <h2>S1 · Brief <span class="muted">— skill Deck Reader</span></h2>
     <p class="muted">What the deck cannot settle by itself: answer, save, then Claude drafts and curates the room brief. Approve the brief in the step bar.</p>
+    <div class="stage" data-stage="S1_PANELS"></div>
     <form id="qform" class="form"></form>
     <div class="row"><button id="qsave" class="primary" type="button">Save answers</button><span id="qstate" class="muted"></span></div>
     <div class="stage" data-stage="S1_DRAFT"></div>

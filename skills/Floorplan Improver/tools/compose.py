@@ -49,7 +49,9 @@ class Canvas:
 
     def att(self, path, params, t=0.5):
         stem = Path(path).stem
-        return {"id": self.nid("att"), "objectId": f"{stem}-with-math", "objectPath": path, "params": params, "t": t, "flip": False}
+        # object/2 Python objects (Objects/Python/) are embedded and baked by embed_python.py, keyed by their stem
+        oid = f"{stem}-py" if "/Python/" in path else f"{stem}-with-math"
+        return {"id": self.nid("att"), "objectId": oid, "objectPath": path, "params": params, "t": t, "flip": False}
 
     def node_object(self, xy, path, params, layer):
         n = self.node(xy, "0")

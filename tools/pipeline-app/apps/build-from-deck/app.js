@@ -30,6 +30,7 @@
   var ROOM = "S5_COMPOSE/" + P.project + ".room.canvas.json";
   var STAGES = {
     S1_INTAKE: { group: "S1", step: "INTAKE", title: "Read the deck", needs: [] },
+    S1_PANELS: { group: "S1", step: "PANELS", title: "Cut the image's panels (image decks)", needs: [{ file: "S1_INTAKE/panels.json", who: "Claude" }] },
     S1_DRAFT: { group: "S1", step: "DRAFT", title: "Draft the brief", needs: [{ file: "S1_INTAKE/deck.json", who: "S1 intake" }] },
     S1_FINALIZE: { group: "S1", step: "FINALIZE", title: "Finalize the brief", needs: [{ file: "S2_BRIEF/roombrief.draft.json", who: "S1 draft" }, { file: "S2_BRIEF/roombrief.curated.json", who: "Claude" }] },
     S2_FROM_TRACER: { group: "S2", step: "FROM_TRACER", title: "Take the Floorplan Tracer's trace", needs: [{ file: "S2_BRIEF/roombrief.json", who: "S1" }] },
@@ -66,7 +67,7 @@
   }
   function loadDecks() {
     return P.list("inputs/decks/").then(function (l) {
-      decks = l.filter(function (f) { return /\.(pptx|pdf)$/i.test(f); }).sort();
+      decks = l.filter(function (f) { return /\.(pptx|pdf|png|jpe?g|webp)$/i.test(f); }).sort();
       if (!chosenDeck || decks.indexOf(chosenDeck) < 0) chosenDeck = decks[decks.length - 1] || null;
     }, function () { decks = []; });
   }
@@ -128,7 +129,7 @@
     expired: "the upload permission expired — ask Claude for a new upload link.",
   };
   function upload(f) {
-    if (!/\.(pptx|pdf)$/i.test(f.name)) { $("#upload-state").textContent = "Only .pptx or .pdf"; return; }
+    if (!/\.(pptx|pdf|png|jpe?g|webp)$/i.test(f.name)) { $("#upload-state").textContent = "Only .pptx, .pdf or an image (.png .jpg .webp)"; return; }
     if (!ANY_SIZE && f.size > OLD_MAX) {
       $("#upload-state").textContent = f.name + " is " + (f.size / 1e6).toFixed(1) + " MB — this editor version takes 4 MB at most. Ask Claude for an upload link (project.upload_link).";
       try { P.emit("deck_too_large", { name: f.name, bytes: f.size, limit: OLD_MAX }); } catch (e) {}
@@ -136,7 +137,7 @@
     }
     var mb = (f.size / 1e6).toFixed(1);
     $("#upload-state").textContent = "Uploading " + f.name + " (" + mb + " MB)…";
-    P.assets.upload(f, { name: f.name, target: "inputs/decks", type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    P.assets.upload(f, { name: f.name, target: "inputs/decks", type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : /\.png$/i.test(f.name) ? "image/png" : /\.jpe?g$/i.test(f.name) ? "image/jpeg" : /\.webp$/i.test(f.name) ? "image/webp" : "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
       onProgress: function (n, t) { $("#upload-state").textContent = "Uploading " + f.name + " — " + Math.round(n / (t || 1) * 100) + "% of " + mb + " MB"; } })
       .then(function (r) {
         $("#upload-state").textContent = "Saved to " + (r.key || "inputs/decks/");

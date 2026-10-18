@@ -2,13 +2,13 @@
  "schema": "runner/1",
  "pipeline": "build-from-deck",
  "phase": "build",
- "note": "build-from-deck 0.4.0: five stages, each one skill (pipeline.json \"skills\"). A runner stage \"uses\" <alias>:<STEP> of a pinned skill; its commands come from the skill's skill.json and run in the skill's folder. \"stage\" groups jobs into S1…S5: a job of Sn runs only after the USER approved S(n-1) in the step bar (run.json), and the runner writes {DIR}stages/<Sn>/progress.json for the app's live progress. Agent steps (curate, trace, resolve, improve) are Claude's: it writes their files with library.write and reports to {DIR}stages/<Sn>/agent-progress.json. R2 data folders under steps/ keep their 0.3 names (S1_INTAKE, S2_BRIEF, S3_GEOMETRY, S4_RESOLVE, S5_COMPOSE, S7_3D). Placeholders: {CODE} {WORK} {PROJ} {STEPS} {OUT} {DIR} {SKILL} {ARG:x} {BASENAME:x} {REPO}.",
+ "note": "build-from-deck 0.5.0: five stages, each one skill (pipeline.json \"skills\"). A runner stage \"uses\" <alias>:<STEP> of a pinned skill; its commands come from the skill's skill.json and run in the skill's folder. \"stage\" groups jobs into S1…S5: a job of Sn runs only after the USER approved S(n-1) in the step bar (run.json), and the runner writes {DIR}stages/<Sn>/progress.json for the app's live progress. Agent steps (curate, trace, resolve, improve) are Claude's: it writes their files with library.write and reports to {DIR}stages/<Sn>/agent-progress.json. R2 data folders under steps/ keep their 0.3 names (S1_INTAKE, S2_BRIEF, S3_GEOMETRY, S4_RESOLVE, S5_COMPOSE, S7_3D). Placeholders: {CODE} {WORK} {PROJ} {STEPS} {OUT} {DIR} {SKILL} {ARG:x} {BASENAME:x} {REPO}. 0.5: the deck may be a moodboard IMAGE (S1_PANELS cuts Claude's panels.json into slides); S3 binds Python (object/2) objects and textured materials made by the Object Maker / Material Maker skills from the item crops; S4 embeds and bakes the Python objects.",
  "stages": {
   "S1_INTAKE": {
    "stage": "S1",
    "uses": "deck:INTAKE",
-   "next": "The USER answers the Questions tab (answers/main in the app store). Then queue S2_DRAFT with { project, room } from their answer.",
-   "title": "Read the deck (PPTX or PDF) and list the questions",
+   "next": "PPTX/PDF: the USER answers the questions in the Brief tab, then queue S1_DRAFT. IMAGE (deck.json needs_panels): AGENT marks the panels (Deck Reader read-an-image-deck.md) → write {STEPS}S1_INTAKE/panels.json, then queue S1_PANELS.",
+   "title": "Read the deck (PPTX, PDF or a moodboard IMAGE) and list the questions",
    "args": {
     "deck": "inputs/decks/<file> (relative to the project)"
    },
@@ -34,8 +34,40 @@
     {
      "from": "{WORK}/deck/pages/*",
      "to": "{STEPS}S1_INTAKE/pages/"
+    },
+    {
+     "from": "{WORK}/deck/pages/*",
+     "to": "{STEPS}S1_INTAKE/pages/",
+     "optional": true
     }
    ]
+  },
+  "S1_PANELS": {
+   "stage": "S1",
+   "uses": "deck:PANELS",
+   "title": "Cut the image's panels into slides and list the questions",
+   "pull": [
+    {
+     "from": "{STEPS}S1_INTAKE/",
+     "to": "{WORK}/deck/",
+     "clean": true
+    }
+   ],
+   "push": [
+    {
+     "from": "{WORK}/deck/deck.json",
+     "to": "{STEPS}S1_INTAKE/deck.json"
+    },
+    {
+     "from": "{WORK}/deck/questions.json",
+     "to": "{STEPS}S1_INTAKE/questions.json"
+    },
+    {
+     "from": "{WORK}/deck/images/*",
+     "to": "{STEPS}S1_INTAKE/images/"
+    }
+   ],
+   "next": "The USER answers the questions in the Brief tab (answers/main). Then queue S1_DRAFT with { project, room } from their answer."
   },
   "S1_DRAFT": {
    "stage": "S1",

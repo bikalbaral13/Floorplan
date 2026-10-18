@@ -2,9 +2,9 @@
  "schema": "skill/1",
  "id": "object-resolver",
  "title": "Object Resolver",
- "version": "1.0.0",
+ "version": "1.1.0",
  "entry": "SKILL.md",
- "about": "Every brief item → a real library object with its real params, host and material (resolve.json); the user signs each off in the Objects review.",
+ "about": "Every brief item → a real library object with its real params, host and material (resolve.json); the user signs each off in the Objects review. Python (object/2) objects are in the catalog too; a new-object item goes to the Object Maker skill, a new-material item to the Material Maker skill, each from the item's reference crop.",
  "inputs": {
   "brief": {
    "type": "roombrief.v1",

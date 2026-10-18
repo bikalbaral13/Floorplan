@@ -2,7 +2,7 @@
  "schema": "skill/1",
  "id": "floorplan-improver",
  "title": "Floorplan Improver",
- "version": "1.0.0",
+ "version": "1.1.0",
  "entry": "improve-traced-plan.md",
  "about": "A traced canvas → a furnished, tiled, lit, render-ready canvas. In a pipeline the Object Resolver's resolve.json is LOCKED: PLACE puts those items as given; IMPROVE only adds what the brief did not list.",
  "inputs": {
@@ -35,13 +35,18 @@
  "steps": {
   "PLACE": {
    "kind": "script",
-   "title": "Place every resolved object on the room canvas",
+   "title": "Place every resolved object on the room canvas; embed + bake the Python ones",
    "weight": 40,
    "run": [
     [
      "python",
      "tools/compose.py",
      "{PROJ}"
+    ],
+    [
+     "python",
+     "tools/embed_python.py",
+     "{PROJ}/{CODE}.room.canvas.json"
     ]
    ]
   },

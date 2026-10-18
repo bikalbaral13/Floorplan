@@ -2,7 +2,7 @@
  "schema": "pipeline/1",
  "id": "build-from-deck",
  "title": "Build (from roombrief or Plan Deck)",
- "version": "0.4.2",
+ "version": "0.5.0",
  "phase": "build",
  "entry": {
   "agents": "AGENTS.md",
@@ -26,9 +26,9 @@
   },
   {
    "id": "deck",
-   "from": "project:inputs/*.pptx",
+   "from": "project:inputs/decks/*.{pptx,pdf,png,jpg,webp}",
    "required": false,
-   "note": "fallback: an outside plan-phase deck (.pptx) when no roombrief exists"
+   "note": "a plan-phase deck (.pptx / .pdf) or one moodboard image (.png / .jpg / .webp) when no roombrief exists"
   },
   {
    "id": "room",
@@ -77,7 +77,7 @@
  "skills": {
   "deck": {
    "id": "deck-reader",
-   "version": "1.0.1"
+   "version": "1.1.0"
   },
   "tracer": {
    "id": "floorplan-tracer",
@@ -85,11 +85,11 @@
   },
   "resolver": {
    "id": "object-resolver",
-   "version": "1.0.0"
+   "version": "1.1.0"
   },
   "improver": {
    "id": "floorplan-improver",
-   "version": "1.0.0"
+   "version": "1.1.0"
   },
   "renderer": {
    "id": "floorplan-renderer",
