@@ -4,6 +4,9 @@
 // Time = the runner's started → finished of each job. Tokens = Claude's usage (deduped per message id) from the
 // moment that stage was queued until the next stage was queued — the agent's work preparing, queuing and checking it.
 // Runner scripts themselves spend no tokens.
+// Stages: when the pipeline's pipeline.json lists "stages" (build-from-deck 0.4: S1…S5), the jobs are also summed per
+// stage (a job S<n>_… belongs to S<n>; the Floorplan Tracer's T_* jobs belong to the stage whose skill is the tracer)
+// with the stage's wall-clock time: its first job queued → the user's last approval of it (run.json).
 import fs from "node:fs";
 import { putObject, getObjectText, listObjects, r2ConfigFrom } from "../r2.mjs";
 
@@ -70,11 +73,35 @@ const stages = [...rows.values()].map((r) => {
   return { stage: r.stage, status: j?.status ?? "done", runs: r.runs, seconds: secs, tokens: { input: r.in, output: r.out, cache_write: r.cw, cache_read: r.cr, total: r.in + r.out + r.cw + r.cr }, inr: Math.round(inr(r) * 100) / 100 };
 });
 const sum = (f) => stages.reduce((a, s) => a + (f(s) || 0), 0);
+// ── per pipeline stage (S1…S5) ──
+let order = [];
+try {
+  const idx = JSON.parse((await getObjectText(cfg, `${cfg.prefix}/Pipelines/index.json`)).text);
+  const base = (idx.pipelines ?? []).find((x) => x.id === pipeline)?.path;
+  if (base) order = JSON.parse((await getObjectText(cfg, `${base.replace(/\/?$/, "/")}pipeline.json`)).text).stages ?? [];
+} catch { /* no stages: flat list only */ }
+let run = null;
+try { run = JSON.parse((await getObjectText(cfg, dir + "run.json")).text); } catch {}
+const tracerStage = order.find((g) => g.skill === "tracer")?.id;
+const groupOf = (name) => { const m = /^S(\d)_/.exec(name); return m ? `S${m[1]}` : /^floorplan-tracer/.test(name) ? tracerStage : null; };
+const groups = order.map((g) => {
+  const mine = stages.filter((x) => groupOf(x.stage) === g.id);
+  const firstQ = events.filter((e) => groupOf(e.pipeline === pipeline ? e.stage : `${e.pipeline} (`) === g.id).map((e) => e.t);
+  const ok = (run?.events ?? []).filter((e) => e.step === g.gate && e.type === "approve" || e.type === "ui" && e.note === "reapprove" && e.data?.gate === g.gate).map((e) => e.at);
+  const t0 = firstQ.length ? Math.min(...firstQ) : null, t1 = ok.length ? Math.max(...ok) : null;
+  const add = (f) => mine.reduce((a, x) => a + (f(x) || 0), 0);
+  return { id: g.id, title: g.title, skill: g.skill, jobs: mine.map((x) => x.stage), seconds: add((x) => x.seconds),
+    elapsed: t0 && t1 && t1 > t0 ? Math.round((t1 - t0) / 1000) : null, approved: t1 ? new Date(t1).toISOString() : null,
+    tokens: { input: add((x) => x.tokens.input), output: add((x) => x.tokens.output), cache_write: add((x) => x.tokens.cache_write), cache_read: add((x) => x.tokens.cache_read), total: add((x) => x.tokens.total) },
+    inr: Math.round(add((x) => x.inr) * 100) / 100 };
+});
 const doc = {
   schema: "pipeline-usage/1", code, pipeline, at: new Date().toISOString(), rates,
+  groups,
   stages,
   total: { seconds: sum((s) => s.seconds), tokens: sum((s) => s.tokens.total), inr: Math.round(sum((s) => s.inr) * 100) / 100 },
 };
 await putObject(cfg, dir + "usage.json", JSON.stringify(doc, null, 1));
+for (const g of groups) console.log(`${(g.id + " " + g.title).padEnd(16)} ${String(g.seconds).padStart(5)} s runner ${String(g.elapsed ?? "-").padStart(6)} s elapsed ${String(g.tokens.total).padStart(10)} tok  ₹${g.inr}  [${g.jobs.join(", ")}]`);
 for (const s of stages) console.log(`${s.stage.padEnd(16)} ${String(s.seconds ?? "-").padStart(5)} s ${String(s.tokens.total).padStart(10)} tok  ₹${s.inr}`);
 console.log(`TOTAL            ${doc.total.seconds} s ${doc.total.tokens} tok  ₹${doc.total.inr} → ${dir}usage.json`);

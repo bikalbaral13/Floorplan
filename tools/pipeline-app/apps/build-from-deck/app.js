@@ -340,14 +340,22 @@
     if (!usage) { el.innerHTML = '<div class="empty">No usage yet — Claude writes usage.json after the stages run.</div>'; return; }
     var r = usage.rates || {}, p = r.usd_per_mtok || {}, k = (r.usd_inr || 0) * (1 + (r.markup || 0));
     var rate = function (usd) { return rupees(usd * k) + "/M"; };
-    var rows = usage.stages.concat([{ stage: "TOTAL", seconds: usage.total.seconds, tokens: { total: usage.total.tokens }, inr: usage.total.inr, total: true }]);
+    // one row per pipeline stage (S1…S5) with its jobs indented under it; a flat job list for older usage.json
+    var rows = [];
+    (usage.groups && usage.groups.length ? usage.groups : []).forEach(function (g) {
+      rows.push({ stage: g.id + " " + g.title, seconds: g.seconds, elapsed: g.elapsed, tokens: g.tokens, inr: g.inr, group: true });
+      usage.stages.filter(function (s) { return g.jobs.indexOf(s.stage) >= 0; }).forEach(function (s) { rows.push(Object.assign({}, s, { stage: "   " + s.stage, job: true })); });
+    });
+    if (!rows.length) rows = usage.stages.slice();
+    rows.push({ stage: "TOTAL", seconds: usage.total.seconds, elapsed: (usage.groups || []).reduce(function (a, g) { return a + (g.elapsed || 0); }, 0) || null, tokens: { total: usage.total.tokens }, inr: usage.total.inr, total: true });
     el.innerHTML = table(rows, [["stage", function (s) { return s.stage; }], ["runner time", function (s) { return hms(s.seconds); }],
+      ["elapsed (to approval)", function (s) { return s.job ? "" : hms(s.elapsed); }],
       ["input", function (s) { return s.total ? "" : num(s.tokens.input); }], ["output", function (s) { return s.total ? "" : num(s.tokens.output); }],
       ["cache write", function (s) { return s.total ? "" : num(s.tokens.cache_write); }], ["cache read", function (s) { return s.total ? "" : num(s.tokens.cache_read); }],
       ["tokens", function (s) { return num(s.tokens.total); }], ["cost (INR)", function (s) { return rupees(s.inr); }]]) +
-      '<p class="muted">Rate (' + esc(r.model || "") + ', incl. ' + Math.round((r.markup || 0) * 100) + '% extra, $1 = ₹' + esc(r.usd_inr) + '): input ' + rate(p.input) + ' · output ' + rate(p.output) +
-      ' · cache write ' + rate(p.cache_write) + ' · cache read ' + rate(p.cache_read) + ' tokens. Runner scripts use no tokens; a stage’s tokens are Claude’s work from queuing it until the next stage was queued. Updated ' + esc(String(usage.at || "").slice(0, 16).replace("T", " ")) + '.</p>';
-    var last = el.querySelector("tr:last-child"); if (last) last.style.fontWeight = "600";
+      '<p class="muted">Runner time = the scripts on the runner. Elapsed = the stage\u2019s first job queued \u2192 your last approval of it (includes Claude\u2019s steps and your review). Rate (' + esc(r.model || "") + ', incl. ' + Math.round((r.markup || 0) * 100) + '% extra, $1 = ₹' + esc(r.usd_inr) + '): input ' + rate(p.input) + ' · output ' + rate(p.output) +
+      ' · cache write ' + rate(p.cache_write) + ' · cache read ' + rate(p.cache_read) + ' tokens. Runner scripts use no tokens; a job\u2019s tokens are Claude\u2019s work from queuing it until the next job was queued. Updated ' + esc(String(usage.at || "").slice(0, 16).replace("T", " ")) + '.</p>';
+    el.querySelectorAll("tr").forEach(function (tr, i) { var r0 = rows[i - 1]; if (r0 && (r0.group || r0.total)) tr.style.fontWeight = "600"; if (r0 && r0.job) tr.style.color = "#64748b"; });
   }
 
   // ── live progress: one card at the top of each stage tab ──
