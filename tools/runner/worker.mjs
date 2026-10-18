@@ -241,7 +241,10 @@ async function gateBlock(root, recipe, dir, group) {
   const prev = order[i - 1];
   if (!prev.gate) return null;
   const run = await readJson(`${dir}run.json`);
-  const approvals = (run?.events ?? []).filter((e) => e.type === "approve" && e.step === prev.gate);
+  // the step bar's Approve step, or the user's Re-approve click in the pipeline app (a "ui" event the editor records
+  // from the app; the step bar can only approve its current step, so a stage re-run after it moved on is re-approved there)
+  const approvals = (run?.events ?? []).filter((e) => e.step === prev.gate && e.type === "approve"
+    || e.type === "ui" && e.note === "reapprove" && e.data?.gate === prev.gate);
   if (!approvals.length) return `${group} waits for the user to approve ${prev.id} (${prev.title ?? prev.gate}) in the step bar`;
   // stale: a script job of the previous stage finished after the user's last approval of it
   const lastOk = Math.max(...approvals.map((e) => e.at));

@@ -101,6 +101,15 @@
       (j && j.log ? "<details" + (st === "failed" ? " open" : "") + "><summary class=\"muted\">log</summary><pre>" + esc(String(j.log).split("\n").slice(-40).join("\n")) + "</pre></details>" : "");
   }
   document.addEventListener("click", function (e) {
+    var ra = e.target.closest && e.target.closest("[data-reapprove]");
+    if (ra) {
+      var g = GROUPS.filter(function (x) { return x.id === ra.dataset.reapprove; })[0];
+      ra.disabled = true;
+      P.emit("reapprove", { stage: g.id, gate: g.gate, at: new Date().toISOString() });
+      P.notify(g.id + " " + g.title + " re-approved", "success");
+      setTimeout(function () { loadProgress(true).then(refresh); }, 1500);
+      return;
+    }
     var b = e.target.closest && e.target.closest("[data-run]");
     if (!b) return;
     var s = b.dataset.run;
@@ -344,8 +353,11 @@
   // ── live progress: one card at the top of each stage tab ──
   // Steps come from the skill (progress.json order/weights/kinds, written by the runner); script steps from the
   // runner, agent steps from agent-progress.json (Claude), user steps from the answers and the step-bar approvals.
+  // an approval = the step bar's Approve step, or the user's Re-approve click on a stale stage in this app (the step
+  // bar only approves its CURRENT step, so a stage re-run after the bar moved on is re-approved here)
+  function isApproval(e, gate) { return e.step === gate && e.type === "approve" || e.type === "ui" && e.note === "reapprove" && e.data && e.data.gate === gate; }
   function approvedAt(gate) {
-    var ev = ((runDoc && runDoc.events) || []).filter(function (e) { return e.type === "approve" && e.step === gate; });
+    var ev = ((runDoc && runDoc.events) || []).filter(function (e) { return isApproval(e, gate); });
     return ev.length ? Math.max.apply(null, ev.map(function (e) { return e.at; })) : null;
   }
   function stageView(g) {
@@ -402,7 +414,7 @@
       (v.running ? '<div class="now">' + esc(v.running.title) + (v.running.msg ? " — " + esc(v.running.msg) : "") + " · " + v.running.pct + " %</div>" : "") +
       (v.failed ? '<div class="now bad">Failed in ' + esc(v.failed.title) + ": " + esc(v.failed.msg) + "</div>" : "") +
       (silent ? '<div class="now bad">Runner not responding (no heartbeat for ' + esc(ago(v.beat)) + ") — is node tools/runner/worker.mjs running?</div>" : "") +
-      (v.stale ? '<div class="now bad">This stage was re-run after you approved it — check it and approve again.</div>' : "") +
+      (v.stale ? '<div class="now bad">This stage was re-run after you approved it — check it and approve again. <button type="button" class="primary" data-reapprove="' + esc(g.id) + '">Re-approve ' + esc(g.id + " " + g.title) + "</button></div>" : "") +
       '<ol class="steps">' + v.steps.map(function (st) {
         return '<li class="' + st.state + '"><span class="ic">' + ICON[st.state] + '</span><span class="t">' + esc(st.title) + (st.kind === "agent" ? ' <em>(Claude)</em>' : st.kind === "user" ? " <em>(you)</em>" : "") + "</span>" +
           '<span class="m">' + esc(st.state === "running" ? st.pct + " %" : st.msg) + "</span>" + (st.secs != null ? '<span class="s">' + esc(hms(st.secs)) + "</span>" : "") + "</li>";
