@@ -897,10 +897,14 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
           cam.updateMatrixWorld();
           const prevPlanes = gl.clippingPlanes;
           if (clip != null) gl.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, -1), clip)];
+          // a snapshot is a deliverable: the origin axis arrows are a viewport aid, not part of the model
+          const helpers: THREE.Object3D[] = [];
+          scene.traverse((o) => { if (o instanceof THREE.ArrowHelper && o.visible) helpers.push(o); });
+          helpers.forEach((h) => { h.visible = false; });
           try {
             gl.render(scene, cam);
             return gl.domElement.toDataURL("image/jpeg", 0.88);
-          } catch { return ""; } finally { gl.clippingPlanes = prevPlanes; }
+          } catch { return ""; } finally { gl.clippingPlanes = prevPlanes; helpers.forEach((h) => { h.visible = true; }); }
         };
         // The composite is the one view that is not a camera: it needs the five orthographic frames
         // first, so render those (still framed on `box`) and hand them to the shared builder.

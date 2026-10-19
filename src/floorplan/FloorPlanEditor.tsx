@@ -254,7 +254,7 @@ import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialo
 import { ImportObjectsDialog } from "./components/dialogs/ImportObjectsDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
-import { RenderModeToggle, useRenderMode } from "./components/RenderModeToggle";
+import { RenderModeToggle, useRenderMode, getRenderMode, setRenderMode } from "./components/RenderModeToggle";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { getUiPrefs, setUiPref, useUiPrefs } from "./uiPrefs";
 import { ElevationPanels } from "./components/ElevationPanels";
@@ -28431,12 +28431,25 @@ User request: ${aiPrompt.trim()}`;
           }
           const api = snapshotApiRef.current;
           if (!api) throw new Error("the 3D view did not open");
-          await new Promise((r) => setTimeout(r, 600));   // let the scene settle (lazy meshes, materials)
-          const { blob, meshes, triangles } = await api.exportScene("glb", { units: export3dRef.current.units, axis: "y-up" });
-          if (!meshes) throw new Error("the 3D view has no visible geometry");
-          const shots: { view: string; dataUrl: string }[] = [];
-          for (const v of d.views) shots.push({ view: v, dataUrl: await api.captureOne(v as never).catch(() => "") });
-          d.resolve({ glb: blob, meshes, triangles, shots });
+          // A deliverable is the real model, not the view setting: Graph / Primitives draw objects as boxes, so
+          // export in Realistic (evaluated objects, textures) and give the user their mode back afterwards.
+          const prevMode = getRenderMode();
+          if (prevMode !== "realistic") setRenderMode("realistic");
+          try {
+            // objects evaluate asynchronously: wait until the mesh count stops changing (max ~30 s)
+            let last = -1, stable = 0, out = await api.exportScene("glb", { units: export3dRef.current.units, axis: "y-up" });
+            for (let i = 0; i < 20 && stable < 2; i++) {
+              await new Promise((r) => setTimeout(r, 1500));
+              out = await api.exportScene("glb", { units: export3dRef.current.units, axis: "y-up" });
+              stable = out.meshes === last ? stable + 1 : 0;
+              last = out.meshes;
+            }
+            const { blob, meshes, triangles } = out;
+            if (!meshes) throw new Error("the 3D view has no visible geometry");
+            const shots: { view: string; dataUrl: string }[] = [];
+            for (const v of d.views) shots.push({ view: v, dataUrl: await api.captureOne(v as never).catch(() => "") });
+            d.resolve({ glb: blob, meshes, triangles, shots });
+          } finally { if (prevMode !== "realistic") setRenderMode(prevMode); }
         } catch (err) { d.reject(err); }
       })();
     };
