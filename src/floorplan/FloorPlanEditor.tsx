@@ -31588,7 +31588,7 @@ User request: ${aiPrompt.trim()}`;
           {/* Preferences open from the account bar at the navigator's bottom-left; the gear shows here only
               while the navigator is folded or switched off, so they are always reachable. */}
           {(!uiPrefs.showNavigator || !navOpen) && defaultSettingsPopover}
-          {pipelineTabs.pipelineTitle != null && (
+          {(
             <button type="button" onClick={togglePipe}
               title={pipeOpen ? "Hide the Pipeline panel" : "Show the Pipeline panel"} aria-label={pipeOpen ? "Hide Pipeline panel" : "Show Pipeline panel"} aria-pressed={pipeOpen}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900">
@@ -44386,7 +44386,7 @@ User request: ${aiPrompt.trim()}`;
         {/* Pipeline column at the FAR RIGHT — the mirror of the Library navigator at the far left: the loaded
             pipeline's step bar and its app (a stage tree). Resized from its left edge, folded from the header's
             Pipeline button; kept mounted while folded so the app keeps its state. */}
-        {pipelineTabs.pipelineTitle != null && (
+        {(
           <div
             style={!isMobile && pipeOpen ? { width: pipePanelW, ...(pipePanelDrag ? { transition: "none" } : {}) } : undefined}
             className={pipeOpen
@@ -44412,7 +44412,15 @@ User request: ${aiPrompt.trim()}`;
                 {isMobile ? "✕" : <PanelRightClose className="h-3.5 w-3.5" />}
               </button>
             </div>
-            {pipelineTabs.frame}
+            {pipelineTabs.frame ?? (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-xs text-slate-500">
+                <Workflow className="h-6 w-6 text-slate-300" />
+                <div className="font-semibold text-slate-600">No pipeline loaded</div>
+                <div>A pipeline's stages and steps show here as a tree. Claude opens one with pipeline.run, or open one yourself.</div>
+                <button type="button" onClick={pipelineTabs.openImport}
+                  className="mt-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50">Open a pipeline…</button>
+              </div>
+            )}
             {!isMobile && pipeOpen && (
               <div role="separator" aria-orientation="vertical" aria-label="Resize the Pipeline panel" title="Drag to resize"
                 onPointerDown={startPipePanelDrag}
