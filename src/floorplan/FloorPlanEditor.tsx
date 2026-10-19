@@ -31596,7 +31596,7 @@ User request: ${aiPrompt.trim()}`;
               <PanelRight className="h-[18px] w-[18px]" />
             </button>
           )}
-          {pipelineTabs.sideTabs.length > 0 && (
+          {pipelineTabs.pipelineTitle != null && (
             <button type="button" onClick={togglePipe}
               title={pipeOpen ? "Hide the Pipeline panel" : "Show the Pipeline panel"} aria-label={pipeOpen ? "Hide Pipeline panel" : "Show Pipeline panel"} aria-pressed={pipeOpen}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 hover:text-slate-900 ${pipeOpen ? "text-sky-700" : "text-slate-600"}`}>
@@ -44402,7 +44402,7 @@ User request: ${aiPrompt.trim()}`;
         {/* Pipeline column at the FAR RIGHT — the mirror of the Library navigator at the far left: the loaded
             pipeline's step bar and its app (a stage tree). Resized from its left edge, folded from the header's
             Pipeline button; kept mounted while folded so the app keeps its state. */}
-        {pipelineTabs.sideTabs.length > 0 && (
+        {pipelineTabs.pipelineTitle != null && (
           <div
             style={!isMobile && pipeOpen ? { width: pipePanelW, ...(pipePanelDrag ? { transition: "none" } : {}) } : undefined}
             className={pipeOpen
