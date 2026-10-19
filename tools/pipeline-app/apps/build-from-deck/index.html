@@ -91,7 +91,7 @@
 
   <details class="node" data-panel="runner"><summary class="nodehead"><span class="caret"></span><b>Runner</b><span class="muted">jobs, time and cost</span><span class="nowr" id="runner-now"></span></summary>
   <div class="nodebody">
-    <p class="muted">Script stages run on a machine with Python: <code>node tools/runner/worker.mjs</code> in the Floorplan repo. Jobs wait here until it picks them up.</p>
+    <p class="muted">Script stages run in the cloud as soon as they are queued (a few seconds; a cold start adds ~30 s). Only a stage marked for a machine runner waits for one.</p>
     <div id="jobs" class="table"></div>
     <h3>Time and cost</h3>
     <div id="usage" class="table"></div>
