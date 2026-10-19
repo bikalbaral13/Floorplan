@@ -56,3 +56,47 @@ iframe.review { width: 100%; height: calc(100vh - 150px); min-height: 520px; bor
 .progress ol.steps em { font-style: normal; color: var(--muted); font-size: 11px; }
 .progress pre { margin: 6px 0 0; max-height: 200px; overflow: auto; font: 11px/1.4 ui-monospace, Consolas, monospace; background: #0f172a; color: #e2e8f0; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
 .progress .foot { font-size: 11px; margin-top: 4px; }
+/* foldable sub-steps (0.4.1) */
+details.sub { margin: 10px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+details.sub > summary { cursor: pointer; padding: 9px 12px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; }
+details.sub > summary::-webkit-details-marker { display: none; }
+details.sub > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+details.sub[open] > summary::before { transform: rotate(90deg); }
+details.sub[open] > summary { border-bottom: 1px solid var(--line); }
+details.sub > :not(summary) { margin-left: 12px; margin-right: 12px; }
+details.sub > :last-child { margin-bottom: 12px; }
+details.sub > summary .sstat { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; max-width: 60%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+details.sub > summary .sstat b { font-variant-numeric: tabular-nums; color: var(--ink); }
+details.sub > summary .sstat.ok b { color: var(--ok); } details.sub > summary .sstat.bad, details.sub > summary .sstat.bad b { color: var(--bad); }
+details.sub > summary .sstat.run b { color: var(--accent); } details.sub > summary .sstat.wait b { color: var(--warn); }
+/* the stage status card folds too (0.4.2): its summary keeps title, state, percent and what is happening */
+.progress { padding: 0; }
+.progress > details > summary { cursor: pointer; list-style: none; padding: 10px 12px; }
+.progress > details > summary::-webkit-details-marker { display: none; }
+.progress > details > summary .phead::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+.progress > details[open] > summary .phead::before { transform: rotate(90deg); }
+.progress > details > summary .bar { margin-bottom: 0; }
+.progress > details > .body { padding: 0 12px 10px; }
+.progress .phead .nowr { margin-left: auto; font-size: 12px; color: var(--muted); max-width: 45%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.progress .phead .pct { margin-left: 0; }
+.form textarea { font: inherit; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; resize: vertical; min-height: 60px; }
+.canvasrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; }
+.canvasrow button { margin-left: auto; }
+/* stage tree (0.6.0): every stage is a node, like the Library tree */
+details.node { border-bottom: 1px solid var(--line); }
+details.node > summary.nodehead { list-style: none; cursor: pointer; display: grid; grid-template-columns: 14px auto auto auto 1fr auto; align-items: center; gap: 4px 8px; padding: 9px 4px; position: relative; }
+details.node > summary.nodehead::-webkit-details-marker { display: none; }
+details.node > summary .caret::before { content: "▸"; color: var(--muted); display: inline-block; transition: transform .15s; }
+details.node[open] > summary .caret::before { transform: rotate(90deg); }
+details.node > summary .nowr { font-size: 12px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: right; min-width: 0; }
+details.node > summary .pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+details.node > summary .hbar { grid-column: 2 / -1; height: 4px; border-radius: 99px; background: #e2e8f0; overflow: hidden; }
+details.node > summary .hbar i { display: block; height: 100%; background: var(--accent); }
+details.node > summary .hbar i.ok { background: var(--ok); } details.node > summary .hbar i.bad { background: var(--bad); }
+details.node.cur > summary { background: #f0f9ff; border-radius: 8px; }
+details.node > .nodebody { padding: 2px 0 12px 18px; border-left: 2px solid var(--line); margin-left: 9px; }
+details.node > .nodebody > details.sub { margin: 6px 0; }
+details.node > .nodebody .progress { position: static; box-shadow: none; }
+.nodebody .progress .phead .pill, .nodebody .progress .phead .nowr, .nodebody .progress .phead .pct, .nodebody .progress .phead > .muted, .nodebody .progress summary .bar { display: none; }
+.nodebody .progress .phead b::after { content: " · steps and log"; font-weight: 400; color: var(--muted); }
+@media (max-width: 420px) { details.node > summary .nowr { display: none; } }

@@ -6058,9 +6058,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     setPipePanelDrag(true);
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
+  /** The Pipeline column at the far right (mirror of the Library navigator on the far left). */
+  const [pipeOpen, setPipeOpen] = useState(() => { try { return localStorage.getItem("bp.editor.pipeOpen") !== "0"; } catch { return true; } });
+  const togglePipe = () => setPipeOpen((o) => { try { localStorage.setItem("bp.editor.pipeOpen", o ? "0" : "1"); } catch { /* */ } return !o; });
   pipelineRevealRef.current = () => {
-    setIsRightPanelCollapsed(false);
-    if (isMobile) setMobilePropsOpen(true); else if (!uiPrefs.showProperties) setUiPref("showProperties", true);
+    setPipeOpen(true);
+    try { localStorage.setItem("bp.editor.pipeOpen", "1"); } catch { /* */ }
   };
   const [toolsPanelExpanded, setToolsPanelExpanded] = useState<boolean>(true);
   const [infoPanelExpanded, setInfoPanelExpanded] = useState<boolean>(true);
@@ -31593,6 +31596,13 @@ User request: ${aiPrompt.trim()}`;
               <PanelRight className="h-[18px] w-[18px]" />
             </button>
           )}
+          {pipelineTabs.sideTabs.length > 0 && (
+            <button type="button" onClick={togglePipe}
+              title={pipeOpen ? "Hide the Pipeline panel" : "Show the Pipeline panel"} aria-label={pipeOpen ? "Hide Pipeline panel" : "Show Pipeline panel"} aria-pressed={pipeOpen}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 hover:text-slate-900 ${pipeOpen ? "text-sky-700" : "text-slate-600"}`}>
+              <Workflow className="h-[18px] w-[18px]" />
+            </button>
+          )}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
         {placementReturn && (
@@ -32058,6 +32068,14 @@ User request: ${aiPrompt.trim()}`;
             {planPanelOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
         </div>
+        {/* Properties fold on the canvas's right edge — the mirror of the Drawings/Layers chevron on the left. */}
+        {!isMobile && !isRightPanelCollapsed && (
+          <button type="button" onClick={toggleProperties}
+            title={propertiesPanelExpanded ? "Hide Properties" : "Show Properties"} aria-label="Toggle Properties"
+            className="absolute right-0 top-0 z-20 mr-1 mt-1 rounded-md border border-slate-200 bg-white/95 p-1 text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900">
+            {propertiesPanelExpanded ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        )}
         {/* Navigation tools float at the top centre of the canvas (Phase + render mode live in Preferences). */}
         {/* Phone: docked flush to the canvas top edge, between the two edge chevrons (navigator left, Properties right). */}
         <div className={`absolute left-1/2 z-30 -translate-x-1/2 border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur ${isMobile ? "top-0 rounded-b-xl border-t-0" : "top-3 rounded-xl"}`}>
@@ -40837,12 +40855,11 @@ User request: ${aiPrompt.trim()}`;
             Folds via the canvas-edge chevron; folding does not affect the Tools
             panel's position because Properties and Tools are no longer nested. */}
         <div
-          style={!isMobile && !isRightPanelCollapsed && propertiesPanelExpanded && pipelineTabs.sideActive ? { width: pipePanelW, ...(pipePanelDrag ? { transition: "none" } : {}) } : undefined}
           className={
             !isRightPanelCollapsed && propertiesPanelExpanded
               ? isMobile
                 ? "absolute bottom-2 right-2 top-2 z-40 min-h-0 w-[min(22rem,calc(100vw-1rem))] rounded-xl border bg-white shadow-xl"
-                : `relative ${pipelineTabs.sideActive ? "" : propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
+                : `relative ${propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
               : "relative w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
           }
         >
@@ -40851,23 +40868,7 @@ User request: ${aiPrompt.trim()}`;
               {/* Panel bar: title, the layout switch (tabbed / Properties and Metrics side by side), close.
                   One fixed place for the panel's own controls instead of buttons floating over the content. */}
               <div className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-3 py-1.5">
-                {pipelineTabs.sideTabs.length ? (
-                  // A loaded pipeline's tabs (Schedule, Issues, …) sit beside Properties; the canvas stays the drawing.
-                  <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="Right panel">
-                    {[{ id: null as string | null, label: "Properties", count: 0, amber: false }, ...pipelineTabs.sideTabs].map((t) => {
-                      const on = pipelineTabs.sideActive === t.id;
-                      return (
-                        <button key={t.id ?? "props"} type="button" role="tab" aria-selected={on} onClick={() => pipelineTabs.pickSide(t.id)}
-                          className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${on ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}>
-                          {t.label}
-                          {t.count > 0 && <span className={`rounded-full px-1.5 text-[10px] font-bold text-white ${t.amber ? "bg-amber-500" : "bg-rose-500"}`}>{t.count}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
-                )}
+                <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
                 {!isMobile && (
                   <button type="button" onClick={() => setPropsSplitView((v) => !v)} aria-pressed={propsSplitView}
                     title={propsSplitView ? "Tabbed: Properties / Metrics" : "Side by side: Properties and Metrics"}
@@ -40887,7 +40888,7 @@ User request: ${aiPrompt.trim()}`;
                   whole panel and pushes every value input past the column edge. Pinning it to 100% caps it
                   at the column and lets the labels wrap instead. */}
               {propertiesPanelExpanded && (
-              <ScrollArea className={`props-scroll flex-1 min-h-0 ${pipelineTabs.sideActive ? "hidden" : ""}`}>
+              <ScrollArea className="props-scroll flex-1 min-h-0">
               <div className="props-pro relative space-y-4 p-4 pb-6">
                 {/* Active workflow tool — its controls live HERE, like an attached object's parameters: no
                     floating window and no Flow panel (it evaluates and commits in the background). */}
@@ -44396,21 +44397,47 @@ User request: ${aiPrompt.trim()}`;
             )}
             </div>
           ) : null}
-          {/* The loaded pipeline's page: kept mounted (even with the panel folded) so its state survives tab switches. */}
-          {pipelineTabs.frame}
-          {/* Resize handle (↔) on the panel's left edge while a pipeline tab is open. */}
-          {!isMobile && !isRightPanelCollapsed && propertiesPanelExpanded && pipelineTabs.sideActive && (
-            <div role="separator" aria-orientation="vertical" aria-label="Resize the panel" title="Drag to resize"
-              onPointerDown={startPipePanelDrag}
-              onDoubleClick={() => { setPipePanelW(544); try { localStorage.setItem("bp.pipePanelW", "544"); } catch { /* storage blocked */ } }}
-              className="group absolute inset-y-0 -left-1.5 z-30 flex w-3 cursor-col-resize items-center justify-center">
-              <span className="h-full w-px bg-transparent group-hover:bg-sky-400" />
-              <span className="absolute flex h-7 w-4 items-center justify-center rounded-md border border-slate-200 bg-white text-[11px] leading-none text-slate-500 shadow-sm group-hover:border-sky-400 group-hover:text-sky-600">↔</span>
-            </div>
-          )}
-          {/* While dragging, a cover keeps the pipeline's iframe from swallowing the pointer. */}
-          {pipePanelDrag && <div className="fixed inset-0 z-[60] cursor-col-resize" />}
         </div>
+
+        {/* Pipeline column at the FAR RIGHT — the mirror of the Library navigator at the far left: the loaded
+            pipeline's step bar and its app (a stage tree). Resized from its left edge, folded from the header's
+            Pipeline button; kept mounted while folded so the app keeps its state. */}
+        {pipelineTabs.sideTabs.length > 0 && (
+          <div
+            style={!isMobile && pipeOpen ? { width: pipePanelW, ...(pipePanelDrag ? { transition: "none" } : {}) } : undefined}
+            className={pipeOpen
+              ? isMobile
+                ? "fixed bottom-2 right-2 top-[72px] z-40 flex w-[min(22rem,calc(100vw-1rem))] flex-col rounded-xl border border-slate-200 bg-white shadow-xl"
+                : "relative flex h-full min-h-0 shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm"
+              : "relative w-0 min-w-0 shrink-0 overflow-hidden"}>
+            <div className="flex shrink-0 items-center gap-1.5 border-b border-slate-100 p-2">
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                <Workflow className="h-3.5 w-3.5 shrink-0 text-sky-600" />
+                <span className="truncate">{pipelineTabs.pipelineTitle ?? "Pipeline"}</span>
+              </span>
+              {/* an app with several pages of its own (not a single tree) keeps a compact page switch here */}
+              {pipelineTabs.sideTabs.length > 1 && (
+                <select aria-label="Pipeline page" value={pipelineTabs.sideActive ?? pipelineTabs.sideTabs[0].id}
+                  onChange={(e) => pipelineTabs.pickSide(e.target.value)}
+                  className="max-w-[45%] rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs">
+                  {pipelineTabs.sideTabs.map((t) => <option key={t.id} value={t.id}>{t.label}{t.count > 0 ? ` (${t.count})` : ""}</option>)}
+                </select>
+              )}
+              <button type="button" onClick={togglePipe} aria-label="Hide Pipeline panel" title="Hide the Pipeline panel"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+                {isMobile ? "✕" : <PanelRightClose className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            {pipelineTabs.frame}
+            {!isMobile && pipeOpen && (
+              <div role="separator" aria-orientation="vertical" aria-label="Resize the Pipeline panel" title="Drag to resize"
+                onPointerDown={startPipePanelDrag}
+                onDoubleClick={() => { setPipePanelW(544); try { localStorage.setItem("bp.pipePanelW", "544"); } catch { /* storage blocked */ } }}
+                className="absolute -left-1.5 top-0 z-30 h-full w-3 cursor-col-resize rounded hover:bg-sky-200/50" />
+            )}
+            {pipePanelDrag && <div className="fixed inset-0 z-[60] cursor-col-resize" />}
+          </div>
+        )}
 
         {/* Right-edge Tools column dissolved at user request: Space Tools removed entirely (Layout
             Generation + Area Extend Behaviour moved to Preferences; Partitioning / Boundary & Offset /

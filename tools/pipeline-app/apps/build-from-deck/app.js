@@ -14,7 +14,7 @@
   var DIR = P.dir || "3-build/build-from-deck/";
   var STEPS = DIR + "steps/";
   var TABS = [
-    { id: "deck", label: "Deck" }, { id: "brief", label: "S1 Brief" }, { id: "plan", label: "S2 Plan" },
+    { id: "brief", label: "S1 Brief" }, { id: "plan", label: "S2 Plan" },
     { id: "objects", label: "S3 Objects" }, { id: "fitout", label: "S4 Fit-out" }, { id: "3d", label: "S5 3D" },
     { id: "runner", label: "Runner" },
   ];
@@ -40,18 +40,36 @@
     S4_PLACE: { group: "S4", step: "PLACE", title: "Place every object on the room canvas", needs: [{ file: "S3_GEOMETRY/plan.json", who: "S2" }, { file: "S4_RESOLVE/resolve.json", who: "S3" }] },
     S5_3D: { group: "S5", step: "RENDER", title: "3D model and snapshots", needs: [{ file: ROOM, who: "S4" }] },
   };
-  var usage = null, jobs = {}, files = new Set(), answers = {}, questions = null, decks = [], chosenDeck = null, active = "deck";
-  var progress = {}, agentProg = {}, runDoc = null, checked = {}, lastPoll = 0;
+  var crops = [], usage = null, jobs = {}, files = new Set(), answers = {}, questions = null, decks = [], chosenDeck = null, active = "brief";
+  var pOpen = {}, progress = {}, agentProg = {}, runDoc = null, checked = {}, lastPoll = 0;
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   var readJson = function (rel) { return P.read(rel).then(function (t) { return JSON.parse(t); }, function () { return null; }); };
 
-  // ── tabs (shown in the editor's top bar) ──
+  // ── the stage tree (0.6): one panel, every stage a node like the Library tree; its row shows state, what is
+  // happening and the percent; open it for its sub-steps. No top tabs: the step bar's "open step" (PIPELINE_UI.tab)
+  // and the first stage not yet approved open their node by themselves.
+  function node(id) { return document.querySelector('details.node[data-panel="' + id + '"]'); }
+  function isOpen(id) { var n = node(id); return !!(n && n.open); }
   function show(id) {
     active = id;
-    document.querySelectorAll("section[data-panel]").forEach(function (s) { s.classList.toggle("on", s.dataset.panel === id); });
-    P.setTabs(TABS.map(function (t) { return { id: t.id, label: t.label, count: t.id === "runner" ? Object.keys(jobs).filter(function (k) { return jobs[k].status === "queued" || jobs[k].status === "running"; }).length : 0, amber: t.id === "brief" && questions && !answers.saved }; }), id);
+    var n = node(id);
+    if (n) { n.open = true; setTimeout(function () { n.scrollIntoView({ block: "start", behavior: "smooth" }); }, 50); }
+    document.querySelectorAll("details.node").forEach(function (d) { d.classList.toggle("cur", d === n); });
     refresh();
+  }
+  document.querySelectorAll("details.node").forEach(function (d) {
+    var k = "bfd.node." + d.dataset.panel;
+    try { var v = localStorage.getItem(k); if (v != null) d.open = v === "1"; } catch (e) {}
+    d.addEventListener("toggle", function () { try { localStorage.setItem(k, d.open ? "1" : "0"); } catch (e) {} if (d.open) refresh(); });
+  });
+  // the stage the run is on: the first whose gate the user has not approved
+  var focused = false;
+  function focusCurrent() {
+    if (focused || !runDoc) return;
+    focused = true;
+    var g = GROUPS.filter(function (x) { return !approvedAt(x.gate); })[0] || GROUPS[GROUPS.length - 1];
+    show(g.tab);
   }
   window.PIPELINE_UI = { tab: show };
 
@@ -80,6 +98,11 @@
       var q = (questions.questions || []).filter(function (x) { return x.key === "room"; })[0];
       var r = q && q.room_ids && q.room_ids[answers.room];
       return r ? { project: r.project, room: r.room } : null;
+    }
+    if (stage === "S1_PANELS") {   // crop only the floorplan the user chose
+      var rq = questions && (questions.questions || []).filter(function (x) { return x.key === "room"; })[0];
+      var rr = rq && rq.room_ids && answers.room && rq.room_ids[answers.room];
+      return rr && rr.board ? { board: rr.board } : questions && (questions.projects || []).length > 1 ? null : {};
     }
     return {};
   }
@@ -161,11 +184,21 @@
     }).join("") : '<div class="empty">No deck uploaded yet.</div>';
     var pics = [].concat(Array.from(files).filter(function (f) { return /^S1_INTAKE\/pages\/.+\.png$/.test(f); }).sort());
     if (!pics.length) pics = Array.from(files).filter(function (f) { return /^S1_INTAKE\/images\//.test(f); }).sort().slice(0, 24);
-    $("#pages").innerHTML = pics.map(function (f) { var u = P.url(STEPS + f); return '<a href="' + u + '" target="_blank"><img src="' + u + '"><span>' + esc(f.split("/").pop()) + "</span></a>"; }).join("");
+    if ($("#pages")) $("#pages").innerHTML = pics.map(function (f) { var u = P.url(STEPS + f); return '<a href="' + u + '" target="_blank"><img src="' + u + '"><span>' + esc(f.split("/").pop()) + "</span></a>"; }).join("");
   }
 
   // ── questions tab ──
+  // the main input beside the questions (what the floorplan / room options refer to), and the crops filed in inputs/
+  function renderSource() {
+    var pages = Array.from(files).filter(function (f) { return /^S1_INTAKE\/pages\/.+\.png$/.test(f); }).sort();
+    $("#qsource").innerHTML = pages.length ? pages.slice(0, 6).map(function (f) { var u = P.url(STEPS + f); return '<a href="' + u + '" target="_blank"><img src="' + u + '"><span>' + esc(chosenDeck || f.split("/").pop()) + "</span></a>"; }).join("") : "";
+    $("#crops").innerHTML = crops.length ? '<h3>3 · Cropped into inputs/images/ (' + crops.length + ')</h3>' + crops.map(function (f) {
+      var u = P.url("inputs/images/" + f), parts = f.split("/");
+      return '<a href="' + u + '" target="_blank" title="' + esc(f) + '"><img src="' + u + '"><span>' + esc(parts.slice(-2).join(" / ").replace(/\.png$/, "")) + "</span></a>";
+    }).join("") : "";
+  }
   function renderQuestions() {
+    renderSource();
     var form = $("#qform");
     if (!questions) { form.innerHTML = '<div class="empty">The questions appear after S1 reads the deck.</div>'; $("#qsave").disabled = true; return; }
     if (form.dataset.for === JSON.stringify(questions.questions)) return;   // keep what the user is typing
@@ -199,6 +232,88 @@
   function imgs(prefix, rx) {
     var fs = Array.from(files).filter(function (f) { return f.indexOf(prefix) === 0 && rx.test(f); }).sort();
     return fs.length ? fs.map(function (f) { var u = P.url(STEPS + f); return '<a href="' + u + '" target="_blank"><img src="' + u + '"><span>' + esc(f.split("/").pop()) + "</span></a>"; }).join("") : '<div class="empty">Nothing yet.</div>';
+  }
+  // ── S2 Plan: four sub-steps on the live canvas, each with the user's input saved in the store (s2/<key>) ──
+  // Claude puts the plan crop on the canvas as an overlay, traces walls / doors / windows, then the objects; after
+  // each the user says "looks right" or asks for changes here. Claude reads the docs (pipeline.events, type "s2").
+  var S2 = {
+    order: ["UNDERLAY", "SCALE", "WALLS", "WALLS_OK", "OBJECTS", "OBJECTS_OK", "MORE", "APPROVE"],
+    kinds: { UNDERLAY: "agent", SCALE: "user", WALLS: "agent", WALLS_OK: "user", OBJECTS: "agent", OBJECTS_OK: "user", MORE: "user", APPROVE: "user" },
+    titles: { UNDERLAY: "Claude puts the plan on the canvas as an overlay", SCALE: "Scale reference and north bearing", WALLS: "Claude traces walls, doors and windows",
+      WALLS_OK: "Check the walls, doors and windows", OBJECTS: "Claude traces the objects", OBJECTS_OK: "Check the objects", MORE: "New objects, materials, improvements", APPROVE: "The user approves the plan" },
+    weights: { UNDERLAY: 10, WALLS: 40, OBJECTS: 40 },
+    docs: { SCALE: "s2/scale", WALLS_OK: "s2/walls", OBJECTS_OK: "s2/objects", MORE: "s2/more" },
+  };
+  var docs = {};
+  // every S2 sub-step leaves its own canvas: steps/S2_PLAN/<n>-<name>.canvas.json (Claude writes it and loads it live);
+  // a new one opens on the canvas by itself, and "Show on canvas" reopens any of them
+  var S2_CANVAS = [
+    { el: "#s2-c1", file: "S2_PLAN/1-overlay.canvas.json", title: "overlay, scaled and turned to north" },
+    { el: "#s2-c2", file: "S2_PLAN/2-walls.canvas.json", title: "walls, doors and windows" },
+    { el: "#s2-c3", file: "S2_PLAN/3-objects.canvas.json", title: "walls + objects" },
+    { el: "#s2-c4", file: "S2_PLAN/4-plan.canvas.json", title: "the plan with your additions" },
+  ];
+  var seenCanvas = null;
+  function renderCanvases() {
+    var have = S2_CANVAS.filter(function (c) { return files.has(c.file); }).map(function (c) { return c.file; });
+    if (seenCanvas === null) seenCanvas = have.slice();
+    have.forEach(function (f) { if (seenCanvas.indexOf(f) < 0) { seenCanvas.push(f); P.openCanvas(STEPS + f).catch(function () {}); P.notify("New canvas: " + f.split("/").pop(), "info"); } });
+    S2_CANVAS.forEach(function (c) {
+      var el = $(c.el); if (!el) return;
+      var on = files.has(c.file);
+      el.innerHTML = '<div class="canvasrow"><span class="pill ' + (on ? "ok" : "") + '">' + (on ? "canvas ready" : "no canvas yet") + "</span><code>" + esc(c.file.split("/").pop()) + "</code>" +
+        '<span class="muted">' + esc(c.title) + "</span>" + '<button type="button" data-canvas="' + esc(c.file) + '"' + (on ? "" : " disabled") + ">Show on canvas</button></div>";
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-canvas]");
+    if (b) P.openCanvas(STEPS + b.dataset.canvas).then(function () { P.notify("Opened " + b.dataset.canvas.split("/").pop(), "success"); }, function (err) { P.notify("Could not open: " + (err && err.message || err), "error"); });
+  });
+  var FORMS = {
+    "s2/scale": { el: "#s2-scale", save: "Save scale and north", fields: [
+      { key: "ref_kind", label: "Scale from", type: "select", options: ["Door width", "Printed dimension", "Other"], default: "Door width" },
+      { key: "ref_what", label: "Which one (e.g. 'entrance door', 'the 18' 11\" wall')", type: "text", default: "entrance door" },
+      { key: "ref_mm", label: "Its real size (mm)", type: "number", default: 900, why: "a standard door leaf is 900 mm; a printed 18' 11\" is 5766 mm" },
+      { key: "north_deg", label: "North bearing (degrees, clockwise from page-up)", type: "number", default: 0, why: "0 = north points up the page" }] },
+    "s2/walls": { el: "#s2-walls", ok: "Looks right", save: "Request changes", fields: [
+      { key: "note", label: "Improvements to the walls, doors and windows", type: "textarea", default: "", why: "e.g. 'the east wall is 150 thick', 'add a window on the south wall'" }] },
+    "s2/objects": { el: "#s2-objects", ok: "Looks right", save: "Request changes", fields: [
+      { key: "note", label: "Improvements to the objects", type: "textarea", default: "", why: "e.g. 'the sofa faces the window', 'move the rug 300 north'" }] },
+    "s2/more": { el: "#s2-more", save: "Save", fields: [
+      { key: "add_objects", label: "Do you want to add new objects?", type: "select", options: ["No", "Yes"], default: "No" },
+      { key: "objects_note", label: "Which objects (optional)", type: "textarea", default: "" },
+      { key: "add_materials", label: "Do you want to add new materials?", type: "select", options: ["No", "Yes"], default: "No" },
+      { key: "materials_note", label: "Which materials (optional)", type: "textarea", default: "" },
+      { key: "improve", label: "Do you want to make any other improvements?", type: "textarea", default: "" }] },
+  };
+  function fieldHtml(f, v) {
+    var name = ' name="' + esc(f.key) + '"';
+    var input = f.type === "select" ? "<select" + name + ">" + f.options.map(function (o) { return "<option" + (String(o) === String(v) ? " selected" : "") + ">" + esc(o) + "</option>"; }).join("") + "</select>"
+      : f.type === "textarea" ? '<textarea rows="3"' + name + ">" + esc(v) + "</textarea>"
+      : '<input type="' + (f.type === "number" ? "number" : "text") + '"' + name + ' value="' + esc(v) + '">';
+    return "<label>" + esc(f.label) + input + (f.why ? '<span class="why">' + esc(f.why) + "</span>" : "") + "</label>";
+  }
+  function formState(d) { return d && d.saved ? (d.ok ? "Marked as looking right · " : "Saved · ") + String(d.saved).slice(0, 16).replace("T", " ") : ""; }
+  function renderForms() {
+    Object.keys(FORMS).forEach(function (key) {
+      var F = FORMS[key], el = $(F.el), d = docs[key] || {};
+      if (!el) return;
+      if (el.dataset.ready) { el.querySelector(".fstate").textContent = formState(d); return; }
+      el.dataset.ready = "1";
+      el.innerHTML = '<form class="form">' + F.fields.map(function (f) { return fieldHtml(f, d[f.key] != null ? d[f.key] : f.default); }).join("") + "</form>" +
+        '<div class="row">' + (F.ok ? '<button type="button" class="primary" data-ok>' + esc(F.ok) + "</button>" : "") +
+        '<button type="button"' + (F.ok ? "" : ' class="primary"') + " data-save>" + esc(F.save) + '</button><span class="fstate muted">' + esc(formState(d)) + "</span></div>";
+      el.addEventListener("click", function (e) {
+        var ok = e.target.closest("[data-ok]"), sv = e.target.closest("[data-save]");
+        if (!ok && !sv) return;
+        var data = {};
+        new FormData(el.querySelector("form")).forEach(function (v, k) { data[k] = v; });
+        F.fields.forEach(function (f) { if (f.type === "number" && data[f.key] !== "") data[f.key] = Number(data[f.key]); });
+        data.ok = !!ok; data.saved = new Date().toISOString();
+        P.db.doc(key).set(data).then(function () { docs[key] = data; P.emit("s2", { doc: key, data: data }); P.notify(ok ? "Marked as looking right" : "Saved — Claude will pick it up", "success"); refresh(); },
+          function (err) { el.querySelector(".fstate").textContent = "Not saved: " + (err && err.message || err); });
+      });
+    });
   }
   function renderBrief() {
     var f = files.has("S2_BRIEF/roombrief.json") ? "S2_BRIEF/roombrief.json" : files.has("S2_BRIEF/roombrief.draft.json") ? "S2_BRIEF/roombrief.draft.json" : null;
@@ -371,8 +486,9 @@
   }
   function stageView(g) {
     var pr = progress[g.id] || null, ag = agentProg[g.id] || null;
-    var order = (pr && pr.order) || Object.keys(STAGES).filter(function (k) { return STAGES[k].group === g.id; }).map(function (k) { return STAGES[k].step; });
-    var kinds = (pr && pr.kinds) || {}, weights = (pr && pr.weights) || {}, titles = (pr && pr.titles) || {};
+    var flow = g.id === "S2" && !(pr && pr.order) ? S2 : null;
+    var order = (flow && flow.order) || (pr && pr.order) || Object.keys(STAGES).filter(function (k) { return STAGES[k].group === g.id; }).map(function (k) { return STAGES[k].step; });
+    var kinds = (flow && flow.kinds) || (pr && pr.kinds) || {}, weights = (flow && flow.weights) || (pr && pr.weights) || {}, titles = (flow && flow.titles) || (pr && pr.titles) || {};
     var lastScript = null;
     Object.keys(STAGES).forEach(function (k) { var j = jobs[k]; if (STAGES[k].group === g.id && j && j.finished && (!lastScript || j.finished > lastScript)) lastScript = j.finished; });
     var okAt = approvedAt(g.gate), stale = okAt && lastScript && Date.parse(lastScript) > okAt + 1000;
@@ -380,7 +496,10 @@
       var s = (pr && pr.steps && pr.steps[id]) || null, kind = kinds[id] || "script", st = { id: id, kind: kind, title: titles[id] || id, state: "todo", pct: 0, msg: "", secs: null };
       if (s) { st.state = s.state === "running" ? "running" : s.state === "failed" ? "failed" : "done"; st.pct = s.pct || 0; st.msg = s.msg || ""; st.secs = s.secs; st.started = s.started; }
       if (kind === "agent" && ag && ag.step === id) { st.state = ag.done ? "done" : "running"; st.pct = ag.done ? 100 : (ag.pct || 0); st.msg = ag.msg || ""; st.started = ag.started; }
-      if (kind === "user") {
+      var dk = flow && flow.docs[id], dd = dk && docs[dk];
+      if (kind === "user" && dk) {
+        st.state = dd && dd.saved ? "done" : "wait"; st.msg = dd && dd.saved ? (dd.ok ? "looks right" : "saved" + (dd.note ? ": " + dd.note : "")) : "waiting";
+      } else if (kind === "user") {
         var isApprove = /APPROVE/.test(id);
         st.state = isApprove ? (okAt && !stale ? "done" : "wait") : (answers.saved ? "done" : questions ? "wait" : "todo");
         st.msg = isApprove ? (okAt && !stale ? "approved " + new Date(okAt).toLocaleString() : stale ? "re-run after approval: approve again" : "waiting for your approval in the step bar") : (answers.saved ? "answers saved" : "waiting for your answers");
@@ -389,6 +508,8 @@
     });
     // agent steps before a finished script step are done; a "wait" before anything that has not run is just todo
     var seenDone = false;
+    // agent steps before the one Claude reports now are done
+    if (ag && ag.step) { var ai = order.indexOf(ag.step); steps.forEach(function (x, i) { if (i < ai && x.kind === "agent" && x.state === "todo") { x.state = "done"; x.pct = 100; } }); }
     for (var i = steps.length - 1; i >= 0; i--) { if (steps[i].state === "done" || steps[i].state === "running") seenDone = true; else if (seenDone && steps[i].kind === "agent") { steps[i].state = "done"; steps[i].pct = 100; } }
     var total = 0, got = 0;
     steps.forEach(function (st) { var w = weights[st.id] != null ? weights[st.id] : (st.kind === "user" ? 0 : 1); total += w; got += w * (st.state === "done" ? 100 : st.state === "running" || st.state === "failed" ? st.pct : 0) / 100; });
@@ -417,9 +538,13 @@
     var every = v.state === "running" ? 3 : 15;
     var silent = v.state === "running" && v.beat && Date.now() - Date.parse(v.beat) > 60000;
     var open = el.querySelector("details.log") ? el.querySelector("details.log").open : v.state === "running" || v.state === "failed";
-    el.innerHTML = '<div class="phead"><b>' + esc(g.id + " " + g.title) + '</b><span class="muted">' + esc(g.skill + (v.pr && v.pr.skill ? " " + v.pr.skill.split("@")[1] : "")) + "</span>" +
-      '<span class="pill ' + cls + '">' + esc(v.state) + "</span><span class=\"pct\">" + v.pct + " %</span>" + (v.eta != null ? '<span class="muted">~' + esc(hms(v.eta)) + " left in this step</span>" : "") + "</div>" +
-      '<div class="bar"><i style="width:' + v.pct + '%" class="' + cls + '"></i></div>' +
+    var now = v.failed ? "failed in " + v.failed.title : v.running ? v.running.title + (v.running.msg ? " — " + v.running.msg : "") : (v.steps.filter(function (s) { return s.state === "wait"; })[0] || {}).title || (v.state === "approved" ? "approved" : "");
+    if (pOpen[g.id] == null) pOpen[g.id] = false;
+    var was = el.querySelector(":scope > details"); if (was) pOpen[g.id] = was.open;
+    el.innerHTML = '<details' + (pOpen[g.id] ? " open" : "") + '><summary><div class="phead"><b>' + esc(g.id + " " + g.title) + '</b><span class="muted">' + esc(g.skill + (v.pr && v.pr.skill ? " " + v.pr.skill.split("@")[1] : "")) + "</span>" +
+      '<span class="pill ' + cls + '">' + esc(v.state) + "</span>" + (now ? '<span class="nowr" title="' + esc(now) + '">' + esc(now) + "</span>" : "") + "<span class=\"pct\">" + v.pct + " %</span></div>" +
+      '<div class="bar"><i style="width:' + v.pct + '%" class="' + cls + '"></i></div></summary><div class="body">' +
+      (v.eta != null ? '<div class="muted">~' + esc(hms(v.eta)) + " left in this step</div>" : "") +
       (v.running ? '<div class="now">' + esc(v.running.title) + (v.running.msg ? " — " + esc(v.running.msg) : "") + " · " + v.running.pct + " %</div>" : "") +
       (v.failed ? '<div class="now bad">Failed in ' + esc(v.failed.title) + ": " + esc(v.failed.msg) + "</div>" : "") +
       (silent ? '<div class="now bad">Runner not responding (no heartbeat for ' + esc(ago(v.beat)) + ") — is node tools/runner/worker.mjs running?</div>" : "") +
@@ -430,13 +555,34 @@
       }).join("") + "</ol>" +
       "<details class=\"log\"" + (open ? " open" : "") + "><summary class=\"muted\">log · " + v.log.length + " lines</summary><pre>" +
       esc(v.log.slice(-40).map(function (l) { return hm(l.t) + "  " + (l.step ? "[" + l.step + "] " : "") + l.msg; }).join("\n") || "(nothing yet)") + "</pre></details>" +
-      '<div class="foot muted">last update ' + esc(ago(v.pr && v.pr.updated)) + " · checking every " + every + " s</div>";
+      '<div class="foot muted">last update ' + esc(ago(v.pr && v.pr.updated)) + " · checking every " + every + " s</div></div></details>";
+    paintSubs(g, v);
+    var head = document.querySelector('.nodehead[data-group="' + g.id + '"]');
+    if (head) head.innerHTML = '<span class="caret"></span><b>' + esc(g.id + " " + g.title) + '</b><span class="muted">' + esc(g.skill) + "</span>" +
+      '<span class="pill ' + cls + '">' + esc(v.state) + "</span>" + (now ? '<span class="nowr" title="' + esc(now) + '">' + esc(now) + "</span>" : '<span class="nowr"></span>') +
+      '<span class="pct">' + v.pct + ' %</span><span class="hbar"><i style="width:' + v.pct + '%" class="' + cls + '"></i></span>';
+  }
+  // each sub-step header shows its own percent and what is happening, from the stage's steps it covers (data-steps)
+  function paintSubs(g, v) {
+    document.querySelectorAll('details.node[data-panel="' + g.tab + '"] details.sub[data-steps]').forEach(function (d) {
+      var ids = d.dataset.steps.split(" "), sts = v.steps.filter(function (s) { return ids.indexOf(s.id) >= 0; });
+      var out = d.querySelector(".sstat");
+      if (!sts.length || !out) return;
+      var pct = Math.round(sts.reduce(function (a, s) { return a + (s.state === "done" ? 100 : s.state === "running" || s.state === "failed" ? s.pct : 0); }, 0) / sts.length);
+      var f = sts.filter(function (s) { return s.state === "failed"; })[0], r = sts.filter(function (s) { return s.state === "running"; })[0], w = sts.filter(function (s) { return s.state === "wait"; })[0];
+      var all = sts.every(function (s) { return s.state === "done"; });
+      var cls = f ? "bad" : r ? "run" : w ? "wait" : all ? "ok" : "";
+      var msg = f ? "failed: " + (f.msg || f.title) : r ? r.title + (r.msg ? " — " + r.msg : "") : w ? (w.msg || "waiting") + (w.kind === "user" ? " (you)" : "") : all ? "done" : "not started";
+      out.className = "sstat " + cls;
+      out.title = msg;
+      out.innerHTML = "<span>" + esc(msg) + "</span><b>" + (all ? "✓" : pct + " %") + "</b>";
+    });
   }
   function loadProgress(force) {
     var now = Date.now();
     return Promise.all(GROUPS.map(function (g) {
       var running = progress[g.id] && progress[g.id].state === "running" || agentProg[g.id] && !agentProg[g.id].done;
-      var every = g.tab === active || running ? 3000 : 15000;
+      var every = isOpen(g.tab) || running ? 3000 : 15000;
       if (!force && checked[g.id] && now - checked[g.id] < every - 200) return null;
       checked[g.id] = now;
       return Promise.all([readJson(DIR + "stages/" + g.id + "/progress.json"), readJson(DIR + "stages/" + g.id + "/agent-progress.json")]).then(function (a) { progress[g.id] = a[0]; agentProg[g.id] = a[1]; });
@@ -447,22 +593,39 @@
     GROUPS.forEach(renderProgress);
     document.querySelectorAll(".stage[data-stage]").forEach(renderStage);
     renderDeck(); renderQuestions(); renderJobs();
-    if (active === "brief") renderBrief();
-    if (active === "objects") renderObjects();
-    if (active === "fitout") renderRoom();
-    if (active === "plan") $("#plan").innerHTML = imgs("S3_GEOMETRY/", /\.png$/);
-    if (active === "3d") $("#model").innerHTML = imgs("S7_3D/", /\.png$/);
+    var rn = $("#runner-now"); if (rn) { var q = Object.keys(jobs).filter(function (k) { return jobs[k].status === "queued" || jobs[k].status === "running"; }); rn.textContent = q.length ? q.length + " job(s) waiting / running" : "idle"; }
+    if (isOpen("brief")) renderBrief();
+    if (isOpen("objects")) renderObjects();
+    if (isOpen("fitout")) renderRoom();
+    if (isOpen("plan")) {
+      renderForms(); renderCanvases();
+      $("#s2-walls-img").innerHTML = imgs("S2_PLAN/", /walls[^/]*\.png$/);
+      $("#s2-objects-img").innerHTML = imgs("S2_PLAN/", /objects[^/]*\.png$/);
+      $("#plan").innerHTML = imgs("S3_GEOMETRY/", /\.png$/);
+    }
+    if (isOpen("3d")) $("#model").innerHTML = imgs("S7_3D/", /\.png$/);
   }
 
   function poll() {
     return Promise.all([loadJobs(), loadFiles(), loadProgress(), readJson(DIR + "usage.json").then(function (u) { usage = u; })]).then(function () {
-      if (!questions && files.has("S1_INTAKE/questions.json")) return readJson(STEPS + "S1_INTAKE/questions.json").then(function (q) { questions = q; });
-    }).then(refresh, function () {});
+      // re-read every poll: Claude may rewrite the questions (an image's floorplans and rooms appear after it marks them)
+      var loads = [P.list("inputs/images/").then(function (l) { crops = l.filter(function (f) { return /\.(png|jpe?g|webp)$/i.test(f); }).sort(); }, function () { crops = []; })];
+      if (files.has("S1_INTAKE/questions.json")) loads.push(readJson(STEPS + "S1_INTAKE/questions.json").then(function (q) { if (q) questions = q; }));
+      return Promise.all(loads);
+    }).then(function () { refresh(); focusCurrent(); }, function () {});
   }
 
+  // foldable sub-steps: each <details class="sub"> remembers open / closed in this browser
+  document.querySelectorAll("details.sub").forEach(function (d) {
+    var k = "bfd.sub2." + d.dataset.sub;   // folded by default; remembers the user's choice
+    try { var v = localStorage.getItem(k); if (v != null) d.open = v === "1"; } catch (e) {}
+    d.addEventListener("toggle", function () { try { localStorage.setItem(k, d.open ? "1" : "0"); } catch (e) {} });
+  });
+
   $("#code").textContent = P.project || "";
+  Object.keys(FORMS).forEach(function (key) { P.db.doc(key).onSnapshot(function (snap) { docs[key] = snap.exists ? snap.data() || {} : {}; refresh(); }); });
   P.db.doc("answers/main").onSnapshot(function (snap) { answers = snap.exists ? snap.data() || {} : {}; if (answers.saved) $("#qstate").textContent = "Saved " + String(answers.saved).slice(0, 16).replace("T", " "); refresh(); });
-  show("deck");
+  show("brief"); focused = false;
   setInterval(function () { GROUPS.forEach(renderProgress); }, 1000);   // the "x s ago" and ETA tick between polls
   Promise.all([loadDecks(), poll()]).then(function () { setInterval(poll, 3000); setInterval(loadDecks, 15000); });
 })();

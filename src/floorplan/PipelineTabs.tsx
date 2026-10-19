@@ -714,7 +714,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
   ) : null;
 
   const frame = loaded ? (
-    <div className={`absolute inset-x-0 bottom-0 top-10 z-10 flex flex-col overflow-hidden bg-white ${active === "drawings" ? "hidden" : ""}`}>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       {stepBar}
       {loaded.srcdoc != null ? (
         <iframe key={`${loaded.app.id}/${loaded.code}`} ref={attachFrame} srcDoc={loaded.srcdoc} sandbox={FRAME_SANDBOX}

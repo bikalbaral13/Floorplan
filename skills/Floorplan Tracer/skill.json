@@ -2,7 +2,7 @@
  "schema": "skill/1",
  "id": "floorplan-tracer",
  "title": "Floorplan Tracer",
- "version": "1.0.1",
+ "version": "1.1.0",
  "entry": "scope-the-trace.md",
  "about": "A raster plan / drawing PDF → a traced plan (the Floorplan Tracer pipeline's S0–S8, its own approvals), then the room geometry a build needs: walls cut at openings, zones, the empty room canvas.",
  "inputs": {
@@ -40,9 +40,9 @@
  "steps": {
   "TRACE": {
    "kind": "agent",
-   "title": "Trace the plan (Floorplan Tracer S0–S8, the user approves its gates)",
+   "title": "Trace the plan live on the canvas: overlay + scale + north, walls / doors / windows, objects, additions (one canvas per sub-step)",
    "weight": 60,
-   "doc": "scope-the-trace.md"
+   "doc": "trace-live-in-build.md"
   },
   "FROM_TRACER": {
    "kind": "script",

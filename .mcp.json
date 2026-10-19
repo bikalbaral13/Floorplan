@@ -1,9 +1,3 @@
 {
-  "mcpServers": {
-    "floorplan-bridge": {
-      "command": "node",
-      "args": ["mcp/floorplan-bridge.mjs"],
-      "env": { "FP_BRIDGE_PORT": "41414" }
-    }
-  }
+  "mcpServers": {}
 }

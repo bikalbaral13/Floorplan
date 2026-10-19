@@ -4,7 +4,7 @@
 | Stage | Skill (R2 library/Skills/) | Runner jobs | The user |
 |---|---|---|---|
 | S1 Brief | Deck Reader | S1_INTAKE → (answers) → S1_DRAFT → Claude curates → S1_FINALIZE | answers the questions, approves **S1 Brief** |
-| S2 Plan | Floorplan Tracer | Claude traces with the tracer pipeline (its gates) → S2_FROM_TRACER → S2_GEOMETRY | approves the tracer's gates, then **S2 Plan** |
+| S2 Plan | Floorplan Tracer | Claude traces LIVE on the canvas in four sub-steps — overlay + scale + north, walls / doors / windows, objects, additions — one canvas file per sub-step (`steps/S2_PLAN/<n>-*.canvas.json`, loaded with design.load); see the skill's trace-live-in-build.md → S2_GEOMETRY | answers each sub-step in the S2 Plan tab (`s2/scale`, `s2/walls`, `s2/objects`, `s2/more`), then approves **S2 Plan** |
 | S3 Objects | Object Resolver | S3_CATALOG → Claude writes resolve.json → (Objects sign-off) → S3_CHECK | signs off, approves **S3 Objects** |
 | S4 Fit-out | Floorplan Improver | S4_PLACE (compose: the resolved items as given) → optional Claude IMPROVE | approves **S4 Fit-out** |
 | S5 3D | Floorplan Renderer | S5_3D (Blender) | approves **S5 3D** |

@@ -3,11 +3,45 @@
  "id": "build-from-deck",
  "note": "Build from Deck 0.4: five stages, each one skill. by: who fills the step in; gate: the USER approves it in the step bar — and the runner refuses a stage until the one before it is approved (run.json). Script stages run on the runner (jobs/<STAGE>.json); Claude writes the curated brief, the trace and resolve.json into steps/ and reports its progress to stages/<Sn>/agent-progress.json.",
  "steps": [
-  { "id": "deck", "title": "Deck", "panel": "deck", "by": "user", "gate": false, "hint": "upload the .pptx or .pdf, then Run S1" },
-  { "id": "brief", "title": "S1 Brief", "panel": "brief", "by": "both", "gate": true, "hint": "answer the questions, check the room brief, approve" },
-  { "id": "plan", "title": "S2 Plan", "panel": "plan", "by": "claude", "gate": true, "hint": "check geometry_check.png, approve" },
-  { "id": "objects", "title": "S3 Objects", "panel": "objects", "by": "both", "gate": true, "hint": "sign off each item's object and material, approve" },
-  { "id": "fitout", "title": "S4 Fit-out", "panel": "fitout", "by": "claude", "gate": true, "hint": "open the room canvas, approve" },
-  { "id": "3d", "title": "S5 3D", "panel": "3d", "by": "claude", "gate": true, "hint": "check the snapshots, approve" }
+  {
+   "id": "brief",
+   "title": "S1 Brief",
+   "panel": "brief",
+   "by": "both",
+   "gate": true,
+   "hint": "upload the .pptx, .pdf or image, answer the floorplan / room questions, check the crops and the room brief, approve"
+  },
+  {
+   "id": "plan",
+   "title": "S2 Plan",
+   "panel": "plan",
+   "by": "claude",
+   "gate": true,
+   "hint": "check geometry_check.png, approve"
+  },
+  {
+   "id": "objects",
+   "title": "S3 Objects",
+   "panel": "objects",
+   "by": "both",
+   "gate": true,
+   "hint": "sign off each item's object and material, approve"
+  },
+  {
+   "id": "fitout",
+   "title": "S4 Fit-out",
+   "panel": "fitout",
+   "by": "claude",
+   "gate": true,
+   "hint": "open the room canvas, approve"
+  },
+  {
+   "id": "3d",
+   "title": "S5 3D",
+   "panel": "3d",
+   "by": "claude",
+   "gate": true,
+   "hint": "check the snapshots, approve"
+  }
  ]
 }

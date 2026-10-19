@@ -7,7 +7,7 @@
   "S1_INTAKE": {
    "stage": "S1",
    "uses": "deck:INTAKE",
-   "next": "PPTX/PDF: the USER answers the questions in the Brief tab, then queue S1_DRAFT. IMAGE (deck.json needs_panels): AGENT marks the panels (Deck Reader read-an-image-deck.md) → write {STEPS}S1_INTAKE/panels.json, then queue S1_PANELS.",
+   "next": "PPTX/PDF: the USER answers the questions in the Brief tab, then queue S1_DRAFT. IMAGE (deck.json needs_panels): AGENT marks the panels (Deck Reader read-an-image-deck.md) → write {STEPS}S1_INTAKE/panels.json (one board, or \"boards\" when the image holds several plans / moodboards), then queue S1_PANELS.",
    "title": "Read the deck (PPTX, PDF or a moodboard IMAGE) and list the questions",
    "args": {
     "deck": "inputs/decks/<file> (relative to the project)"
@@ -34,18 +34,13 @@
     {
      "from": "{WORK}/deck/pages/*",
      "to": "{STEPS}S1_INTAKE/pages/"
-    },
-    {
-     "from": "{WORK}/deck/pages/*",
-     "to": "{STEPS}S1_INTAKE/pages/",
-     "optional": true
     }
    ]
   },
   "S1_PANELS": {
    "stage": "S1",
    "uses": "deck:PANELS",
-   "title": "Cut the image's panels into slides and list the questions",
+   "title": "Cut the image's panels into slides, file each crop under inputs/images/, list the questions",
    "pull": [
     {
      "from": "{STEPS}S1_INTAKE/",
@@ -65,9 +60,16 @@
     {
      "from": "{WORK}/deck/images/*",
      "to": "{STEPS}S1_INTAKE/images/"
+    },
+    {
+     "from": "{WORK}/deck/inputs/",
+     "to": "Projects/{CODE}/inputs/"
     }
    ],
-   "next": "The USER answers the questions in the Brief tab (answers/main). Then queue S1_DRAFT with { project, room } from their answer."
+   "next": "Every crop is now its own input: Projects/{CODE}/inputs/images/<source>/<board>/<category>/<id>.png (+ index.json). The USER answers the questions in the Brief tab (answers/main) — with several boards the first question picks the board. Then queue S1_DRAFT with { project, room } from their answer.",
+   "args": {
+    "board": "the board (floorplan) the user chose: questions.json room_ids[<answer>].board — only it is cropped"
+   }
   },
   "S1_DRAFT": {
    "stage": "S1",

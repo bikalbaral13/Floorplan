@@ -14,8 +14,8 @@ Input: a .pptx / .pdf deck, or a moodboard **image** (.png / .jpg / .webp). Ever
 | Step | Who | What |
 |---|---|---|
 | INTAKE | script | `intake.py <deck> <work>/deck` — slides (or PDF pages rendered to `pages/`), images, plan overlays → `deck.json`; `questions.py` → `questions.json` (project, room, ceiling height, a scale dimension) |
-| MARK | agent | **image decks only**: mark the plan, every item and swatch on the image → `panels.json` — see [read-an-image-deck.md](read-an-image-deck.md) |
-| PANELS | script | `panels.py` crops each box into `images/` and rewrites `deck.json` one slide per panel; `questions.py` again |
+| MARK | agent | **image decks only**: mark the plan, every item and swatch on the image → `panels.json` (one board, or `boards` when the image holds several plans / moodboards) — see [read-an-image-deck.md](read-an-image-deck.md) |
+| PANELS | script | `panels.py` crops each box into `images/`, rewrites `deck.json` one slide per panel (one project per board) and files every crop as a project input: `inputs/images/<source>/<board>/<category>/<id>.png` + `index.json` (deck-inputs/1) → pushed to `Projects/<CODE>/inputs/`; `questions.py` again |
 | ANSWER | **user** | answers the questions. The agent never answers them. |
 | DRAFT | script | `brief.py <deck> "<project>" "<room>" roombrief.draft.json` — everything the deck says about that room |
 | CURATE | agent | write `roombrief.curated.json` — see [curate-the-brief.md](curate-the-brief.md) |

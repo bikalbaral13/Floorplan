@@ -12,73 +12,111 @@
   <div id="runner-pill" class="pill">runner: …</div>
 </header>
 <main id="panels">
-  <section data-panel="deck">
-    <h2>1 · The deck</h2>
-    <p class="muted">Upload the plan-phase deck — PowerPoint (.pptx) or PDF — or one moodboard image (.png .jpg .webp): Claude marks its plan, items and swatches. It is saved in the project's <code>inputs/decks/</code>.</p>
+  <details class="node" data-panel="brief"><summary class="nodehead" data-group="S1"></summary>
+  <div class="nodebody">
+    <div class="progress" data-group="S1"></div>
+    <details class="sub" data-sub="s1-input" data-steps="INTAKE"><summary><span class="t">1 · The input</span><span class="sstat"></span></summary>
+    <p class="muted">Upload the plan-phase deck — PowerPoint (.pptx) or PDF — or one moodboard image (.png .jpg .webp). It is saved in the project's <code>inputs/decks/</code>.</p>
     <label id="drop" class="drop">
       <input id="file" type="file" accept=".pptx,.pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
       <span>Drop the deck or moodboard image here, or <u>choose a file</u></span>
       <span id="upload-state" class="muted"></span>
     </label>
     <div id="decks" class="list"></div>
-    <div class="progress" data-group="S1"></div>
     <div class="stage" data-stage="S1_INTAKE"></div>
-    <div id="pages" class="thumbs"></div>
-  </section>
-
-  <section data-panel="brief">
-    <div class="progress" data-group="S1"></div>
-    <h2>S1 · Brief <span class="muted">— skill Deck Reader</span></h2>
-    <p class="muted">What the deck cannot settle by itself: answer, save, then Claude drafts and curates the room brief. Approve the brief in the step bar.</p>
-    <div class="stage" data-stage="S1_PANELS"></div>
+    <div id="qsource" class="thumbs"></div>
+    </details>
+    <details class="sub" data-sub="s1-questions" data-steps="ANSWER"><summary><span class="t">2 · Floorplan and room</span><span class="sstat"></span></summary>
+    <p class="muted">The options come from the input: every floorplan it holds, and the rooms on it.</p>
     <form id="qform" class="form"></form>
     <div class="row"><button id="qsave" class="primary" type="button">Save answers</button><span id="qstate" class="muted"></span></div>
+    </details>
+    <details class="sub" data-sub="s1-crops" data-steps="MARK PANELS"><summary><span class="t">3 · Crops in inputs/images/</span><span class="sstat"></span></summary>
+    <p class="muted">The chosen floorplan, its products and swatches, each cropped into its own file in the project's <code>inputs/images/</code>.</p>
+    <div class="stage" data-stage="S1_PANELS"></div>
+    <div id="crops" class="thumbs"></div>
+    </details>
+    <details class="sub" data-sub="s1-brief" data-steps="DRAFT CURATE FINALIZE APPROVE"><summary><span class="t">4 · Room brief</span><span class="sstat"></span></summary>
+    <p class="muted">Claude drafts and curates the room brief from the chosen floorplan; approve it in the step bar.</p>
     <div class="stage" data-stage="S1_DRAFT"></div>
     <div class="stage" data-stage="S1_FINALIZE"></div>
     <div id="brief" class="table"></div>
-  </section>
+    </details>
+  </div></details>
 
-  <section data-panel="plan">
+  <details class="node" data-panel="plan"><summary class="nodehead" data-group="S2"></summary>
+  <div class="nodebody">
     <div class="progress" data-group="S2"></div>
-    <h2>S2 · Plan <span class="muted">— skill Floorplan Tracer</span></h2>
-    <p class="muted">Claude traces the deck's plan with the Floorplan Tracer (you approve its scale and overlay); the scripts turn the trace into walls, openings and zones. Check geometry_check.png, then approve.</p>
+    <details class="sub" data-sub="s2-underlay" data-steps="UNDERLAY SCALE"><summary><span class="t">1 · Overlay, scale and north</span><span class="sstat"></span></summary>
+    <p class="muted">Claude puts the chosen floorplan from S1 on the canvas as an overlay. Give one reference to scale it by — a door's width or a printed dimension — and the north bearing.</p>
+    <div id="s2-scale"></div>
+    <div id="s2-c1"></div>
+    </details>
+    <details class="sub" data-sub="s2-walls" data-steps="WALLS WALLS_OK"><summary><span class="t">2 · Walls, doors and windows</span><span class="sstat"></span></summary>
+    <p class="muted">Claude traces the walls, doors and windows over the overlay on the canvas. Check them there; say what to improve, or mark them as right.</p>
+    <div id="s2-c2"></div>
+    <div id="s2-walls-img" class="thumbs big"></div>
+    <div id="s2-walls"></div>
     <div class="stage" data-stage="S2_FROM_TRACER"></div>
     <div class="stage" data-stage="S2_GEOMETRY"></div>
     <div id="plan" class="thumbs big"></div>
-  </section>
+    </details>
+    <details class="sub" data-sub="s2-objects" data-steps="OBJECTS OBJECTS_OK"><summary><span class="t">3 · Objects</span><span class="sstat"></span></summary>
+    <p class="muted">Claude traces the furniture and fixtures drawn on the plan as objects. Say what to improve, or mark them as right.</p>
+    <div id="s2-c3"></div>
+    <div id="s2-objects-img" class="thumbs big"></div>
+    <div id="s2-objects"></div>
+    </details>
+    <details class="sub" data-sub="s2-more" data-steps="MORE APPROVE"><summary><span class="t">4 · New objects, materials and improvements</span><span class="sstat"></span></summary>
+    <div id="s2-more"></div>
+    <div id="s2-c4"></div>
+    </details>
+  </div></details>
 
-  <section data-panel="objects">
+  <details class="node" data-panel="objects"><summary class="nodehead" data-group="S3"></summary>
+  <div class="nodebody">
     <div class="progress" data-group="S3"></div>
-    <h2>S3 · Objects <span class="muted">— skill Object Resolver</span></h2>
-    <p class="muted">Each brief item bound to a library object with its real parameters and a material. Sign off below, then approve.</p>
+    <details class="sub" data-sub="s3-catalog"><summary><span class="t">1 · Library snapshot</span><span class="sstat"></span></summary>
     <div class="stage" data-stage="S3_CATALOG"></div>
+    </details>
+    <details class="sub" data-sub="s3-check"><summary><span class="t">2 · Bindings and sign-off</span><span class="sstat"></span></summary>
+    <p class="muted">Each brief item bound to a library object with its real parameters and a material. Sign off below, then approve.</p>
     <div class="stage" data-stage="S3_CHECK"></div>
     <div id="objects"></div>
-  </section>
+    </details>
+  </div></details>
 
-  <section data-panel="fitout">
+  <details class="node" data-panel="fitout"><summary class="nodehead" data-group="S4"></summary>
+  <div class="nodebody">
     <div class="progress" data-group="S4"></div>
-    <h2>S4 · Fit-out <span class="muted">— skill Floorplan Improver</span></h2>
-    <p class="muted">Every signed-off object placed as given; Claude may add floors, lighting and trims around them. Open the room canvas to check, then approve.</p>
+    <details class="sub" data-sub="s4-place"><summary><span class="t">1 · Place the objects</span><span class="sstat"></span></summary>
+    <p class="muted">Every signed-off object placed as given; Claude may add floors, lighting and trims around them.</p>
     <div class="stage" data-stage="S4_PLACE"></div>
+    </details>
+    <details class="sub" data-sub="s4-room"><summary><span class="t">2 · Room canvas</span><span class="sstat"></span></summary>
     <div id="room"></div>
-  </section>
+    </details>
+  </div></details>
 
-  <section data-panel="3d">
+  <details class="node" data-panel="3d"><summary class="nodehead" data-group="S5"></summary>
+  <div class="nodebody">
     <div class="progress" data-group="S5"></div>
-    <h2>S5 · 3D <span class="muted">— skill Floorplan Renderer</span></h2>
-    <p class="muted">The room as .blend / .fbx / .glb with snapshots from the deck's cameras, two corners and the top (Blender on the runner).</p>
+    <details class="sub" data-sub="s5-render"><summary><span class="t">1 · Render</span><span class="sstat"></span></summary>
+    <p class="muted">The room as .blend / .fbx / .glb (Blender on the runner).</p>
     <div class="stage" data-stage="S5_3D"></div>
+    </details>
+    <details class="sub" data-sub="s5-snaps"><summary><span class="t">2 · Snapshots</span><span class="sstat"></span></summary>
     <div id="model" class="thumbs big"></div>
-  </section>
+    </details>
+  </div></details>
 
-  <section data-panel="runner">
-    <h2>Runner</h2>
+  <details class="node" data-panel="runner"><summary class="nodehead"><span class="caret"></span><b>Runner</b><span class="muted">jobs, time and cost</span><span class="nowr" id="runner-now"></span></summary>
+  <div class="nodebody">
     <p class="muted">Script stages run on a machine with Python: <code>node tools/runner/worker.mjs</code> in the Floorplan repo. Jobs wait here until it picks them up.</p>
     <div id="jobs" class="table"></div>
     <h3>Time and cost</h3>
     <div id="usage" class="table"></div>
-  </section>
+  </div></details>
 </main>
 <script src="app.js"></script>
 </body>

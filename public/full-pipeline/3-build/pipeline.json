@@ -2,7 +2,7 @@
  "schema": "pipeline/1",
  "id": "build-from-deck",
  "title": "Build (from roombrief or Plan Deck)",
- "version": "0.5.0",
+ "version": "0.5.4",
  "phase": "build",
  "entry": {
   "agents": "AGENTS.md",
@@ -77,11 +77,11 @@
  "skills": {
   "deck": {
    "id": "deck-reader",
-   "version": "1.1.0"
+   "version": "1.3.0"
   },
   "tracer": {
    "id": "floorplan-tracer",
-   "version": "1.0.1"
+   "version": "1.1.0"
   },
   "resolver": {
    "id": "object-resolver",
@@ -93,7 +93,7 @@
   },
   "renderer": {
    "id": "floorplan-renderer",
-   "version": "1.0.0"
+   "version": "1.1.1"
   }
  },
  "stages": [
