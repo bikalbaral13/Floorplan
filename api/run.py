@@ -33,6 +33,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 JOB_RE = re.compile(r"^Projects/([A-Z0-9][A-Z0-9_]*)/(\d-[a-z]+)/([a-z0-9-]+)/jobs/([A-Z0-9_]+)\.json$")
 TMP = os.environ.get("BP_RUN_TMP") or "/tmp/bp-run"
@@ -176,9 +177,12 @@ def materialise(kind, id_, base, rel, sha, log):
     if os.path.exists(os.path.join(d, ".complete")):
         return d
     shutil.rmtree(d, ignore_errors=True)
-    for rp, meta in rel["files"].items():
+    for rp in rel["files"]:
         if re.search(r"(^|/)\.\.(/|$)", rp) or rp.startswith("/") or ":" in rp:
             raise RuntimeError(f"release lists a bad path: {rp}")
+
+    def fetch(item):
+        rp, meta = item
         b = get_bytes(base + rp)
         if (meta or {}).get("sha256") and sha256(b) != meta["sha256"]:
             raise RuntimeError(f"{rp} in R2 does not match its release.json sha256 — the release changed after it was published; republish it")
@@ -186,6 +190,9 @@ def materialise(kind, id_, base, rel, sha, log):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         with open(dst, "wb") as f:
             f.write(b)
+
+    with ThreadPoolExecutor(16) as pool:          # one file at a time was ~20 s per skill
+        list(pool.map(fetch, rel["files"].items()))
     with open(os.path.join(d, ".complete"), "w") as f:
         f.write(json.dumps({"id": id_, "version": rel.get("version"), "sha": sha}))
     log(f"fetched {id_} {rel.get('version')} from R2 ({len(rel['files'])} files, sha256 checked)")
@@ -208,11 +215,6 @@ def load_pipeline(pipeline, log):
         was = f" (approved: {ap.get('version')}, sha {str(ap.get('sha', ''))[:12]})" if ap else ""
         raise RuntimeError(f"{pipeline} {rel.get('version')} is not approved for the cloud runner{was}. The publisher approves it: "
                            f"node tools/runner/approve-cloud.mjs {pipeline} — then Run again.")
-    for alias, s in skills.items():
-        s["root"] = materialise("skills", s["id"], s["base"], s["rel"], s["sha"], log)
-        s["manifest"] = read_local_json(os.path.join(s["root"], "skill.json")) or {}
-        if s["manifest"].get("version") != s["version"]:
-            raise RuntimeError(f"skill {s['id']}: skill.json is {s['manifest'].get('version')}, the pipeline pins {s['version']}")
     return root, {"version": rel.get("version"), "sha": sha[:12], "source": "r2"}, skills
 
 
@@ -354,6 +356,10 @@ def glob_local(pattern):
     return sorted(os.path.join(d, f) for f in os.listdir(d) if fnmatch.fnmatchcase(f, base) and os.path.isfile(os.path.join(d, f)))
 
 
+# a child `python` does not inherit the packages Vercel put on THIS process's sys.path (requirements.txt)
+PYPATH = os.pathsep.join(p for p in sys.path if p and os.path.isdir(p))
+
+
 def run_cmd(cmd, cwd, log, env, on_progress):
     opts = cmd[-1] if isinstance(cmd[-1], dict) else {}
     argv = [x for x in cmd if isinstance(x, str)]
@@ -363,7 +369,7 @@ def run_cmd(cmd, cwd, log, env, on_progress):
         raise RuntimeError(f"the cloud runner has no {argv[0]} — give this stage \"host\": \"runner\" in runner.json")
     log("$ " + " ".join(argv))
     p = subprocess.Popen(argv, cwd=opts.get("cwd") or cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1", **env})
+                         env={**os.environ, "PYTHONPATH": PYPATH, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1", **env})
     for raw in p.stdout:
         line = raw.decode("utf8", "replace").rstrip("\r\n")
         m = re.match(r"^@@progress (\{.*\})\s*$", line)
@@ -435,6 +441,15 @@ def run_job(key):
         blocked = gate_block(root, recipe, d, st.get("stage"))
         if blocked:
             raise RuntimeError(blocked)
+        uses = str(st.get("uses") or "").split(":")[0]
+        for s in skills.values():          # only the skill this stage runs is downloaded (all are verified + approved)
+            if uses and uses not in (s["id"], next(a for a, v in skills.items() if v is s)):
+                continue
+            s["root"] = materialise("skills", s["id"], s["base"], s["rel"], s["sha"], log)
+            s["manifest"] = read_local_json(os.path.join(s["root"], "skill.json")) or {}
+            if s["manifest"].get("version") != s["version"]:
+                raise RuntimeError(f"skill {s['id']}: skill.json is {s['manifest'].get('version')}, the pipeline pins {s['version']}")
+        skills = {a: v for a, v in skills.items() if "root" in v}
         skill_env = {f"BP_SKILL_{re.sub(r'[^A-Z0-9]', '_', s['id'].upper())}": s["root"] for s in skills.values()}
         cwd, commands, step_id, step_title, skill = root, st.get("run") or [], stage, st.get("title"), None
         if st.get("uses"):
