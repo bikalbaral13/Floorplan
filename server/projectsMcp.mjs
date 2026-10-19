@@ -141,7 +141,7 @@ export async function callProjectTool(cfg, name, args = {}, user = "user") {
     const st = args.stage ? String(args.stage).toUpperCase() : "";
     if (st && !STAGE_RE.test(st)) throw new Error("bad `stage`");
     const jobs = await jobsOf(cfg, dir, st);
-    const queued = jobs.filter((j) => j.status === "queued" && Date.now() - Date.parse(j.queued) > 60_000);
+    const queued = jobs.filter((j) => (j.status === "queued" || j.status === "queued-cloud") && Date.now() - Date.parse(j.queued) > 60_000);
     return { dir, jobs, ...(queued.length ? { note: "queued for over a minute: the cloud runner did not take it (a host:runner stage, or /__run unreachable) — is a machine runner running? (node tools/runner/worker.mjs)" } : {}) };
   }
   if (name === "project_job") {
@@ -154,7 +154,7 @@ export async function callProjectTool(cfg, name, args = {}, user = "user") {
     const job = { schema: "runner-job/1", code: c, pipeline: pl, phase: phaseOf(pl, args.phase), stage: st,
       args: args.args && typeof args.args === "object" ? args.args : {}, status: "queued", queued: new Date().toISOString(), by: user };
     const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-    if (host) job.cloud = true;
+    if (host) { job.cloud = true; job.status = "queued-cloud"; }   // old machine runners ignore this status
     await putJson(cfg, key, job);
     // the cloud runner (api/run.py, this deployment) takes it; the call is only the kick — it keeps running after
     // we stop waiting, and project.jobs shows the result. No deployment (local dev): the machine runner takes it.

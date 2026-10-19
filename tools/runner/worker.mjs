@@ -443,9 +443,10 @@ async function tick() {
     if (!JOB_RE.test(o.key) || seen.get(o.key) === o.lastModified) continue;
     seen.set(o.key, o.lastModified);
     const job = await readJson(o.key);
-    if (job?.status !== "queued") continue;
-    // the cloud runner (api/run.py) was kicked for it: take it only if it is still queued after a grace period
-    if (job.cloud && Date.now() - Date.parse(job.queued) < 90_000) { seen.delete(o.key); continue; }
+    // "queued-cloud": the cloud runner (api/run.py) was kicked for it — take it only if still waiting after 90 s
+    const cloud = job?.status === "queued-cloud" || (job?.status === "queued" && job.cloud);
+    if (job?.status !== "queued" && !cloud) continue;
+    if (cloud && Date.now() - Date.parse(job.queued) < 90_000) { seen.delete(o.key); continue; }
     console.log(`job ${o.key}`);
     await runJob(o.key, job);
     seen.set(o.key, "ran");

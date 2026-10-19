@@ -606,7 +606,7 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         const key = `${pipelineDir(loaded.code, loaded.app.id, loaded.app.phase)}jobs/${st}.json`;
         let job: Record<string, unknown> = {};
         try { job = JSON.parse(await text(key, true)); } catch { throw new Error(`no job ${st}`); }
-        if (job.status !== "queued") throw new Error(`${st} is ${String(job.status)} — only a queued job can be cancelled`);
+        if (job.status !== "queued" && job.status !== "queued-cloud") throw new Error(`${st} is ${String(job.status)} — only a queued job can be cancelled`);
         const r = await saveKey(key, JSON.stringify({ ...job, status: "cancelled", cancelled: new Date().toISOString() }, null, 1));
         if (!r.ok) throw new Error(r.error ?? "could not cancel");
         return { key };
@@ -642,7 +642,9 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         const st = String(stage).toUpperCase();
         if (!/^[A-Z0-9][A-Z0-9_]{1,40}$/.test(st)) throw new Error(`bad stage "${stage}"`);
         const key = `${pipelineDir(loaded.code, loaded.app.id, loaded.app.phase)}jobs/${st}.json`;
-        const job = { schema: "runner-job/1", code: loaded.code, pipeline: loaded.app.id, stage: st, args, status: "queued", queued: new Date().toISOString(), by: "editor", cloud: true };
+        const job = { schema: "runner-job/1", code: loaded.code, pipeline: loaded.app.id, stage: st, args, status: "queued-cloud", queued: new Date().toISOString(), by: "editor", cloud: true };
+        // "queued-cloud", not "queued": a machine runner older than the cloud runner would take a "queued" job and
+        // refuse it as not approved on that machine; it ignores this status. worker.mjs falls back to it after 90 s.
         const r = await saveKey(key, JSON.stringify(job, null, 1));
         if (!r.ok) throw new Error(r.error ?? "could not queue the job");
         pushEvent({ type: "ui", note: "job", data: { stage: st, args } });

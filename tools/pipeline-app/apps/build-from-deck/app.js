@@ -104,11 +104,11 @@
   function renderStage(el) {
     var s = el.dataset.stage, j = jobs[s], miss = missing(s), args = argsFor(s);
     var st = j ? j.status : "not run";
-    var cls = st === "done" ? "ok" : st === "failed" ? "bad" : st === "queued" || st === "running" ? "warn" : "";
+    var cls = st === "done" ? "ok" : st === "failed" ? "bad" : st === "queued" || st === "queued-cloud" || st === "running" ? "warn" : "";
     var why = miss.length ? "waiting for " + miss.map(function (m) { return m.who + " (" + m.file.split("/").pop() + ")"; }).join(", ")
       : args === null ? (s === "S1_INTAKE" ? "upload or choose a deck" : "answer the Questions first") : "";
-    var busy = st === "queued" || st === "running";
-    var stale = st === "queued" && Date.now() - Date.parse(j.queued) > 60000;
+    var busy = st === "queued" || st === "queued-cloud" || st === "running";
+    var stale = (st === "queued" || st === "queued-cloud") && Date.now() - Date.parse(j.queued) > 60000;
     el.innerHTML = '<div class="head"><span class="name">' + esc(s) + " · " + esc(STAGES[s].title) + '</span><span class="pill ' + cls + '">' + esc(st) + "</span>" +
       '<button type="button" data-run="' + s + '"' + (busy || why ? " disabled" : "") + ">" + (j ? "Run again" : "Run") + "</button>" +
       (why ? '<span class="muted">' + esc(why) + "</span>" : "") + (stale ? '<span class="pill warn">no runner has picked it up — Run again (a machine-only stage needs node tools/runner/worker.mjs)</span>' : "") + "</div>" +
@@ -473,7 +473,7 @@
       ["finished", function (j) { return (j.finished || "").slice(0, 19).replace("T", " "); }], ["by", function (j) { return j.by || ""; }], ["error", function (j) { return j.error || ""; }]]);
     var list = Object.keys(jobs).map(function (k) { return jobs[k]; });
     var run = list.filter(function (j) { return j.status === "running"; })[0];
-    var stale = list.some(function (j) { return j.status === "queued" && Date.now() - Date.parse(j.queued) > 60000; });
+    var stale = list.some(function (j) { return (j.status === "queued" || j.status === "queued-cloud") && Date.now() - Date.parse(j.queued) > 60000; });
     var pill = $("#runner-pill");
     pill.className = "pill " + (run ? "warn" : stale ? "bad" : "ok");
     pill.textContent = run ? "runner: " + run.stage + " running" : stale ? "runner: offline?" : "runner: idle";
@@ -626,7 +626,7 @@
     GROUPS.forEach(renderProgress);
     document.querySelectorAll(".stage[data-stage]").forEach(renderStage);
     renderDeck(); renderQuestions(); renderJobs();
-    var rn = $("#runner-now"); if (rn) { var q = Object.keys(jobs).filter(function (k) { return jobs[k].status === "queued" || jobs[k].status === "running"; }); rn.textContent = q.length ? q.length + " job(s) waiting / running" : "idle"; }
+    var rn = $("#runner-now"); if (rn) { var q = Object.keys(jobs).filter(function (k) { return jobs[k].status === "queued" || jobs[k].status === "queued-cloud" || jobs[k].status === "running"; }); rn.textContent = q.length ? q.length + " job(s) waiting / running" : "idle"; }
     if (isOpen("brief")) renderBrief();
     if (isOpen("objects")) renderObjects();
     if (isOpen("fitout")) renderRoom();

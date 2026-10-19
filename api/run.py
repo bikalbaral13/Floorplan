@@ -396,7 +396,7 @@ def run_job(key):
     job = read_json(key)
     if not job:
         return 404, {"error": f"no job at {key}"}
-    if job.get("status") != "queued":
+    if job.get("status") not in ("queued", "queued-cloud"):
         return 409, {"error": f"{stage} is {job.get('status')} — only a queued job runs", "status": job.get("status")}
     lines, started, state = [], now(), {"release": None, "prog": None, "step": stage}
 
@@ -553,7 +553,7 @@ def run_job(key):
     except NeedsMachine as e:
         with wlock:
             stop.set()
-            put_json(key, {**job, "cloud": False, "note": f"{e} — waiting for node tools/runner/worker.mjs"})
+            put_json(key, {**job, "status": "queued", "cloud": False, "note": f"{e} — waiting for node tools/runner/worker.mjs"})
         return 202, {"ok": True, "key": key, "status": "queued", "note": str(e)}
     except Exception as e:
         with wlock:
