@@ -102,3 +102,5 @@ details.node > .nodebody .progress { position: static; box-shadow: none; }
 @media (max-width: 420px) { details.node > summary .nowr { display: none; } }
 .filelink { display: inline-block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--accent); text-decoration: none; }
 .approve-hint { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: #fef3c7; color: #78350f; font-size: 12px; }
+.views { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 8px 0; font-size: 12px; }
+.views label { display: inline-flex; gap: 4px; align-items: center; }

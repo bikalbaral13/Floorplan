@@ -242,21 +242,32 @@
   // ── S3 3D: the editor's own export (window.pipeline.export3d) — the live 3D scene → output/<CODE>.glb + snapshots ──
   var S3 = { order: ["EXPORT", "APPROVE"], kinds: { EXPORT: "app", APPROVE: "user" }, titles: { EXPORT: "Export the 3D model (GLB + snapshots)", APPROVE: "The user approves the 3D" }, weights: { EXPORT: 1 }, docs: {} };
   var outFiles = [], exporting = false;
+  // the angles the editor renders (its 3D view's snapshot cameras); the user picks which ones to export
+  var VIEWS = [["isometric", "Isometric"], ["front", "Front"], ["back", "Back"], ["left", "Left"], ["right", "Right"], ["top", "Top"], ["panorama", "360° panorama"]];
+  var pickedViews = ["isometric", "front", "back", "left", "right", "top"];
+  try { var pv = JSON.parse(localStorage.getItem("bfd.s3.views") || "null"); if (Array.isArray(pv)) pickedViews = pv; } catch (e) {}
   var CAN_3D = ((P.host && P.host.capabilities) || []).indexOf("export-3d") >= 0 && typeof P.export3d === "function";
   function renderExport() {
     var el = $("#s3-export"); if (!el) return;
     var has = outFiles.some(function (f) { return /\.glb$/i.test(f); });
     el.innerHTML = CAN_3D
-      ? '<div class="row"><button type="button" class="primary" id="s3-go"' + (exporting ? " disabled" : "") + ">" + (exporting ? "Exporting…" : has ? "Export again" : "Export 3D") + '</button><span class="muted">from the canvas open in the editor — open <code>5-final.canvas.json</code> first (S2 · 5)</span></div>'
+      ? '<div class="views"><span class="muted">Snapshots:</span>' + VIEWS.map(function (v) { return '<label><input type="checkbox" data-view="' + v[0] + '"' + (pickedViews.indexOf(v[0]) >= 0 ? " checked" : "") + "> " + esc(v[1]) + "</label>"; }).join("") + "</div>" +
+        '<div class="row"><button type="button" class="primary" id="s3-go"' + (exporting ? " disabled" : "") + ">" + (exporting ? "Exporting…" : has ? "Export again" : "Export 3D") + '</button><span class="muted">from the canvas open in the editor — open <code>5-final.canvas.json</code> first (S2 · 5)</span></div>'
       : '<div class="empty">This editor cannot export 3D yet (no "export-3d" host capability) — reload the editor after it updates.</div>';
     var shots = outFiles.filter(function (f) { return /\.png$/i.test(f); });
     $("#model").innerHTML = shots.map(function (f) { var u = P.url(DIR + "output/" + f); return '<a href="' + u + '" target="_blank"><img src="' + u + '"><span>' + esc(f) + "</span></a>"; }).join("");
     $("#s3-files").innerHTML = outFiles.filter(function (f) { return /\.(glb|gltf)$/i.test(f); }).map(function (f) { return '<a class="filelink" href="' + P.url(DIR + "output/" + f) + '" target="_blank" download>⬇ ' + esc(f) + "</a>"; }).join("");
   }
+  document.addEventListener("change", function (e) {
+    var v = e.target && e.target.dataset && e.target.dataset.view;
+    if (!v) return;
+    pickedViews = VIEWS.map(function (x) { return x[0]; }).filter(function (k) { var c = document.querySelector('[data-view="' + k + '"]'); return c && c.checked; });
+    try { localStorage.setItem("bfd.s3.views", JSON.stringify(pickedViews)); } catch (err) {}
+  });
   document.addEventListener("click", function (e) {
     if (!e.target.closest || !e.target.closest("#s3-go")) return;
     exporting = true; renderExport();
-    P.export3d(DIR + "output/", { name: P.project, snapshots: ["isometric", "top", "front"] }).then(function (r) {
+    P.export3d(DIR + "output/", { name: P.project, snapshots: pickedViews }).then(function (r) {
       P.notify("3D exported — " + r.meshes + " meshes, " + Math.round(r.triangles) + " triangles", "success");
       P.emit("s3", { export: r });
     }, function (err) { P.notify("3D export failed: " + (err && err.message || err), "error"); })
