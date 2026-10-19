@@ -31588,19 +31588,11 @@ User request: ${aiPrompt.trim()}`;
           {/* Preferences open from the account bar at the navigator's bottom-left; the gear shows here only
               while the navigator is folded or switched off, so they are always reachable. */}
           {(!uiPrefs.showNavigator || !navOpen) && defaultSettingsPopover}
-          {!isMobile && !isRightPanelCollapsed && (
-            <button type="button" onClick={toggleProperties}
-              title={propertiesPanelExpanded ? "Hide the Properties panel" : "Show the Properties panel"}
-              aria-label={propertiesPanelExpanded ? "Hide Properties panel" : "Show Properties panel"} aria-pressed={propertiesPanelExpanded}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-              <PanelRight className="h-[18px] w-[18px]" />
-            </button>
-          )}
           {pipelineTabs.pipelineTitle != null && (
             <button type="button" onClick={togglePipe}
               title={pipeOpen ? "Hide the Pipeline panel" : "Show the Pipeline panel"} aria-label={pipeOpen ? "Hide Pipeline panel" : "Show Pipeline panel"} aria-pressed={pipeOpen}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 hover:text-slate-900 ${pipeOpen ? "text-sky-700" : "text-slate-600"}`}>
-              <Workflow className="h-[18px] w-[18px]" />
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+              <PanelRight className="h-[18px] w-[18px]" />
             </button>
           )}
         </div>
@@ -32073,7 +32065,7 @@ User request: ${aiPrompt.trim()}`;
           <button type="button" onClick={toggleProperties}
             title={propertiesPanelExpanded ? "Hide Properties" : "Show Properties"} aria-label="Toggle Properties"
             className="absolute right-0 top-0 z-20 mr-1 mt-1 rounded-md border border-slate-200 bg-white/95 p-1 text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900">
-            {propertiesPanelExpanded ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {propertiesPanelExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
         )}
         {/* Navigation tools float at the top centre of the canvas (Phase + render mode live in Preferences). */}
@@ -40859,7 +40851,7 @@ User request: ${aiPrompt.trim()}`;
             !isRightPanelCollapsed && propertiesPanelExpanded
               ? isMobile
                 ? "absolute bottom-2 right-2 top-2 z-40 min-h-0 w-[min(22rem,calc(100vw-1rem))] rounded-xl border bg-white shadow-xl"
-                : `relative ${propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
+                : `relative w-72 ${sidePanelClass}`
               : "relative w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
           }
         >
@@ -40869,18 +40861,10 @@ User request: ${aiPrompt.trim()}`;
                   One fixed place for the panel's own controls instead of buttons floating over the content. */}
               <div className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-3 py-1.5">
                 <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
-                {!isMobile && (
-                  <button type="button" onClick={() => setPropsSplitView((v) => !v)} aria-pressed={propsSplitView}
-                    title={propsSplitView ? "Tabbed: Properties / Metrics" : "Side by side: Properties and Metrics"}
-                    aria-label={propsSplitView ? "Tabbed view" : "Side-by-side view"}
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${propsSplitView ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}>
-                    <Columns2 className="h-3.5 w-3.5" />
-                  </button>
+                {isMobile && (
+                  <button type="button" onClick={toggleProperties} aria-label="Hide Properties" title="Hide the Properties panel"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800">✕</button>
                 )}
-                <button type="button" onClick={toggleProperties} aria-label="Hide Properties" title="Hide the Properties panel"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800">
-                  {isMobile ? "✕" : <PanelRightClose className="h-3.5 w-3.5" />}
-                </button>
               </div>
               {/* `[&>div>div]` is Radix's viewport child, which it styles `display:table; min-width:100%`.
                   A table inside a scroll container has unlimited inline space, so it grows to MAX-CONTENT:
