@@ -13,6 +13,10 @@
       "destination": "/api/relay?route=mcp"
     },
     {
+      "source": "/__run",
+      "destination": "/api/run"
+    },
+    {
       "source": "/meshy-assets/:match*",
       "destination": "https://assets.meshy.ai/:match*"
     },
@@ -28,6 +32,10 @@
     "api/mcp.mjs": {
       "maxDuration": 60,
       "includeFiles": "server/fonts/**"
+    },
+    "api/run.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{public,src,tools,packages,skills,skills-*,docs,test-plans,server,blender,sketchup,scripts,mcp,node_modules,dist,pipeline-work,output}/**"
     }
   }
 }

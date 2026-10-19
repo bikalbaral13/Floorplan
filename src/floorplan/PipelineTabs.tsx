@@ -642,10 +642,13 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         const st = String(stage).toUpperCase();
         if (!/^[A-Z0-9][A-Z0-9_]{1,40}$/.test(st)) throw new Error(`bad stage "${stage}"`);
         const key = `${pipelineDir(loaded.code, loaded.app.id, loaded.app.phase)}jobs/${st}.json`;
-        const job = { schema: "runner-job/1", code: loaded.code, pipeline: loaded.app.id, stage: st, args, status: "queued", queued: new Date().toISOString(), by: "editor" };
+        const job = { schema: "runner-job/1", code: loaded.code, pipeline: loaded.app.id, stage: st, args, status: "queued", queued: new Date().toISOString(), by: "editor", cloud: true };
         const r = await saveKey(key, JSON.stringify(job, null, 1));
         if (!r.ok) throw new Error(r.error ?? "could not queue the job");
         pushEvent({ type: "ui", note: "job", data: { stage: st, args } });
+        // the cloud runner (api/run.py) runs it in this deployment; not awaited — the app polls the job + progress
+        // files. Where there is no /__run (the dev server) a machine runner takes the job after its grace period.
+        void fetch("/__run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(() => {});
         return { key };
       },
       onEmit: (type, data) => pushEvent({ type: "ui", note: type, data }),

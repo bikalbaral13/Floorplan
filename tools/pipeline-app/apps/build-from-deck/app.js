@@ -111,9 +111,10 @@
     var stale = st === "queued" && Date.now() - Date.parse(j.queued) > 60000;
     el.innerHTML = '<div class="head"><span class="name">' + esc(s) + " · " + esc(STAGES[s].title) + '</span><span class="pill ' + cls + '">' + esc(st) + "</span>" +
       '<button type="button" data-run="' + s + '"' + (busy || why ? " disabled" : "") + ">" + (j ? "Run again" : "Run") + "</button>" +
-      (why ? '<span class="muted">' + esc(why) + "</span>" : "") + (stale ? '<span class="pill warn">no runner has picked it up — is it running?</span>' : "") + "</div>" +
+      (why ? '<span class="muted">' + esc(why) + "</span>" : "") + (stale ? '<span class="pill warn">no runner has picked it up — Run again (a machine-only stage needs node tools/runner/worker.mjs)</span>' : "") + "</div>" +
       (j && j.error ? '<div class="next" style="color:#b91c1c">' + esc(j.error) + "</div>" : "") +
-      (j && /not approved on this runner/.test(j.error || "") ? '<div class="approve-hint"><b>The runner needs your approval for the new release.</b> On the runner machine run <code>node tools/runner/worker.mjs approve ' + esc(j.pipeline || "build-from-deck") + '</code>, type <b>yes</b> at the end (the last line must say "approved …"), then Run again.</div>' : "") +
+      (j && /not approved for the cloud runner/.test(j.error || "") ? '<div class="approve-hint"><b>This release of the pipeline is not approved yet.</b> Ask the publisher to approve it for the cloud runner, then Run again.</div>' : "") +
+      (j && /not approved on this runner/.test(j.error || "") ? '<div class="approve-hint"><b>The machine runner needs your approval for the new release.</b> On the runner machine run <code>node tools/runner/worker.mjs approve ' + esc(j.pipeline || "build-from-deck") + '</code>, type <b>yes</b>, then Run again.</div>' : "") +
       (j && j.next && st === "done" ? '<div class="next">Next: ' + esc(j.next) + "</div>" : "") +
       (j && j.log ? "<details" + (st === "failed" ? " open" : "") + "><summary class=\"muted\">log</summary><pre>" + esc(String(j.log).split("\n").slice(-40).join("\n")) + "</pre></details>" : "");
   }

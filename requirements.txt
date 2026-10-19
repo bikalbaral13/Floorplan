@@ -1,0 +1,5 @@
+# Packages the cloud runner (api/run.py) gives pipeline script stages. A stage that needs more: add it here and redeploy.
+python-pptx==1.0.2
+PyMuPDF==1.28.2
+Pillow==12.1.0
+numpy==2.4.4

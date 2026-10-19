@@ -64,7 +64,7 @@ export const PROJECT_TOOLS = [
   },
   {
     name: "project_job",
-    description: "Queue ONE script stage of a pipeline for the runner (a machine with Python; tools/runner/worker.mjs): writes <pipeline dir>/jobs/<STAGE>.json. Build-from-deck 0.4 stages: S1_INTAKE { deck: 'inputs/decks/<file>' }, S1_DRAFT { project, room }, S1_FINALIZE, S2_FROM_TRACER, S2_GEOMETRY, S3_CATALOG, S3_CHECK, S4_PLACE, S5_3D — a stage of Sn fails until the USER approved S(n-1) in the step bar. Then poll project.jobs. A stage already running is refused. The runner fetches the pipeline's current release from R2 and runs it only if the USER approved that release on the runner machine — a job failing with 'not approved' means: ask the user to run `node tools/runner/worker.mjs approve <pipeline>` there, then queue it again (never try to approve yourself).",
+    description: "Queue ONE script stage of a pipeline: writes <pipeline dir>/jobs/<STAGE>.json and kicks the cloud runner in this deployment (api/run.py, Python stages); a stage marked host:runner waits for a machine runner (tools/runner/worker.mjs). Build-from-deck 0.4 stages: S1_INTAKE { deck: 'inputs/decks/<file>' }, S1_DRAFT { project, room }, S1_FINALIZE, S2_FROM_TRACER, S2_GEOMETRY, S3_CATALOG, S3_CHECK, S4_PLACE, S5_3D — a stage of Sn fails until the USER approved S(n-1) in the step bar. Then poll project.jobs. A stage already running is refused. The runner fetches the pipeline's current release from R2 and runs it only if that release is approved — a job failing with 'not approved' means the publisher must approve the release (cloud: node tools/runner/approve-cloud.mjs <pipeline>; machine: worker.mjs approve) — tell the user, never try to approve yourself.",
     inputSchema: { type: "object", properties: {
       code, pipeline, stage: { type: "string", description: "e.g. S1_INTAKE" }, args: { type: "object", description: "stage arguments" },
       phase: { type: "string" },
@@ -142,7 +142,7 @@ export async function callProjectTool(cfg, name, args = {}, user = "user") {
     if (st && !STAGE_RE.test(st)) throw new Error("bad `stage`");
     const jobs = await jobsOf(cfg, dir, st);
     const queued = jobs.filter((j) => j.status === "queued" && Date.now() - Date.parse(j.queued) > 60_000);
-    return { dir, jobs, ...(queued.length ? { note: "queued for over a minute: is the runner running? (node tools/runner/worker.mjs on the user's machine)" } : {}) };
+    return { dir, jobs, ...(queued.length ? { note: "queued for over a minute: the cloud runner did not take it (a host:runner stage, or /__run unreachable) — is a machine runner running? (node tools/runner/worker.mjs)" } : {}) };
   }
   if (name === "project_job") {
     if (!(await readJson(cfg, manifestKey(c), null))) throw new Error(`no project ${c} — project.create first`);
@@ -153,8 +153,14 @@ export async function callProjectTool(cfg, name, args = {}, user = "user") {
     if (cur?.status === "running" && Date.now() - Date.parse(cur.heartbeat ?? cur.started ?? 0) < 120_000) throw new Error(`${st} is running (since ${cur.started}) — wait for it (project.jobs)`);
     const job = { schema: "runner-job/1", code: c, pipeline: pl, phase: phaseOf(pl, args.phase), stage: st,
       args: args.args && typeof args.args === "object" ? args.args : {}, status: "queued", queued: new Date().toISOString(), by: user };
+    const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+    if (host) job.cloud = true;
     await putJson(cfg, key, job);
-    return { ok: true, key, job };
+    // the cloud runner (api/run.py, this deployment) takes it; the call is only the kick — it keeps running after
+    // we stop waiting, and project.jobs shows the result. No deployment (local dev): the machine runner takes it.
+    if (host) await fetch(`https://${host}/__run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }),
+      signal: AbortSignal.timeout(2500) }).catch(() => {});
+    return { ok: true, key, job, runner: host ? "cloud (this deployment) — poll project.jobs" : "machine runner (node tools/runner/worker.mjs)" };
   }
   throw new Error(`unknown project tool ${name}`);
 }
