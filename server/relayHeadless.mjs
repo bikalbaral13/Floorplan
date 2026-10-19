@@ -34,6 +34,7 @@ export const LOAD_DESIGN_TOOL = {
   inputSchema: { type: "object", properties: {
     path: { type: "string", description: "a project canvas: Projects/<CODE>/shared/canvas.json (or a pipeline output, e.g. Projects/<CODE>/3-build/build-from-deck/output/<CODE>.room.canvas.json)" },
     design: { description: "optional — the plan as a JSON object or its text; omit to load the existing file at `path`" },
+    from: { type: "string", description: "optional — copy this saved canvas (e.g. the previous sub-step's Projects/<CODE>/…/2-walls.canvas.json) to `path` inside R2, then load it: start a new step from the last one without passing its JSON" },
     overwrite: { type: "boolean", description: "with `design`: replace an existing file (default false) — read it first if it may hold work you want to keep" },
   }, required: ["path"] },
 };
@@ -44,6 +45,16 @@ export async function saveDesignJson(session, args, user = "relay") {
   if (!cfg) throw new Error("library storage is not configured on this server");
   const path = String(args.path ?? "").trim().replace(/^library\//i, "");
   if (!validDesignPath(path)) throw new Error("path must be a project canvas, e.g. Projects/<CODE>/shared/canvas.json");
+  if (args.from && (args.design === undefined || args.design === null || args.design === "")) {
+    // COPY inside R2: the previous canvas becomes this one, no plan bytes cross the MCP call
+    const from = String(args.from).trim().replace(/^library\//i, "");
+    if (!validDesignPath(from)) throw new Error("from must be a project canvas path");
+    const store = libraryStore(cfg);
+    if (!(await store.exists(from))) throw new Error(`${from} does not exist`);
+    let plan;
+    try { plan = JSON.parse(await store.get(from)); } catch (e) { throw new Error(`${from} is not valid JSON: ${e.message}`); }
+    args = { ...args, design: plan };
+  }
   if (args.design === undefined || args.design === null || args.design === "") {
     // Load BY PATH: the file is already in the Library — read it here so its bytes never cross the MCP call.
     const store = libraryStore(cfg);
