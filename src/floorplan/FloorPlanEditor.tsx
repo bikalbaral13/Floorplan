@@ -28415,6 +28415,35 @@ User request: ${aiPrompt.trim()}`;
     }
   }, [export3d, setViewMode]);
 
+  // A pipeline app's export3d (host call): open the 3D view if needed, serialise the live scene to GLB and capture
+  // a few views — the in-app replacement for the Blender render step.
+  const export3dRef = useRef(export3d);
+  export3dRef.current = export3d;
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ views: string[]; resolve: (v: unknown) => void; reject: (err: unknown) => void }>).detail;
+      void (async () => {
+        try {
+          if (!snapshotApiRef.current) {
+            setViewMode((m) => (m === "3d" || m === "both" ? m : "both"));
+            const deadline = Date.now() + 10000;
+            while (!snapshotApiRef.current && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+          }
+          const api = snapshotApiRef.current;
+          if (!api) throw new Error("the 3D view did not open");
+          await new Promise((r) => setTimeout(r, 600));   // let the scene settle (lazy meshes, materials)
+          const { blob, meshes, triangles } = await api.exportScene("glb", { units: export3dRef.current.units, axis: "y-up" });
+          if (!meshes) throw new Error("the 3D view has no visible geometry");
+          const shots: { view: string; dataUrl: string }[] = [];
+          for (const v of d.views) shots.push({ view: v, dataUrl: await api.captureOne(v as never).catch(() => "") });
+          d.resolve({ glb: blob, meshes, triangles, shots });
+        } catch (err) { d.reject(err); }
+      })();
+    };
+    window.addEventListener("bp-export-3d", on);
+    return () => window.removeEventListener("bp-export-3d", on);
+  }, [setViewMode]);
+
   /**
    * Export ▸ HTML report — the complete project report (../houseDesign/htmlReport): architecture, structure
    * with member forces, geotechnics, BOQ & rates, programme and the drawing set from the house engine, plus

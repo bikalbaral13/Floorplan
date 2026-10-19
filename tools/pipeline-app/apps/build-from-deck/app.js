@@ -20,11 +20,9 @@
   ];
   // the five stages: which tab shows them, the skill, and the step-bar step the user approves
   var GROUPS = [
-    { id: "S1", tab: "brief", title: "Brief", skill: "Deck Reader", gate: "brief" },
-    { id: "S2", tab: "plan", title: "Plan", skill: "Floorplan Tracer", gate: "plan" },
-    { id: "S3", tab: "objects", title: "Objects", skill: "Object Resolver", gate: "objects" },
-    { id: "S4", tab: "fitout", title: "Fit-out", skill: "Floorplan Improver", gate: "fitout" },
-    { id: "S5", tab: "3d", title: "3D", skill: "Floorplan Renderer", gate: "3d" },
+    { id: "S1", tab: "brief", title: "Read", skill: "Deck Reader", gate: "brief" },
+    { id: "S2", tab: "plan", title: "Design", skill: "live on the canvas", gate: "plan" },
+    { id: "S3", tab: "3d", title: "3D", skill: "in the editor", gate: "3d" },
   ];
   // what each script stage needs before it can run, and who makes it
   var ROOM = "S5_COMPOSE/" + P.project + ".room.canvas.json";
@@ -33,12 +31,6 @@
     S1_PANELS: { group: "S1", step: "PANELS", title: "Cut the image's panels (image decks)", needs: [{ file: "S1_INTAKE/panels.json", who: "Claude" }] },
     S1_DRAFT: { group: "S1", step: "DRAFT", title: "Draft the brief", needs: [{ file: "S1_INTAKE/deck.json", who: "S1 intake" }] },
     S1_FINALIZE: { group: "S1", step: "FINALIZE", title: "Finalize the brief", needs: [{ file: "S2_BRIEF/roombrief.draft.json", who: "S1 draft" }, { file: "S2_BRIEF/roombrief.curated.json", who: "Claude" }] },
-    S2_FROM_TRACER: { group: "S2", step: "FROM_TRACER", title: "Take the Floorplan Tracer's trace", needs: [{ file: "S2_BRIEF/roombrief.json", who: "S1" }] },
-    S2_GEOMETRY: { group: "S2", step: "GEOMETRY", title: "Walls, openings and zones", needs: [{ file: "S3_GEOMETRY/trace.px.json", who: "S2 trace" }] },
-    S3_CATALOG: { group: "S3", step: "CATALOG", title: "Snapshot the library", needs: [] },
-    S3_CHECK: { group: "S3", step: "CHECK", title: "Check object bindings", needs: [{ file: "S4_RESOLVE/catalog.json", who: "S3 catalog" }, { file: "S4_RESOLVE/resolve.json", who: "Claude" }] },
-    S4_PLACE: { group: "S4", step: "PLACE", title: "Place every object on the room canvas", needs: [{ file: "S3_GEOMETRY/plan.json", who: "S2" }, { file: "S4_RESOLVE/resolve.json", who: "S3" }] },
-    S5_3D: { group: "S5", step: "RENDER", title: "3D model and snapshots", needs: [{ file: ROOM, who: "S4" }] },
   };
   var crops = [], usage = null, jobs = {}, files = new Set(), answers = {}, questions = null, decks = [], chosenDeck = null, active = "brief";
   var pOpen = {}, progress = {}, agentProg = {}, runDoc = null, checked = {}, lastPoll = 0;
@@ -121,6 +113,7 @@
       '<button type="button" data-run="' + s + '"' + (busy || why ? " disabled" : "") + ">" + (j ? "Run again" : "Run") + "</button>" +
       (why ? '<span class="muted">' + esc(why) + "</span>" : "") + (stale ? '<span class="pill warn">no runner has picked it up — is it running?</span>' : "") + "</div>" +
       (j && j.error ? '<div class="next" style="color:#b91c1c">' + esc(j.error) + "</div>" : "") +
+      (j && /not approved on this runner/.test(j.error || "") ? '<div class="approve-hint"><b>The runner needs your approval for the new release.</b> On the runner machine run <code>node tools/runner/worker.mjs approve ' + esc(j.pipeline || "build-from-deck") + '</code>, type <b>yes</b> at the end (the last line must say "approved …"), then Run again.</div>' : "") +
       (j && j.next && st === "done" ? '<div class="next">Next: ' + esc(j.next) + "</div>" : "") +
       (j && j.log ? "<details" + (st === "failed" ? " open" : "") + "><summary class=\"muted\">log</summary><pre>" + esc(String(j.log).split("\n").slice(-40).join("\n")) + "</pre></details>" : "");
   }
@@ -237,21 +230,46 @@
   // Claude puts the plan crop on the canvas as an overlay, traces walls / doors / windows, then the objects; after
   // each the user says "looks right" or asks for changes here. Claude reads the docs (pipeline.events, type "s2").
   var S2 = {
-    order: ["UNDERLAY", "SCALE", "WALLS", "WALLS_OK", "OBJECTS", "OBJECTS_OK", "MORE", "APPROVE"],
-    kinds: { UNDERLAY: "agent", SCALE: "user", WALLS: "agent", WALLS_OK: "user", OBJECTS: "agent", OBJECTS_OK: "user", MORE: "user", APPROVE: "user" },
+    order: ["UNDERLAY", "SCALE", "WALLS", "WALLS_OK", "OBJECTS", "OBJECTS_OK", "MATERIALS", "MATERIALS_OK", "MORE", "APPROVE"],
+    kinds: { UNDERLAY: "agent", SCALE: "user", WALLS: "agent", WALLS_OK: "user", OBJECTS: "agent", OBJECTS_OK: "user", MATERIALS: "agent", MATERIALS_OK: "user", MORE: "user", APPROVE: "user" },
     titles: { UNDERLAY: "Claude puts the plan on the canvas as an overlay", SCALE: "Scale reference and north bearing", WALLS: "Claude traces walls, doors and windows",
-      WALLS_OK: "Check the walls, doors and windows", OBJECTS: "Claude traces the objects", OBJECTS_OK: "Check the objects", MORE: "New objects, materials, improvements", APPROVE: "The user approves the plan" },
-    weights: { UNDERLAY: 10, WALLS: 40, OBJECTS: 40 },
-    docs: { SCALE: "s2/scale", WALLS_OK: "s2/walls", OBJECTS_OK: "s2/objects", MORE: "s2/more" },
+      WALLS_OK: "Check the walls, doors and windows", OBJECTS: "Claude places the library objects", OBJECTS_OK: "Check the objects",
+      MATERIALS: "Claude binds the materials and finishes", MATERIALS_OK: "Check the materials", MORE: "Lighting, new objects, improvements", APPROVE: "The user approves the design" },
+    weights: { UNDERLAY: 10, WALLS: 30, OBJECTS: 30, MATERIALS: 20, MORE: 10 },
+    docs: { SCALE: "s2/scale", WALLS_OK: "s2/walls", OBJECTS_OK: "s2/objects", MATERIALS_OK: "s2/materials", MORE: "s2/more" },
   };
   var docs = {};
+  // ── S3 3D: the editor's own export (window.pipeline.export3d) — the live 3D scene → output/<CODE>.glb + snapshots ──
+  var S3 = { order: ["EXPORT", "APPROVE"], kinds: { EXPORT: "app", APPROVE: "user" }, titles: { EXPORT: "Export the 3D model (GLB + snapshots)", APPROVE: "The user approves the 3D" }, weights: { EXPORT: 1 }, docs: {} };
+  var outFiles = [], exporting = false;
+  var CAN_3D = ((P.host && P.host.capabilities) || []).indexOf("export-3d") >= 0 && typeof P.export3d === "function";
+  function renderExport() {
+    var el = $("#s3-export"); if (!el) return;
+    var has = outFiles.some(function (f) { return /\.glb$/i.test(f); });
+    el.innerHTML = CAN_3D
+      ? '<div class="row"><button type="button" class="primary" id="s3-go"' + (exporting ? " disabled" : "") + ">" + (exporting ? "Exporting…" : has ? "Export again" : "Export 3D") + '</button><span class="muted">from the canvas open in the editor — open <code>5-final.canvas.json</code> first (S2 · 5)</span></div>'
+      : '<div class="empty">This editor cannot export 3D yet (no "export-3d" host capability) — reload the editor after it updates.</div>';
+    var shots = outFiles.filter(function (f) { return /\.png$/i.test(f); });
+    $("#model").innerHTML = shots.map(function (f) { var u = P.url(DIR + "output/" + f); return '<a href="' + u + '" target="_blank"><img src="' + u + '"><span>' + esc(f) + "</span></a>"; }).join("");
+    $("#s3-files").innerHTML = outFiles.filter(function (f) { return /\.(glb|gltf)$/i.test(f); }).map(function (f) { return '<a class="filelink" href="' + P.url(DIR + "output/" + f) + '" target="_blank" download>⬇ ' + esc(f) + "</a>"; }).join("");
+  }
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest || !e.target.closest("#s3-go")) return;
+    exporting = true; renderExport();
+    P.export3d(DIR + "output/", { name: P.project, snapshots: ["isometric", "top", "front"] }).then(function (r) {
+      P.notify("3D exported — " + r.meshes + " meshes, " + Math.round(r.triangles) + " triangles", "success");
+      P.emit("s3", { export: r });
+    }, function (err) { P.notify("3D export failed: " + (err && err.message || err), "error"); })
+      .then(function () { exporting = false; return P.list(DIR + "output/").then(function (l) { outFiles = l; }, function () {}); }).then(refresh);
+  });
   // every S2 sub-step leaves its own canvas: steps/S2_PLAN/<n>-<name>.canvas.json (Claude writes it and loads it live);
   // a new one opens on the canvas by itself, and "Show on canvas" reopens any of them
   var S2_CANVAS = [
     { el: "#s2-c1", file: "S2_PLAN/1-overlay.canvas.json", title: "overlay, scaled and turned to north" },
     { el: "#s2-c2", file: "S2_PLAN/2-walls.canvas.json", title: "walls, doors and windows" },
-    { el: "#s2-c3", file: "S2_PLAN/3-objects.canvas.json", title: "walls + objects" },
-    { el: "#s2-c4", file: "S2_PLAN/4-plan.canvas.json", title: "the plan with your additions" },
+    { el: "#s2-c3", file: "S2_PLAN/3-objects.canvas.json", title: "walls + library objects" },
+    { el: "#s2-c4", file: "S2_PLAN/4-materials.canvas.json", title: "with materials and finishes" },
+    { el: "#s2-c5", file: "S2_PLAN/5-final.canvas.json", title: "the final design (S3 exports this)" },
   ];
   var seenCanvas = null;
   function renderCanvases() {
@@ -279,11 +297,13 @@
       { key: "note", label: "Improvements to the walls, doors and windows", type: "textarea", default: "", why: "e.g. 'the east wall is 150 thick', 'add a window on the south wall'" }] },
     "s2/objects": { el: "#s2-objects", ok: "Looks right", save: "Request changes", fields: [
       { key: "note", label: "Improvements to the objects", type: "textarea", default: "", why: "e.g. 'the sofa faces the window', 'move the rug 300 north'" }] },
+    "s2/materials": { el: "#s2-materials", ok: "Looks right", save: "Request changes", fields: [
+      { key: "note", label: "Changes to the materials and finishes", type: "textarea", default: "", why: "e.g. 'lighter oak for the floor', 'the teal only on the TV wall'" },
+      { key: "add_materials", label: "Do you want to add new materials?", type: "select", options: ["No", "Yes"], default: "No" },
+      { key: "materials_note", label: "Which materials (optional)", type: "textarea", default: "" }] },
     "s2/more": { el: "#s2-more", save: "Save", fields: [
       { key: "add_objects", label: "Do you want to add new objects?", type: "select", options: ["No", "Yes"], default: "No" },
       { key: "objects_note", label: "Which objects (optional)", type: "textarea", default: "" },
-      { key: "add_materials", label: "Do you want to add new materials?", type: "select", options: ["No", "Yes"], default: "No" },
-      { key: "materials_note", label: "Which materials (optional)", type: "textarea", default: "" },
       { key: "improve", label: "Do you want to make any other improvements?", type: "textarea", default: "" }] },
   };
   function fieldHtml(f, v) {
@@ -486,7 +506,7 @@
   }
   function stageView(g) {
     var pr = progress[g.id] || null, ag = agentProg[g.id] || null;
-    var flow = g.id === "S2" && !(pr && pr.order) ? S2 : null;
+    var flow = g.id === "S2" && !(pr && pr.order) ? S2 : g.id === "S3" ? S3 : null;
     var order = (flow && flow.order) || (pr && pr.order) || Object.keys(STAGES).filter(function (k) { return STAGES[k].group === g.id; }).map(function (k) { return STAGES[k].step; });
     var kinds = (flow && flow.kinds) || (pr && pr.kinds) || {}, weights = (flow && flow.weights) || (pr && pr.weights) || {}, titles = (flow && flow.titles) || (pr && pr.titles) || {};
     var lastScript = null;
@@ -496,6 +516,7 @@
       var s = (pr && pr.steps && pr.steps[id]) || null, kind = kinds[id] || "script", st = { id: id, kind: kind, title: titles[id] || id, state: "todo", pct: 0, msg: "", secs: null };
       if (s) { st.state = s.state === "running" ? "running" : s.state === "failed" ? "failed" : "done"; st.pct = s.pct || 0; st.msg = s.msg || ""; st.secs = s.secs; st.started = s.started; }
       if (kind === "agent" && ag && ag.step === id) { st.state = ag.done ? "done" : "running"; st.pct = ag.done ? 100 : (ag.pct || 0); st.msg = ag.msg || ""; st.started = ag.started; }
+      if (kind === "app") { var out = outFiles.filter(function (f) { return /\.glb$/i.test(f); }); st.state = out.length ? "done" : "todo"; st.pct = out.length ? 100 : 0; st.msg = out.length ? out[0] : "not exported yet"; return st; }
       var dk = flow && flow.docs[id], dd = dk && docs[dk];
       if (kind === "user" && dk) {
         st.state = dd && dd.saved ? "done" : "wait"; st.msg = dd && dd.saved ? (dd.ok ? "looks right" : "saved" + (dd.note ? ": " + dd.note : "")) : "waiting";
@@ -601,15 +622,14 @@
       renderForms(); renderCanvases();
       $("#s2-walls-img").innerHTML = imgs("S2_PLAN/", /walls[^/]*\.png$/);
       $("#s2-objects-img").innerHTML = imgs("S2_PLAN/", /objects[^/]*\.png$/);
-      $("#plan").innerHTML = imgs("S3_GEOMETRY/", /\.png$/);
     }
-    if (isOpen("3d")) $("#model").innerHTML = imgs("S7_3D/", /\.png$/);
+    if (isOpen("3d")) renderExport();
   }
 
   function poll() {
     return Promise.all([loadJobs(), loadFiles(), loadProgress(), readJson(DIR + "usage.json").then(function (u) { usage = u; })]).then(function () {
       // re-read every poll: Claude may rewrite the questions (an image's floorplans and rooms appear after it marks them)
-      var loads = [P.list("inputs/images/").then(function (l) { crops = l.filter(function (f) { return /\.(png|jpe?g|webp)$/i.test(f); }).sort(); }, function () { crops = []; })];
+      var loads = [P.list(DIR + "output/").then(function (l) { outFiles = l; }, function () { outFiles = []; }), P.list("inputs/images/").then(function (l) { crops = l.filter(function (f) { return /\.(png|jpe?g|webp)$/i.test(f); }).sort(); }, function () { crops = []; })];
       if (files.has("S1_INTAKE/questions.json")) loads.push(readJson(STEPS + "S1_INTAKE/questions.json").then(function (q) { if (q) questions = q; }));
       return Promise.all(loads);
     }).then(function () { refresh(); focusCurrent(); }, function () {});

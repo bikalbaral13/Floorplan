@@ -617,6 +617,26 @@ export function usePipelineTabs(opts: PipelineTabsOptions = {}): {
         window.dispatchEvent(new CustomEvent("bp-open-plan", { detail: { json, path: key } }));
         return { opened: key };
       },
+      export3d: async (rel, opts) => {
+        // the editor renders + serialises its LIVE 3D scene (what you see is what you get) and hands back the files
+        const views = (Array.isArray(opts.snapshots) ? opts.snapshots : ["isometric", "top", "front"]).map(String);
+        const res = await new Promise<{ glb: Blob; meshes: number; triangles: number; shots: { view: string; dataUrl: string }[] }>((resolve, reject) =>
+          window.dispatchEvent(new CustomEvent("bp-export-3d", { detail: { views, resolve, reject } })));
+        const dir = projectKey(loaded.code, rel.replace(/\/?$/, "/"));
+        const name = String(opts.name || loaded.code).replace(/[^\w.-]+/g, "_");
+        const glbKey = `${dir}${name}.glb`;
+        const up = await uploadDirect(glbKey, res.glb, "model/gltf-binary");
+        if (!up.ok) throw new Error(up.error ?? "could not save the GLB");
+        const snapshots: string[] = [];
+        for (const sh of res.shots) {
+          if (!sh.dataUrl) continue;
+          const blob = await (await fetch(sh.dataUrl)).blob();
+          const key = `${dir}${name}.${sh.view}.png`;
+          const r = await uploadDirect(key, blob, blob.type || "image/png");
+          if (r.ok) snapshots.push(key);
+        }
+        return { glb: glbKey, snapshots, meshes: res.meshes, triangles: res.triangles };
+      },
       notify: (message, level) => { (level === "error" ? toast.error : level === "success" ? toast.success : level === "warning" ? toast.warning : toast.info)(message); },
       job: async (stage, args) => {
         const st = String(stage).toUpperCase();

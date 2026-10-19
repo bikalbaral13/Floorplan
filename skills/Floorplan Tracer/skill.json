@@ -2,7 +2,7 @@
  "schema": "skill/1",
  "id": "floorplan-tracer",
  "title": "Floorplan Tracer",
- "version": "1.1.0",
+ "version": "1.2.0",
  "entry": "scope-the-trace.md",
  "about": "A raster plan / drawing PDF → a traced plan (the Floorplan Tracer pipeline's S0–S8, its own approvals), then the room geometry a build needs: walls cut at openings, zones, the empty room canvas.",
  "inputs": {

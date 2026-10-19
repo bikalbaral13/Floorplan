@@ -1,8 +1,8 @@
 {
  "schema": "pipeline/1",
  "id": "build-from-deck",
- "title": "Build (from roombrief or Plan Deck)",
- "version": "0.5.4",
+ "title": "Build (deck or image → live design → 3D)",
+ "version": "0.6.0",
  "phase": "build",
  "entry": {
   "agents": "AGENTS.md",
@@ -42,36 +42,30 @@
   "keep": [
    {
     "id": "roombrief",
-    "local": "project:roombrief.json",
-    "to": "{OUT}roombrief.json",
+    "from": "{STEPS}S2_BRIEF/roombrief.json",
     "schema": "roombrief.v1"
    },
    {
     "id": "canvas",
-    "local": "project:{CODE}.room.canvas.json",
-    "to": "{OUT}{CODE}.room.canvas.json",
+    "from": "{STEPS}S2_PLAN/5-final.canvas.json",
     "schema": "canvas.v1",
-    "after": "S4_PLACE"
-   },
-   {
-    "id": "resolve",
-    "local": "project:resolve.json",
-    "to": "{OUT}resolve.json",
-    "after": "S3_CHECK"
+    "by": "Claude (S2)"
    },
    {
     "id": "model",
-    "local": "3d/*",
-    "to": "{OUT}3d/",
+    "from": "{OUT}<CODE>.glb",
     "binary": true,
-    "after": "S5_3D"
+    "by": "the editor (S3 export3d)"
+   },
+   {
+    "id": "snapshots",
+    "from": "{OUT}<CODE>.<view>.png",
+    "binary": true,
+    "by": "the editor (S3 export3d)"
    }
   ],
   "temp": [
-   "deck/**",
-   "catalog.json",
-   "render/stills/**",
-   "*.baked.json"
+   "deck/**"
   ]
  },
  "skills": {
@@ -81,7 +75,7 @@
   },
   "tracer": {
    "id": "floorplan-tracer",
-   "version": "1.1.0"
+   "version": "1.2.0"
   },
   "resolver": {
    "id": "object-resolver",
@@ -99,38 +93,31 @@
  "stages": [
   {
    "id": "S1",
-   "title": "Brief",
+   "title": "Read",
    "skill": "deck",
    "gate": "brief",
    "tab": "brief"
   },
   {
    "id": "S2",
-   "title": "Plan",
+   "title": "Design",
    "skill": "tracer",
+   "also": [
+    "resolver",
+    "improver"
+   ],
    "gate": "plan",
-   "tab": "plan"
+   "tab": "plan",
+   "live": true,
+   "note": "Claude works on the live canvas through the connector: overlay + scale + north, walls / doors / windows, library objects, materials, lighting + additions — one canvas per sub-step (steps/S2_PLAN/<n>-*.canvas.json); the user answers each sub-step in the app (s2/* docs)."
   },
   {
    "id": "S3",
-   "title": "Objects",
-   "skill": "resolver",
-   "gate": "objects",
-   "tab": "objects"
-  },
-  {
-   "id": "S4",
-   "title": "Fit-out",
-   "skill": "improver",
-   "gate": "fitout",
-   "tab": "fitout"
-  },
-  {
-   "id": "S5",
    "title": "3D",
-   "skill": "renderer",
    "gate": "3d",
-   "tab": "3d"
+   "tab": "3d",
+   "in_app": true,
+   "note": "The editor exports its live 3D scene (GLB + PNG snapshots) to output/ — pipeline.export3d; no runner, no Blender."
   }
  ]
 }

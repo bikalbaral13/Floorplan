@@ -154,7 +154,7 @@ const CONNECTOR_TOOLS = [
   },
   {
     name: "open_editor",
-    description: "Start a LIVE editor session without the user clicking anything: returns a one-time link (valid 10 min) that opens the floorplan editor already connected to this connector. Give the user the link — or open it beside the chat if you can open a browser — then call editor_status until tabConnected is true. Prefer this over connect_editor.",
+    description: "Start a LIVE editor session without the user clicking anything: returns a one-time link (valid 30 min) that opens the floorplan editor already connected to this connector; a new link joins the session already open (run state and design kept). Give the user the link — or open it beside the chat if you can open a browser — then call editor_status until tabConnected is true. Prefer this over connect_editor.",
     inputSchema: { type: "object", properties: {} },
   },
   {

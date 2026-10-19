@@ -1,13 +1,11 @@
 # AGENTS.md — Build from Plan Deck
 
-## 0.4: five stages, each one skill
+## 0.6: three stages — S1 Read (runner) · S2 Design (live) · S3 3D (editor)
 | Stage | Skill (R2 library/Skills/) | Runner jobs | The user |
 |---|---|---|---|
-| S1 Brief | Deck Reader | S1_INTAKE → (answers) → S1_DRAFT → Claude curates → S1_FINALIZE | answers the questions, approves **S1 Brief** |
-| S2 Plan | Floorplan Tracer | Claude traces LIVE on the canvas in four sub-steps — overlay + scale + north, walls / doors / windows, objects, additions — one canvas file per sub-step (`steps/S2_PLAN/<n>-*.canvas.json`, loaded with design.load); see the skill's trace-live-in-build.md → S2_GEOMETRY | answers each sub-step in the S2 Plan tab (`s2/scale`, `s2/walls`, `s2/objects`, `s2/more`), then approves **S2 Plan** |
-| S3 Objects | Object Resolver | S3_CATALOG → Claude writes resolve.json → (Objects sign-off) → S3_CHECK | signs off, approves **S3 Objects** |
-| S4 Fit-out | Floorplan Improver | S4_PLACE (compose: the resolved items as given) → optional Claude IMPROVE | approves **S4 Fit-out** |
-| S5 3D | Floorplan Renderer | S5_3D (Blender) | approves **S5 3D** |
+| S1 Read | Deck Reader | runner: INTAKE → (image) Claude marks panels.json → PANELS (only the chosen board) → DRAFT → Claude curates → FINALIZE | uploads, picks floorplan + room, approves **S1 Read** |
+| S2 Design | Floorplan Tracer + Object Resolver + Floorplan Improver rules | Claude LIVE on the canvas, five sub-steps (overlay/scale/north, walls, library objects, materials, lighting + additions), one canvas per sub-step `steps/S2_PLAN/<n>-*.canvas.json` — see the tracer skill's trace-live-in-build.md | answers each sub-step (`s2/scale`, `s2/walls`, `s2/objects`, `s2/materials`, `s2/more`), approves **S2 Design** |
+| S3 3D | — (the editor) | the editor exports the live 3D scene: `output/<CODE>.glb` + snapshots (pipeline.export3d). No runner, no Blender | clicks **Export 3D**, approves **S3 3D** |
 
 - The scripts live in the skills (`skills/<Name>/` in the repo), not here: `pipeline.json` pins each skill's version
   and `runner.json` stages say `"uses": "<alias>:<STEP>"`. Publish a skill with `node tools/skills/publish.mjs`.

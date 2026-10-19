@@ -100,3 +100,5 @@ details.node > .nodebody .progress { position: static; box-shadow: none; }
 .nodebody .progress .phead .pill, .nodebody .progress .phead .nowr, .nodebody .progress .phead .pct, .nodebody .progress .phead > .muted, .nodebody .progress summary .bar { display: none; }
 .nodebody .progress .phead b::after { content: " · steps and log"; font-weight: 400; color: var(--muted); }
 @media (max-width: 420px) { details.node > summary .nowr { display: none; } }
+.filelink { display: inline-block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--accent); text-decoration: none; }
+.approve-hint { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: #fef3c7; color: #78350f; font-size: 12px; }

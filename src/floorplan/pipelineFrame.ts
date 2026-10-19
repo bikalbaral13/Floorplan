@@ -50,7 +50,7 @@ window.pipeline={db:db,assets:assets,downloads:downloads,project:ctx.code,id:ctx
   read:function(p){return call('read',{path:p});},list:function(p){return call('list',{path:p||''});},
   job:function(s,a){return call('job',{stage:s,args:a||{}});},cancelJob:function(s){return call('cancelJob',{stage:s});},
   write:function(p,c){return call('write',{path:p,content:typeof c==='string'?c:JSON.stringify(c,null,1)});},del:function(p){return call('del_file',{path:p});},
-  openCanvas:function(p){return call('openCanvas',{path:p});},notify:function(m,l){return call('notify',{message:String(m),level:l||'info'});},
+  openCanvas:function(p){return call('openCanvas',{path:p});},export3d:function(p,o){return call('export3d',{path:p||'',opts:o||{}});},notify:function(m,l){return call('notify',{message:String(m),level:l||'info'});},
   host:ctx.host||{version:'0',capabilities:[]},url:function(p){return (ctx.projectUrl||'')+String(p).split('/').map(encodeURIComponent).join('/');},
   setTabs:function(tabs,active){var j=JSON.stringify([tabs,active]);if(j===lastTabs)return;lastTabs=j;call('tabs',{tabs:tabs,active:active});}};
 // The page's own tabs go to the editor's top bar (beside its Drawings tab): a page calls pipeline.setTabs, or —
@@ -77,7 +77,7 @@ export const FRAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-popup
 /** <head> preamble: absolute <base> (the frame's origin is opaque), the context, then the shim — before the page's own scripts. */
 /** What this editor offers a pipeline UI (window.pipeline.host). Bump HOST_VERSION when a call is added. */
 export const HOST_VERSION = "1.0.0";
-export const HOST_CAPABILITIES = ["db", "upload-any-size", "upload-progress", "read", "list", "write", "delete", "url", "job", "cancel-job", "open-canvas", "notify", "emit", "tabs", "downloads"];
+export const HOST_CAPABILITIES = ["db", "upload-any-size", "upload-progress", "read", "list", "write", "delete", "url", "job", "cancel-job", "open-canvas", "export-3d", "notify", "emit", "tabs", "downloads"];
 
 export function framePreamble(base: string, ctx: { id: string; code: string; kv: Record<string, string>; hostTabs?: boolean; projectUrl?: string; dir?: string; host?: { version: string; capabilities: string[]; config?: Record<string, unknown> } }) {
   const json = JSON.stringify(ctx).replace(/</g, "\\u003c");
@@ -101,6 +101,8 @@ export interface FrameHostOptions {
   del?: (path: string) => Promise<{ key: string }>;
   cancelJob?: (stage: string) => Promise<{ key: string }>;
   openCanvas?: (path: string) => Promise<{ opened: string }>;
+  /** Export the editor's live 3D scene to <path>/<name>.glb (+ PNG snapshots) in the project — no Blender. */
+  export3d?: (path: string, opts: Record<string, unknown>) => Promise<{ glb: string; snapshots: string[]; meshes: number; triangles: number }>;
   notify?: (message: string, level: string) => void;
   /** The project's files (paths relative to Projects/<CODE>/). */
   read?: (path: string) => Promise<string>;
@@ -144,6 +146,7 @@ export function connectFrame(frame: HTMLIFrameElement, o: FrameHostOptions) {
     del_file: (a) => { if (!o.del) throw new Error("this host cannot delete project files"); return o.del(String(a.path ?? "")); },
     cancelJob: (a) => { if (!o.cancelJob) throw new Error("this host cannot cancel runner jobs"); return o.cancelJob(String(a.stage ?? "")); },
     openCanvas: (a) => { if (!o.openCanvas) throw new Error("this host cannot open canvases"); return o.openCanvas(String(a.path ?? "")); },
+    export3d: (a) => { if (!o.export3d) throw new Error("this host cannot export 3D"); return o.export3d(String(a.path ?? ""), (a.opts as Record<string, unknown>) ?? {}); },
     notify: (a) => { o.notify?.(String(a.message ?? ""), String(a.level ?? "info")); return true; },
     read: (a) => { if (!o.read) throw new Error("this host cannot read project files"); return o.read(String(a.path ?? "")); },
     list: (a) => { if (!o.list) throw new Error("this host cannot list project files"); return o.list(String(a.path ?? "")); },

@@ -38,6 +38,9 @@ const AGENT_SEEN_WRITE_MS = 20_000;                               // lastAgentCa
 const MAX_BATCH = 20;                                             // calls handed to a batch-capable tab per /next
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LATCH_STALE_MS = 30_000;
+/** How long a call waits for a tab that is still connecting, and for how long after a link was opened it does. */
+const TAB_WAIT_MS = 10_000;
+const TAB_WAIT_WINDOW_MS = 30 * 60 * 1000;
 const INLINE_LIMIT = 4_000_000;                                   // Vercel caps bodies at ~4.5 MB
 const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 /** Reads can safely run again on another tab; anything else must never run twice. */
@@ -225,8 +228,8 @@ const rateLimited = (req) => {
  * The reverse of Connect Claude. The connector creates the session ALREADY linked to its user and returns a
  * link carrying a one-time claim token in the URL FRAGMENT (#pair=…, never sent to a server, so it stays out
  * of access logs). The tab that opens it POSTs the token to /__relay/claim and gets its tokens — minted
- * there, so no secret is ever stored. The claim is single-use and lives 10 minutes. */
-const CLAIM_TTL_MS = 10 * 60 * 1000;
+ * there, so no secret is ever stored. The claim is single-use and lives 30 minutes. */
+const CLAIM_TTL_MS = 30 * 60 * 1000;
 const claimKey = (token) => `relay/claims/${sha(`claim:${token}`)}.json`;
 const EDITOR_ORIGIN = unquote(process.env.EDITOR_ORIGIN || "").replace(/\/+$/, "") || ALLOWED_ORIGINS[0];
 
@@ -422,7 +425,17 @@ async function callTool(cfg, sid, name, args, preloaded = null) {
 
   // The explicit design tools always run headless; the canvas tools do only when no tab is connected (a
   // latch refreshed within ~45 s). A connected-but-slow tab keeps the ticket path, so no call runs twice.
-  const tabUp = !!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000;
+  let tabUp = !!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000;
+  // A tab that is still loading (a link opened in the last few minutes, or a reload) connects within seconds: a call
+  // that needs it waits up to TAB_WAIT_MS for the latch instead of failing with EDITOR_NOT_CONNECTED.
+  if (!tabUp && !HEADLESS_TOOL_NAMES.has(name) && Date.now() - (s.linkedAt ?? s.createdAt ?? 0) < TAB_WAIT_WINDOW_MS) {
+    const until = Date.now() + TAB_WAIT_MS;
+    while (!tabUp && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 750));
+      const fresh = await getJson(cfg, `${P(sid)}/session.json`);
+      if (fresh?.latch && Date.now() - fresh.latch.seenAt <= LATCH_STALE_MS + 15_000) { s.latch = fresh.latch; tabUp = true; }
+    }
+  }
 
   // load_design: save the whole plan, then (tab connected) ONE import_plan command — the tab's own Import JSON.
   if (name === "load_design") {
@@ -575,15 +588,20 @@ export async function openEditor(cfg, user) {
   const old = prev?.sid ? await getJson(cfg, `${P(prev.sid)}/session.json`) : null;
   const design = live(old) ? old.design ?? null : null;                     // keep working on the design picked before
   const linkCode = Array.from(crypto.randomBytes(6), (b) => LINK_ALPHABET[b % LINK_ALPHABET.length]).join("");
-  await putJson(cfg, `${P(sid)}/session.json`, { createdAt: now, expiresAt: now + SESSION_TTL_MS, agentHash: "", tabHash: "", latch: null,
+  // A live session (the user's tab, its run state, its design) is kept: the new link joins it, so opening another
+  // link (a reload, a second device) does not orphan the session the agent was working in.
+  const keep = live(old) ? prev.sid : null;
+  const useSid = keep ?? sid;
+  if (keep) await putJson(cfg, `${P(useSid)}/session.json`, { ...old, tabHash: "", latch: null, linkedAt: now, expiresAt: Math.max(old.expiresAt ?? 0, now + SESSION_TTL_MS) });
+  else await putJson(cfg, `${P(useSid)}/session.json`, { createdAt: now, linkedAt: now, expiresAt: now + SESSION_TTL_MS, agentHash: "", tabHash: "", latch: null,
     run: newRunState(), opened: true, ...(design ? { design, designSetBy: "agent" } : {}) });
-  await putJson(cfg, `relay/links/${linkCode}.json`, { sid, expiresAt: now + SESSION_TTL_MS });
+  await putJson(cfg, `relay/links/${linkCode}.json`, { sid: useSid, expiresAt: now + SESSION_TTL_MS });
   const token = rand(24);
-  await putJson(cfg, claimKey(token), { sid, linkCode, expiresAt: now + CLAIM_TTL_MS });
-  await putJson(cfg, userKey(user), { sid, linked: true, at: now });
+  await putJson(cfg, claimKey(token), { sid: useSid, linkCode, expiresAt: now + CLAIM_TTL_MS });
+  await putJson(cfg, userKey(user), { sid: useSid, linked: true, at: now });
   return { ok: true, url: `${EDITOR_ORIGIN}/floorplan-editor#pair=${token}`, linked: true, tabConnected: false, design,
-    expiresAt: now + CLAIM_TTL_MS,
-    note: "Give the user this link (or open it beside the chat if you can open a browser). The tab connects itself when it loads — no code to read. The link works ONCE within 10 minutes; call editor_status until tabConnected is true before drawing live." };
+    expiresAt: now + CLAIM_TTL_MS, joined: !!keep,
+    note: "Give the user this link (or open it beside the chat if you can open a browser). The tab connects itself when it loads — no code to read. The link works ONCE within 30 minutes and joins the session already open — its run state and design are kept; the tab that opens it takes over from any older tab; calls made while the tab is still connecting wait for it." };
 }
 
 export async function connectorStatus(cfg, user) {

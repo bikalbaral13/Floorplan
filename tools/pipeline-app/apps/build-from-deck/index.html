@@ -57,56 +57,35 @@
     <div id="s2-c2"></div>
     <div id="s2-walls-img" class="thumbs big"></div>
     <div id="s2-walls"></div>
-    <div class="stage" data-stage="S2_FROM_TRACER"></div>
-    <div class="stage" data-stage="S2_GEOMETRY"></div>
-    <div id="plan" class="thumbs big"></div>
     </details>
-    <details class="sub" data-sub="s2-objects" data-steps="OBJECTS OBJECTS_OK"><summary><span class="t">3 · Objects</span><span class="sstat"></span></summary>
-    <p class="muted">Claude traces the furniture and fixtures drawn on the plan as objects. Say what to improve, or mark them as right.</p>
+    <details class="sub" data-sub="s2-objects" data-steps="OBJECTS OBJECTS_OK"><summary><span class="t">3 · Objects (library)</span><span class="sstat"></span></summary>
+    <p class="muted">Claude places a library object for each piece of furniture and fixture on the plan — real sizes and parameters, matched to the S1 crops. Say what to improve, or mark them as right.</p>
     <div id="s2-c3"></div>
     <div id="s2-objects-img" class="thumbs big"></div>
     <div id="s2-objects"></div>
     </details>
-    <details class="sub" data-sub="s2-more" data-steps="MORE APPROVE"><summary><span class="t">4 · New objects, materials and improvements</span><span class="sstat"></span></summary>
-    <div id="s2-more"></div>
+    <details class="sub" data-sub="s2-materials" data-steps="MATERIALS MATERIALS_OK"><summary><span class="t">4 · Materials and finishes</span><span class="sstat"></span></summary>
+    <p class="muted">Floor, wall paint and fabrics from the S1 swatches, bound to library materials. Say what to change, or mark them as right.</p>
     <div id="s2-c4"></div>
+    <div id="s2-materials"></div>
+    </details>
+    <details class="sub" data-sub="s2-more" data-steps="MORE APPROVE"><summary><span class="t">5 · Lighting, new objects and improvements</span><span class="sstat"></span></summary>
+    <p class="muted">Claude adds the lights from the moodboard; then anything you want added or changed.</p>
+    <div id="s2-more"></div>
+    <div id="s2-c5"></div>
     </details>
   </div></details>
 
-  <details class="node" data-panel="objects"><summary class="nodehead" data-group="S3"></summary>
+  <details class="node" data-panel="3d"><summary class="nodehead" data-group="S3"></summary>
   <div class="nodebody">
     <div class="progress" data-group="S3"></div>
-    <details class="sub" data-sub="s3-catalog"><summary><span class="t">1 · Library snapshot</span><span class="sstat"></span></summary>
-    <div class="stage" data-stage="S3_CATALOG"></div>
+    <details class="sub" data-sub="s3-export" data-steps="EXPORT"><summary><span class="t">1 · Export the 3D model</span><span class="sstat"></span></summary>
+    <p class="muted">The editor turns the final design canvas into 3D and saves it to the project's <code>output/</code>: a GLB and snapshots (isometric, top, front). No Blender, no runner.</p>
+    <div id="s3-export"></div>
     </details>
-    <details class="sub" data-sub="s3-check"><summary><span class="t">2 · Bindings and sign-off</span><span class="sstat"></span></summary>
-    <p class="muted">Each brief item bound to a library object with its real parameters and a material. Sign off below, then approve.</p>
-    <div class="stage" data-stage="S3_CHECK"></div>
-    <div id="objects"></div>
-    </details>
-  </div></details>
-
-  <details class="node" data-panel="fitout"><summary class="nodehead" data-group="S4"></summary>
-  <div class="nodebody">
-    <div class="progress" data-group="S4"></div>
-    <details class="sub" data-sub="s4-place"><summary><span class="t">1 · Place the objects</span><span class="sstat"></span></summary>
-    <p class="muted">Every signed-off object placed as given; Claude may add floors, lighting and trims around them.</p>
-    <div class="stage" data-stage="S4_PLACE"></div>
-    </details>
-    <details class="sub" data-sub="s4-room"><summary><span class="t">2 · Room canvas</span><span class="sstat"></span></summary>
-    <div id="room"></div>
-    </details>
-  </div></details>
-
-  <details class="node" data-panel="3d"><summary class="nodehead" data-group="S5"></summary>
-  <div class="nodebody">
-    <div class="progress" data-group="S5"></div>
-    <details class="sub" data-sub="s5-render"><summary><span class="t">1 · Render</span><span class="sstat"></span></summary>
-    <p class="muted">The room as .blend / .fbx / .glb (Blender on the runner).</p>
-    <div class="stage" data-stage="S5_3D"></div>
-    </details>
-    <details class="sub" data-sub="s5-snaps"><summary><span class="t">2 · Snapshots</span><span class="sstat"></span></summary>
+    <details class="sub" data-sub="s3-check" data-steps="APPROVE"><summary><span class="t">2 · Check and approve</span><span class="sstat"></span></summary>
     <div id="model" class="thumbs big"></div>
+    <div id="s3-files" class="list"></div>
     </details>
   </div></details>
 
