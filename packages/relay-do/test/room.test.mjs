@@ -132,6 +132,48 @@ await check("session copy: put, get with state, seedOnly never overwrites, null 
   assert.equal((await room("session")).session, null);
   await room("session", { session: { v: 3 } });
 });
+const agentSock = (token, hello) => new Promise((resolve, reject) => {
+  const ws = new WebSocket(`${WS}/v1/agent/${sid}?t=${encodeURIComponent(token)}`);
+  const inbox = [];
+  ws.onmessage = (ev) => inbox.push(JSON.parse(ev.data));
+  ws.onopen = () => { ws.send(JSON.stringify({ type: "hello", ...hello })); setTimeout(() => resolve({ ws, inbox }), 100); };
+  ws.onerror = reject;
+});
+const until = async (fn, ms = 3000) => { const t = Date.now() + ms; while (Date.now() < t) { const v = fn(); if (v) return v; await sleep(20); } return null; };
+const bridgeToken = `fpa_${sid}_${crypto.randomBytes(18).toString("base64url")}`;
+await check("bridge token (second agent token) connects; agent token still works", async () => {
+  await room("register", { bridgeHash: sha(bridgeToken) });
+  const b = await agentSock(bridgeToken, { agent: "host-1", chatHost: true });
+  const a = await agentSock(agentToken, { agent: "mcp-1" });
+  assert.ok(b.inbox.some((m) => m.type === "welcome")); assert.ok(a.inbox.some((m) => m.type === "welcome"));
+  b.ws.close(); a.ws.close(); await sleep(100);
+});
+await check("results go back to the agent that made the call", async () => {
+  const T = tab("tabR"); await T.open();
+  const a1 = await agentSock(agentToken, { agent: "mcp-A" });
+  const a2 = await agentSock(bridgeToken, { agent: "mcp-B" });
+  a2.ws.send(JSON.stringify({ type: "call", id: "c_route_1", tool: "get_state", args: {}, timeoutMs: 10_000 }));
+  assert.ok(await until(() => a2.inbox.find((m) => m.type === "result" && m.id === "c_route_1")));
+  assert.equal(a1.inbox.some((m) => m.type === "result" && m.id === "c_route_1"), false);
+  a1.ws.close(); a2.ws.close(); T.close(); await sleep(100);
+});
+await check("chat: tab → host, host's chat_event → tab, bridge up/down announced", async () => {
+  const T = tab("tabC"); await T.open();
+  const tabInbox = [];
+  T.ws.addEventListener("message", (ev) => tabInbox.push(JSON.parse(ev.data)));
+  const h = await agentSock(bridgeToken, { agent: "host-2", chatHost: true });
+  assert.ok(await until(() => tabInbox.find((m) => m.type === "bridge" && m.chatHost === true)));
+  T.ws.send(JSON.stringify({ type: "chat", op: "prompt", conv: "k1", text: "hi" }));
+  const got = await until(() => h.inbox.find((m) => m.type === "chat"));
+  assert.equal(got?.text, "hi"); assert.equal(got?.client, "tabC");
+  h.ws.send(JSON.stringify({ type: "chat_event", conv: "k1", event: { type: "text_delta", text: "hello" } }));
+  assert.ok(await until(() => tabInbox.find((m) => m.type === "chat_event" && m.event?.text === "hello")));
+  h.ws.close();
+  assert.ok(await until(() => tabInbox.find((m) => m.type === "bridge" && m.chatHost === false)));
+  T.ws.send(JSON.stringify({ type: "chat", op: "prompt", conv: "k1", text: "anyone?" }));
+  assert.ok(await until(() => tabInbox.find((m) => m.type === "chat_event" && m.event?.type === "error")), "no-host error");
+  T.close(); await sleep(100);
+});
 await check("end closes sockets and clears the room", async () => {
   const Z = tab("tabZ"); await Z.open();
   const closed = new Promise((r) => { Z.ws.onclose = (e) => r(e.code); });

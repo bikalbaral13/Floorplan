@@ -14,6 +14,13 @@
 import http from "node:http";
 import { groupedTools, resolveCall, describeOps } from "./toolGroups.mjs";
 import { TOOLS, DEFAULT_TIMEOUT_MS, CHECKPOINT_TIMEOUT_MS, newRunState, stepGate, timeoutFor } from "./tools.mjs";
+import { main as subcommand, relayCredentials } from "./host.mjs";
+
+// Sub-commands (`pair <CODE>`, `host`) run instead of the MCP server. `host` never returns.
+if (process.argv[2] === "pair" || process.argv[2] === "host") {
+  await subcommand(process.argv[2], process.argv.slice(3));
+  process.exit(process.exitCode ?? 0);
+}
 
 const HTTP_PORT = Number(process.env.FP_BRIDGE_PORT || 41414);
 
@@ -28,8 +35,11 @@ const pending = new Map(); // command id → { resolve, reject, timer }
 //    127.0.0.1, this bridge connects OUTBOUND to the session's room (packages/relay-do) and the tab is reached
 //    through it. No local port is needed by the browser, so no local-network prompt. The token is the agent
 //    token Connect Claude shows (`fpa_<session>_<secret>`). ──
-const RELAY = String(process.env.FP_BRIDGE_RELAY || "").trim().replace(/\/+$/, "");
-const RELAY_TOKEN = String(process.env.FP_BRIDGE_TOKEN || "").trim();
+// Env first, else the pairing saved by `floorplan-bridge pair <CODE>`.
+const RELAY_CRED = relayCredentials();
+const RELAY = RELAY_CRED?.relay ?? "";
+const RELAY_TOKEN = RELAY_CRED?.token ?? "";
+const AGENT_ID = `mcp-${Math.random().toString(36).slice(2, 12)}`;
 const READ_ONLY = /^(get_|list_|export_plan$|snapshot_canvas$|compile_flow$|flow_node_catalog$|analyze_underlay$)/;
 let relayMode = false, relaySock = null, relayTabUp = false, relayFailures = 0;
 const relayOutbox = new Map(); // call id → frame, re-sent after a reconnect until its result arrives
@@ -44,7 +54,7 @@ function relayConnect(url) {
   const ws = new WebSocket(url);
   ws.onopen = () => {
     opened = true; relayFailures = 0; relaySock = ws;
-    ws.send(JSON.stringify({ type: "hello" }));
+    ws.send(JSON.stringify({ type: "hello", agent: AGENT_ID }));
     for (const f of relayOutbox.values()) ws.send(f);
     beat = setInterval(() => { try { ws.send(JSON.stringify({ type: "ping" })); } catch { /* closing */ } }, 15000);
     process.stderr.write("[floorplan-bridge] connected to the realtime relay\n");
@@ -120,7 +130,7 @@ const corsFor = (origin) => ({
   "Access-Control-Allow-Private-Network": "true",
 });
 
-http.createServer((req, res) => {
+const browserChannel = http.createServer((req, res) => {
   const origin = req.headers.origin;
   if (!originAllowed(origin)) {
     res.writeHead(403, { "Content-Type": "application/json" });
@@ -210,9 +220,15 @@ http.createServer((req, res) => {
   }
 
   res.writeHead(404, CORS); res.end();
-}).listen(HTTP_PORT, "127.0.0.1", () => {
-  process.stderr.write(`[floorplan-bridge] browser channel on http://127.0.0.1:${HTTP_PORT}\n`);
 });
+// FP_BRIDGE_NO_HTTP=1: relay-only (the bridge `host` starts for Claude) — no local port, so it never collides
+// with a bridge already on 41414. A busy port is reported, not fatal: relay mode works without it.
+if (!process.env.FP_BRIDGE_NO_HTTP) {
+  browserChannel.on("error", (e) => process.stderr.write(`[floorplan-bridge] browser channel not started (${e.code || e.message})${relayMode ? " — relay mode does not need it" : ""}\n`));
+  browserChannel.listen(HTTP_PORT, "127.0.0.1", () => {
+    process.stderr.write(`[floorplan-bridge] browser channel on http://127.0.0.1:${HTTP_PORT}\n`);
+  });
+}
 
 
 // ── MCP stdio transport: newline-delimited JSON-RPC 2.0 on stdin/stdout. ──

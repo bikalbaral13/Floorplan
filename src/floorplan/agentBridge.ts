@@ -225,6 +225,28 @@ export function startAgentBridge(base = bridgeBase()): () => void {
  * re-sends this tab's unfinished calls, and a call that already ran is answered from RESULT_CACHE instead of
  * running twice. */
 type Cmd = { id: string; tool: string; args?: Record<string, unknown>; argsBlob?: boolean };
+
+/* ── Claude inside the canvas ───────────────────────────────────────────────────────────────────────────
+ * The same socket carries chat: the panel sends {type:"chat", op, conv, text}; the room forwards it to the
+ * paired `floorplan-bridge host`, which runs headless Claude Code and streams {type:"chat_event"} back.
+ * The panel listens to window events, so it needs no reference to the socket. */
+export interface ClaudeChatEvent { conv: string | null; event: { type: string; [k: string]: unknown } }
+export const CHAT_EVENT = "bp-claude-chat";
+export const BRIDGE_EVENT = "bp-claude-bridge";
+let chatSend: ((frame: string) => boolean) | null = null;
+let chatHostUp = false;
+/** Is a `floorplan-bridge host` connected to this tab's session? */
+export const claudeHostConnected = () => chatHostUp;
+/** Can this tab chat at all (on the realtime relay socket)? */
+export const claudeChatAvailable = () => !!chatSend;
+/** Send a prompt / stop / reset to the bridge. False when the socket is not open. */
+export function sendClaudeChat(msg: { op: "prompt" | "stop" | "reset"; conv: string; text?: string }): boolean {
+  return chatSend ? chatSend(JSON.stringify({ type: "chat", ...msg })) : false;
+}
+const setChatHost = (up: boolean) => {
+  chatHostUp = up;
+  window.dispatchEvent(new CustomEvent(BRIDGE_EVENT, { detail: { chatHost: up, socket: !!chatSend } }));
+};
 const WS_INLINE_LIMIT = 900_000;
 const HEARTBEAT_MS = 15_000;
 const RESULT_CACHE = new Map<string, string>();   // call id → the result frame already sent
@@ -302,13 +324,20 @@ function startRelaySocket(relay: RelaySession, auth: Record<string, string>, fal
     try { ws = new WebSocket(url); } catch { scheduleRetry(); return; }
     ws.onopen = () => {
       opened = true; everOpened = true; failures = 0;
+      chatSend = sendRaw;
       sendRaw(frame("hello"));
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = setInterval(() => sendRaw(frame("ping")), HEARTBEAT_MS);
     };
     ws.onmessage = (ev) => {
-      let m: { type?: string; latched?: boolean } & Partial<Cmd>;
+      let m: { type?: string; latched?: boolean; chatHost?: boolean; conv?: string | null; event?: ClaudeChatEvent["event"] } & Partial<Cmd>;
       try { m = JSON.parse(String(ev.data)); } catch { return; }
+      if (m.type === "welcome" || m.type === "bridge") { if (typeof m.chatHost === "boolean") setChatHost(m.chatHost); }
+      if (m.type === "chat_event" && m.event) {
+        window.dispatchEvent(new CustomEvent<ClaudeChatEvent>(CHAT_EVENT, { detail: { conv: m.conv ?? null, event: m.event } }));
+        return;
+      }
+      if (m.type === "bridge") return;
       if (m.type === "welcome" || m.type === "latch") emitRelayState(m.latched === false ? "idle" : "connected", { transport: "ws" });
       else if (m.type === "cmd" && m.id && m.tool) {
         emitRelayState("connected", { transport: "ws" });
@@ -320,6 +349,8 @@ function startRelaySocket(relay: RelaySession, auth: Record<string, string>, fal
     ws.onclose = (ev) => {
       if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
       ws = null;
+      chatSend = null;
+      setChatHost(false);
       if (stopped) return;
       // 4001 session ended / 4002 a newer editor link took this session over.
       if (ev.code === 4001 || ev.code === 4002) { setRelaySession(null); emitRelayState("expired"); stopped = true; running = false; return; }

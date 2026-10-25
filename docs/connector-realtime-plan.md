@@ -1,7 +1,7 @@
 # Connector realtime plan — stable, low-latency Claude ↔ editor link
 
 Status (2026-10-25): no Cloudflare account available, so the room also runs on **plain Node** (`packages/relay-node`, same `room.js`, 12/12 tests, live-tested, survives restart). Cloudflare Durable Objects stays an option. Phases 2, 3 and 5 built and tested locally
-(`packages/relay-do`, `npm test` 12/12). Phase 1 done: session.json is mirrored in the room (reads from the room,
+(`packages/relay-do`, `npm test` 15/15). Phase 1 done: session.json is mirrored in the room (reads from the room,
 writes to room + R2), so a warm `/mcp` call makes **0 R2 requests**; full `/mcp` p50 **66 ms** locally (was ≈ 340 ms
 with R2 session reads, ~1.9 s on the R2 queue). **Not deployed.** Phases 0, 4, 6, 7 not started.
 Discussion source: "claude code native in bpluss editor" note.
@@ -119,3 +119,16 @@ Recommendation: **A**, or **B** if Cloudflare stays excluded. Phases below are h
 - Headless Claude Code needs the user's own login on their machine; the bridge never handles credentials.
 - A local process that can launch an agent is an attack surface — outbound-only plus pairing token is
   mandatory.
+
+## Progress log
+
+- **Step 2 (bridge pairing) — built.** `floorplan-bridge pair <CODE>` trades the Connect Claude code for a second
+  agent token (`bridgeHash`, `/__relay/bridge`), saved to `~/.builderpluss/floorplan-bridge.json`. Package 0.5.0
+  (also ships the previously missing `toolGroups.mjs`). **Not published** — npm needs the owner's login.
+- **Step 3 (Claude inside the canvas) — built, plumbing verified.** `floorplan-bridge host` runs headless Claude
+  Code (`--tools ""`, `--allowedTools mcp__floorplan`, `dontAsk`, strict MCP config, empty temp cwd, eager MCP
+  load) per conversation and streams events to the editor's Claude panel (`ClaudeChatPanel.tsx`) through the
+  room (`chat` / `chat_event` / `bridge` frames; results routed per agent id). Verified: pairing, panel "bridge
+  connected", prompt reaching Claude, live tool-call streaming, floorplan MCP connected with only its 10 tools.
+  **Not verified: a full drawn turn** — this machine's Claude Code account answered "Credit balance is too low".
+  Not yet: approval prompts for non-floorplan tools (all are refused), conversation resume after reload.

@@ -60,7 +60,7 @@ export class Room {
   async state() {
     const ws = await this.latched();
     const i = ws ? this.info(ws) : null;
-    return { tabUp: !!ws, client: i?.client ?? null, seenAt: i?.seenAt ?? null, design: (await this.ctx.storage.get("design")) ?? null,
+    return { tabUp: !!ws, chatHost: this.chatHost(), client: i?.client ?? null, seenAt: i?.seenAt ?? null, design: (await this.ctx.storage.get("design")) ?? null,
       tabs: this.sockets("tab").length, agents: this.sockets("agent").length };
   }
 
@@ -90,8 +90,11 @@ export class Room {
     await this.ctx.storage.delete(`call:${c.id}`);
     const ws = this.waiters.get(c.id);
     if (c.from === "agent") {
-      const sent = this.sockets("agent").some((a) => this.sendTo(a, { type: "result", id: c.id, ...result }));
-      if (!sent) await this.ctx.storage.put(`result:${c.id}`, { ...result, from: "agent" });
+      // Back to the bridge instance that made the call (several can share a session: the user's bridge and
+      // the one a headless Claude runs). A reconnecting bridge keeps its agent id, so it still gets it.
+      const mine = this.sockets("agent").filter((a) => !c.agentId || this.info(a).agentId === c.agentId);
+      const sent = mine.some((a) => this.sendTo(a, { type: "result", id: c.id, ...result }));
+      if (!sent) await this.ctx.storage.put(`result:${c.id}`, { ...result, from: "agent", agentId: c.agentId ?? null });
     } else if (ws?.length) {
       this.waiters.delete(c.id);
       for (const w of ws) w(result);
@@ -116,9 +119,9 @@ export class Room {
     });
   }
 
-  async addCall({ id, tool, args, argsBlob, timeoutMs, readOnly }, from) {
+  async addCall({ id, tool, args, argsBlob, timeoutMs, readOnly }, from, agentId = null) {
     const now = Date.now();
-    const c = { id, tool, args: args ?? {}, argsBlob: !!argsBlob, readOnly: !!readOnly, from, state: "queued", createdAt: now, deadline: now + Math.max(5_000, Number(timeoutMs) || 60_000) };
+    const c = { id, tool, args: args ?? {}, argsBlob: !!argsBlob, readOnly: !!readOnly, from, agentId, state: "queued", createdAt: now, deadline: now + Math.max(5_000, Number(timeoutMs) || 60_000) };
     await this.putCall(c);
     await this.ensureAlarm();
     return c;
@@ -158,7 +161,7 @@ export class Room {
     if (sub === "register") {
       // The Vercel relay tells the room which token hashes may connect (on pair / claim / open_editor).
       const prev = (await this.meta()) ?? {};
-      const meta = { tabHash: body.tabHash ?? prev.tabHash ?? "", agentHash: body.agentHash ?? prev.agentHash ?? "", expiresAt: Number(body.expiresAt) || prev.expiresAt || Date.now() + 12 * 3600_000 };
+      const meta = { tabHash: body.tabHash ?? prev.tabHash ?? "", agentHash: body.agentHash ?? prev.agentHash ?? "", bridgeHash: body.bridgeHash ?? prev.bridgeHash ?? "", expiresAt: Number(body.expiresAt) || prev.expiresAt || Date.now() + 12 * 3600_000 };
       if (body.reset) for (const ws of this.sockets("tab")) { try { ws.close(4002, "a new editor link took over"); } catch { /* gone */ } }
       await this.ctx.storage.put("meta", meta);
       await this.ensureAlarm();
@@ -202,8 +205,8 @@ export class Room {
     const token = url.searchParams.get("t") ?? "";
     const m = TOKEN_RE.exec(token);
     const meta = await this.meta();
-    const want = role === "tab" ? meta?.tabHash : meta?.agentHash;
-    if (!m || m[1] !== (role === "tab" ? "fpt" : "fpa") || !want || (await sha256(token)) !== want) return { status: 401, error: "not paired" };
+    const wants = (role === "tab" ? [meta?.tabHash] : [meta?.agentHash, meta?.bridgeHash]).filter(Boolean);
+    if (!m || m[1] !== (role === "tab" ? "fpt" : "fpa") || !wants.length || !wants.includes(await sha256(token))) return { status: 401, error: "not paired" };
     if (meta.expiresAt && Date.now() > meta.expiresAt) return { status: 401, error: "session expired" };
     return null;
   }
@@ -238,7 +241,7 @@ export class Room {
         if (typeof msg.design === "string" && msg.design && (await this.latched()) === ws) await this.ctx.storage.put("design", msg.design.slice(0, 500));
         if (msg.type === "hello") {
           const tab = await this.latched();
-          this.sendTo(ws, { type: "welcome", latched: tab === ws });
+          this.sendTo(ws, { type: "welcome", latched: tab === ws, chatHost: this.chatHost() });
           for (const a of this.sockets("agent")) this.sendTo(a, { type: "tab", up: !!tab });
           await this.dispatch();
         } else {
@@ -252,16 +255,30 @@ export class Room {
         if (c) await this.finish(c, msg);
         return;
       }
+      // Canvas chat → the bridge that hosts Claude (not stored: a chat turn is live or it is nothing).
+      if (msg.type === "chat") {
+        const hosts = this.sockets("agent").filter((a) => this.info(a).chatHost);
+        const fwd = { ...msg, client: this.info(ws).client ?? null };
+        if (!hosts.some((a) => this.sendTo(a, fwd))) this.sendTo(ws, { type: "chat_event", conv: msg.conv ?? null, event: { type: "error", message: "No Claude bridge is connected to this editor. Run: npx @builderpluss/floorplan-bridge pair <code>, then: npx @builderpluss/floorplan-bridge host" } });
+        return;
+      }
       return;
     }
     if (role === "agent") {
       if (msg.type === "hello" || msg.type === "ping") {
-        this.setInfo(ws, { seenAt: now });
+        const patch = { seenAt: now };
+        if (msg.type === "hello") {
+          if (typeof msg.agent === "string") patch.agentId = msg.agent.slice(0, 64);
+          patch.chatHost = !!msg.chatHost;
+        }
+        this.setInfo(ws, patch);
         this.sendTo(ws, { type: msg.type === "hello" ? "welcome" : "pong", tabUp: !!(await this.latched()) });
         if (msg.type === "hello") {
-          // Hand over results that finished while the bridge was disconnected.
+          this.announceBridge();
+          // Hand over results that finished while this bridge was disconnected.
+          const me = this.info(ws).agentId ?? null;
           for (const [k, r] of await this.ctx.storage.list({ prefix: "result:" })) {
-            if (r.from !== "agent") continue;
+            if (r.from !== "agent" || (r.agentId && r.agentId !== me)) continue;
             this.sendTo(ws, { type: "result", id: k.slice(7), ...r });
             await this.ctx.storage.delete(k);
           }
@@ -270,10 +287,22 @@ export class Room {
       }
       if (msg.type === "call" && msg.id && msg.tool) {
         if (await this.ctx.storage.get(`call:${msg.id}`)) return; // a resend after reconnect
-        await this.addCall(msg, "agent");
+        await this.addCall(msg, "agent", this.info(ws).agentId ?? null);
         await this.dispatch();
+        return;
+      }
+      // Claude's streamed output → every tab of this session (the panel shows it wherever it is open).
+      if (msg.type === "chat_event") {
+        for (const t of this.sockets("tab")) this.sendTo(t, msg);
       }
     }
+  }
+
+  /** Is a bridge that can run Claude connected? */
+  chatHost(except = null) { return this.sockets("agent").some((a) => a !== except && this.info(a).chatHost); }
+  announceBridge(except = null) {
+    const up = this.chatHost(except);
+    for (const t of this.sockets("tab")) this.sendTo(t, { type: "bridge", chatHost: up });
   }
 
   async webSocketClose(ws) {
@@ -282,6 +311,8 @@ export class Room {
       const tab = await this.latched();
       for (const a of this.sockets("agent")) this.sendTo(a, { type: "tab", up: !!tab });
       // Calls are NOT failed here: the same tab usually reconnects within seconds and resumes them.
+    } else if (this.info(ws).role === "agent") {
+      this.announceBridge(ws);
     }
   }
   async webSocketError(ws) { await this.webSocketClose(ws); }

@@ -30,12 +30,34 @@ claude mcp add floorplan --scope user -- npx -y @builderpluss/floorplan-bridge
 Keep the editor tab open while Claude works. If several tabs have `?agent=1`, the one you last focused
 receives the commands.
 
+## Over the realtime relay (Node 22+) — no local port, no browser prompt
+
+When the editor runs with the realtime relay, pair the bridge once with the code **Connect Claude** shows:
+
+```bash
+npx -y @builderpluss/floorplan-bridge pair ABC123
+```
+
+The pairing is saved to `~/.builderpluss/floorplan-bridge.json` (valid as long as that editor session). Then either:
+
+- **Claude Code drives the canvas** — `claude mcp add floorplan -- npx -y @builderpluss/floorplan-bridge`
+  (it reads the saved pairing and connects outbound to the relay), or
+- **Claude inside the canvas** — `npx -y @builderpluss/floorplan-bridge host`, then type in the editor's
+  **Claude** panel. The bridge runs headless Claude Code under *your* Claude login on this computer, with no
+  built-in tools (no files, no shell, no web) and only the floorplan tools allowed, in an empty temp folder.
+  Output streams back into the panel. Set `CLAUDE_CLI` if `claude` is installed somewhere unusual.
+
+For a non-production editor add `--editor <origin>` to `pair`.
+
 ## Options
 
 | Variable | Default | What it does |
 |---|---|---|
 | `FP_BRIDGE_PORT` | `41414` | Port for the browser channel. If you change it, open the editor with `?agent=1&agentPort=<port>`. |
 | `FP_BRIDGE_ORIGINS` | — | Extra websites allowed to connect, comma-separated. The deployed app and `localhost` are always allowed. |
+| `FP_BRIDGE_RELAY` / `FP_BRIDGE_TOKEN` | saved pairing | Relay URL and token, instead of `pair`. |
+| `FP_BRIDGE_NO_HTTP` | — | `1` = do not open the local browser channel (relay only). |
+| `CLAUDE_CLI` | auto | Path to Claude Code (`cli.js` or an executable) for `host`. |
 
 Example: `claude mcp add floorplan -e FP_BRIDGE_PORT=41500 -- npx -y @builderpluss/floorplan-bridge`
 

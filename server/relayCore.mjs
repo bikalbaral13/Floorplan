@@ -426,6 +426,26 @@ async function blob(cfg, req, res) {
   send(res, 200, { ok: true, putUrl: presign(cfg, "PUT", `${P(a.sid)}/blobs/${b.id}.json`, 300) });
 }
 
+/** `floorplan-bridge pair <CODE>`: trade the code Connect Claude shows for a bridge token on the realtime
+ *  relay. The token is a SECOND agent token (bridgeHash), so pairing a bridge never revokes the token a
+ *  Claude Code `claude mcp add` already uses. Same trust as connect_editor: whoever has the code can drive
+ *  that tab until the session ends. */
+async function bridgePair(cfg, req, res) {
+  if (rateLimited(req)) return send(res, 429, { ok: false, error: "too many attempts from this address — try again within the hour" });
+  if (!doConfig()) return send(res, 409, { ok: false, error: "this server has no realtime relay (RELAY_DO_URL) — the bridge cannot pair over it" });
+  let body; try { body = JSON.parse(await readBody(req) || "{}"); } catch { return send(res, 400, { ok: false, error: "bad body" }); }
+  const code = String(body?.code ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const l = code ? await getJson(cfg, `relay/links/${code}.json`) : null;
+  const s = l && Date.now() <= l.expiresAt ? await getJson(cfg, `${P(l.sid)}/session.json`) : null;
+  if (!live(s)) return send(res, 404, { ok: false, error: `no editor is waiting with code ${code || "(empty)"} — open the editor, click Connect Claude, and use the code it shows` });
+  const token = `fpa_${l.sid}_${rand(24)}`;
+  s.bridgeHash = sha(token);
+  await putJson(cfg, `${P(l.sid)}/session.json`, s);
+  try { await doRoom(l.sid, "register", { bridgeHash: s.bridgeHash, expiresAt: s.expiresAt }); }
+  catch (e) { return send(res, 502, { ok: false, error: `the realtime relay did not answer (${e.message})` }); }
+  send(res, 200, { ok: true, relay: doWsBase(), token, sessionId: l.sid, expiresAt: s.expiresAt });
+}
+
 /** A presigned GET for call arguments too big for one socket frame (realtime relay, `argsBlob`). */
 async function argsUrl(cfg, req, res, url) {
   const a = await authFor(cfg, req, "tab");
@@ -816,6 +836,7 @@ async function handleRelayTimed(req, res, route, url, cfg) {
     if (route === "/result" && req.method === "POST") return await result(cfg, req, res);
     if (route === "/blob" && req.method === "POST") return await blob(cfg, req, res);
     if (route === "/args" && req.method === "GET") return await argsUrl(cfg, req, res, url);
+    if (route === "/bridge" && req.method === "POST") return await bridgePair(cfg, req, res);
     if (route === "/session" && req.method === "DELETE") return await endSession(cfg, req, res);
     if (route === "/status" && req.method === "GET") return await status(cfg, req, res);
     send(res, 404, { ok: false, error: `no relay route ${req.method} ${route}` });

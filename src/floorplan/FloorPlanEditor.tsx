@@ -247,6 +247,7 @@ import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
+import { ClaudeChatPanel } from "./components/ClaudeChatPanel";
 import { PushButton } from "@/components/PushButton";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
 import { showCheckpoint, resolveOpenCheckpoint, isCheckpointOpen } from "./checkpointHud";
@@ -45043,6 +45044,8 @@ User request: ${aiPrompt.trim()}`;
           must never hold. */}
       {/* Connect Claude's dialog lives here, always mounted; Preferences ▸ Connect Claude opens it. */}
       <ConnectClaudeButton variant="host" />
+      {/* Claude inside the canvas: chat with a headless Claude on the user's own bridge (realtime relay only). */}
+      <ClaudeChatPanel />
       <FilePickerDialog open={importPickerOpen} onOpenChange={setImportPickerOpen} title="Import" description="What do you want to bring in?" options={importOptions} />
       <FilePickerDialog open={exportPickerOpen} onOpenChange={setExportPickerOpen} title="Export" description="Save the plan as…" options={exportOptions} />
       <ImportMoodboardDialog
