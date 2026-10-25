@@ -486,7 +486,9 @@ async function waitResult(cfg, sid, id, until) {
 }
 
 /** Turn a stored result into the tool's reply, applying the step gate the same way the local bridge does. */
-async function finish(cfg, sid, call, r) {
+/** `preloaded`: the session this request already read — reused for get_state (read-only), saving a round
+ *  trip; checkpoint re-reads, because it writes the step gate back. */
+async function finish(cfg, sid, call, r, preloaded = null) {
   const cleanup = deleteObject(cfg, `${P(sid)}/results/${call.id}.json`).catch(() => {});
   if (r.blob) {
     const key = `${P(sid)}/blobs/${call.id}.json`;
@@ -499,7 +501,8 @@ async function finish(cfg, sid, call, r) {
   void cleanup;
   if (!r.ok) return errText(r.error || "command failed");
   // Only get_state and checkpoint touch the step gate, so only they read the session again.
-  const s = call.tool === "get_state" || call.tool === "checkpoint" ? await getJson(cfg, `${P(sid)}/session.json`) : null;
+  const s = call.tool === "get_state" ? preloaded ?? await getJson(cfg, `${P(sid)}/session.json`)
+    : call.tool === "checkpoint" ? await getJson(cfg, `${P(sid)}/session.json`) : null;
   if (s) {
     const g = stepGate(s.run ?? (s.run = newRunState()));
     if (call.tool === "get_state") return text({ ...(r.result ?? {}), stepState: g.stepState() });
@@ -643,7 +646,7 @@ async function enqueue(cfg, sid, s, name, args, extra, via = "r2") {
   const callArgs = name === "checkpoint" ? { ...args, step: args.step ?? s.run.step ?? "checkpoint" } : args;
   const call = { id, tool: name, args: callArgs, createdAt: now, deadline, state: "queued", step: name === "checkpoint" ? s.run.step : undefined, final: !!args.final };
   const argText = JSON.stringify(callArgs);
-  if (via === "do") return enqueueDo(cfg, sid, call, argText, extra);
+  if (via === "do") return enqueueDo(cfg, sid, call, argText, extra, s);
   if (argText.length > INLINE_LIMIT) {                                   // big arguments (an inline image) wait in the blob area
     await putObject(cfg, `${P(sid)}/blobs/${id}.args`, argText);
     call.args = null; call.argsBlob = true;
@@ -663,7 +666,7 @@ async function enqueue(cfg, sid, s, name, args, extra, via = "r2") {
 
 /** enqueue over the realtime relay: one request to the room, which pushes the call down the tab's socket
  *  and holds until the result comes back up it (or hands back a ticket, like the R2 path). */
-async function enqueueDo(cfg, sid, call, argText, extra) {
+async function enqueueDo(cfg, sid, call, argText, extra, session = null) {
   const { id, tool: name, deadline } = call;
   let argsBlob = false;
   if (argText.length > WS_INLINE_LIMIT) {                                 // too big for one socket frame: the tab fetches it
@@ -679,7 +682,7 @@ async function enqueueDo(cfg, sid, call, argText, extra) {
     return errText(`the realtime relay could not be reached (${e.message}) — reload the editor tab to reconnect, then retry`);
   }
   note("wait", Date.now() - t0);
-  if (a.done) return extra && a.r.ok ? text({ ...extra, live: true, tab: a.r.result }) : finish(cfg, sid, call, a.r);
+  if (a.done) return extra && a.r.ok ? text({ ...extra, live: true, tab: a.r.result }) : finish(cfg, sid, call, a.r, session);
   await putJson(cfg, `${P(sid)}/tickets/${id}.json`, { ...call, args: undefined, via: "do" });
   return text({ pending: true, ticket: id, tool: name,
     hint: name === "checkpoint" ? "The card is open in the app. Call await_result with this ticket to keep waiting for the user." : "Still running in the editor. Call await_result with this ticket to keep waiting." });

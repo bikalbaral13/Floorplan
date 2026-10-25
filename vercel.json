@@ -25,6 +25,9 @@
       "destination": "/"
     }
   ],
+  "regions": [
+    "sin1"
+  ],
   "functions": {
     "api/relay.mjs": {
       "maxDuration": 60
