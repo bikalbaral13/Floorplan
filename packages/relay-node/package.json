@@ -1,0 +1,15 @@
+{
+  "name": "@builderpluss/relay-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Realtime relay for the BuilderPluss editor on plain Node (same Room as packages/relay-do).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node ../relay-do/test/room.test.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

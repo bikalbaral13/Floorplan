@@ -72,3 +72,5 @@ backups/
 .dev.vars
 .wrangler/
 packages/relay-do/node_modules/
+packages/relay-node/node_modules/
+packages/relay-node/data/

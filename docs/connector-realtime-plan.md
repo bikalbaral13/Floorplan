@@ -1,6 +1,6 @@
 # Connector realtime plan — stable, low-latency Claude ↔ editor link
 
-Status (2026-10-25): host chosen = **Cloudflare Durable Objects**. Phases 2, 3 and 5 built and tested locally
+Status (2026-10-25): no Cloudflare account available, so the room also runs on **plain Node** (`packages/relay-node`, same `room.js`, 12/12 tests, live-tested, survives restart). Cloudflare Durable Objects stays an option. Phases 2, 3 and 5 built and tested locally
 (`packages/relay-do`, `npm test` 12/12). Phase 1 done: session.json is mirrored in the room (reads from the room,
 writes to room + R2), so a warm `/mcp` call makes **0 R2 requests**; full `/mcp` p50 **66 ms** locally (was ≈ 340 ms
 with R2 session reads, ~1.9 s on the R2 queue). **Not deployed.** Phases 0, 4, 6, 7 not started.

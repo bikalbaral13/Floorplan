@@ -1,0 +1,29 @@
+# Render Blueprint — the BuilderPluss realtime relay (packages/relay-node).
+# Render ▸ New ▸ Blueprint ▸ pick this repo. Steps: packages/relay-node/RENDER.md
+services:
+  - type: web
+    name: bpluss-relay
+    runtime: docker
+    # Close to the editor's users (India). Other choices: oregon, ohio, virginia, frankfurt.
+    region: singapore
+    # free sleeps after ~15 min idle (first call then waits ~30 s). starter ($7/mo) stays awake.
+    plan: free
+    dockerfilePath: ./packages/relay-node/Dockerfile
+    dockerContext: ./packages
+    healthCheckPath: /health
+    # One instance only: relay rooms live in the process's memory.
+    numInstances: 1
+    autoDeploy: true
+    # Redeploy only when the relay itself changes, not on every editor commit.
+    buildFilter:
+      paths:
+        - packages/relay-node/**
+        - packages/relay-do/src/**
+    envVars:
+      # Render makes a random secret; copy it into Vercel's RELAY_DO_SECRET.
+      - key: RELAY_DO_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://floorplan-indol.vercel.app
+      # Rooms are saved to /data (Dockerfile). On Free that folder is reset on each deploy — fine: session
+      # data is also in R2. On a paid plan, add a disk mounted at /data to keep tab pairings across deploys.
