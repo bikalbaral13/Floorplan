@@ -14,7 +14,8 @@ export interface InboxPrompt {
 }
 
 const queue: InboxPrompt[] = [];
-const waiters: ((p: InboxPrompt) => void)[] = [];
+/** Blocked chat_wait_prompt calls. A waiter is called with null when a NEWER wait replaces it. */
+const waiters: ((p: InboxPrompt | null) => void)[] = [];
 /** How many chat_wait_prompt calls are blocked right now — i.e. is Claude Code listening. */
 let listening = 0;
 const listeners = new Set<() => void>();
@@ -27,10 +28,14 @@ export function sendToInbox(p: InboxPrompt) {
   notify();
 }
 
-/** The handler behind chat_wait_prompt. */
-export function waitForPrompt(): Promise<InboxPrompt> {
+/** The handler behind chat_wait_prompt. Resolves null when superseded.
+ *  Only the NEWEST wait listens: an older one belongs to a call the agent has given up on (it timed out over
+ *  the relay, or Claude restarted), and left in place it would swallow the user's next prompt where no one
+ *  reads it. So a new wait releases every older one (they return { superseded }) and takes the next prompt. */
+export function waitForPrompt(): Promise<InboxPrompt | null> {
   const next = queue.shift();
   if (next) { notify(); return Promise.resolve(next); }
+  for (const old of waiters.splice(0)) old(null);
   listening++;
   notify();
   return new Promise((resolve) => {

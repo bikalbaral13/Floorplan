@@ -9257,6 +9257,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // ── The Chat box as Claude Code's inbox, and the navigator's Library selection (chat.* / library.selection). ──
     registerAgentCommand("chat_wait_prompt", async () => {
       const p = await asUserInteraction(() => waitForPrompt());
+      if (!p) return { superseded: true, note: "A newer chat.wait took over this one — nothing to do for this call." };
       setAiSendBusy(true);   // the chat shows a green signal while Claude Code works (no log line)
       return { ...p, note: "The user is in the editor chat and CANNOT see your terminal. Ask every question with chat.ask (options for choices) and wait for its answer — never ask in the terminal or with your own question tool. Follow any `skill` items; read files with library.read (paths are Library-relative). Work on the live canvas, post progress with chat.reply, finish with chat.reply { final: true }, then chat.wait again." };
     });

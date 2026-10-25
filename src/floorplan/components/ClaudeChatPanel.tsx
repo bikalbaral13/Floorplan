@@ -118,7 +118,10 @@ export function ClaudeChatPanel() {
   const origin = typeof window !== "undefined" ? window.location.origin : PROD_EDITOR;
   const server = `bpluss-${(session.linkCode ?? session.sessionId.slice(-6)).toLowerCase()}`;
   const add = session.agentToken ? `claude mcp add --scope user --transport http ${server} "${origin}/mcp?key=${session.agentToken}"` : "";
-  const start = `claude "You are connected to my open BuilderPluss editor through the MCP server ${server}. Call its get_state tool, tell me briefly what is on the canvas, then wait for my instructions."`;
+  // Claude listens to the EDITOR's chat bar (chat_wait_prompt → work → chat_reply final, forever), so the user
+  // types in the editor, not the terminal. The server's tools are pre-allowed: a permission question in the
+  // terminal would stall a user who is looking at the editor.
+  const start = `claude --allowedTools "mcp__${server}" "You are connected to my open BuilderPluss editor through the MCP server ${server}. I will type in the editor's chat bar, not here. Loop forever: wait for my next prompt with the chat tools (chat op wait; if it returns pending, keep calling await_result), do it on the canvas, then answer in the editor with chat op reply (final: true). Ask me questions only with chat op ask. Start by posting a short hello with chat op reply."`;
   const oneLine = add ? (shell === "cmd" ? `${add} & ${start}` : `${add} ; ${start}`) : "";
 
   if (!open) {
@@ -150,8 +153,8 @@ export function ClaudeChatPanel() {
           <div className="space-y-3">
             {oneLine ? (
               <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[12px] text-slate-700">
-                <p className="font-medium">Use Claude Code with this editor — one command</p>
-                <p>Needs Claude Code installed and signed in. Paste this into a terminal; Claude starts already connected to this tab.</p>
+                <p className="font-medium">Chat with Claude in this editor — one command</p>
+                <p>Needs Claude Code installed and signed in. Paste this into a terminal and leave it open, then type your requests in the editor’s chat bar (bottom) — Claude answers there and draws here.</p>
                 <div className="flex gap-1" role="tablist" aria-label="Terminal">
                   {([["ps", "PowerShell / Mac / Linux"], ["cmd", "Command Prompt"]] as const).map(([k, label]) => (
                     <button key={k} type="button" role="tab" aria-selected={shell === k} onClick={() => setShell(k)}
@@ -164,7 +167,7 @@ export function ClaudeChatPanel() {
                     {copied === oneLine ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
-                <p className="text-[11px] text-slate-500">Then talk to Claude in that terminal — it draws here live. The command contains this session’s key: don’t share it. It stops working when you disconnect or the session expires (12 h).</p>
+                <p className="text-[11px] text-slate-500">Set the chat bar to “AI” mode so every message goes to Claude. The command contains this session’s key: don’t share it. It stops working when you disconnect or the session expires (12 h).</p>
               </div>
             ) : null}
             <details className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-slate-700">
