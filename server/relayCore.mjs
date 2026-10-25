@@ -248,8 +248,21 @@ const AUTH_CACHE_MS = 60_000;
 const rememberAuth = (sid, s) => { if (s?.tabHash || s?.agentHash) authCache.set(sid, { agentHash: s.agentHash, tabHash: s.tabHash, expiresAt: s.expiresAt, at: Date.now() }); };
 
 /** Token check for routes that need no session state: answered from the cache when it can be. */
+/** The token of a request: the Authorization header, or — for the agent side only — `?key=fpa_…` on the URL.
+ *  The key form lets the editor hand out ONE copy-paste `claude mcp add … "…/mcp?key=…"` line that works in
+ *  every shell (a quoted "Authorization: Bearer …" header is mangled by Windows PowerShell). Same token, same
+ *  checks; the tab side keeps header-only. */
+function bearerOf(req, kind) {
+  const h = String(req.headers.authorization || "");
+  if (h || kind !== "agent") return h;
+  try {
+    const key = new URL(req.url ?? "/", "http://x").searchParams.get("key");
+    return key ? `Bearer ${key}` : "";
+  } catch { return ""; }
+}
+
 async function authFor(cfg, req, kind) {
-  const m = /^Bearer\s+(fp[at])_([A-Za-z0-9]{10,40})_([A-Za-z0-9_-]{20,})$/.exec(String(req.headers.authorization || ""));
+  const m = /^Bearer\s+(fp[at])_([A-Za-z0-9]{10,40})_([A-Za-z0-9_-]{20,})$/.exec(bearerOf(req, kind));
   if (!m || m[1] !== (kind === "agent" ? "fpa" : "fpt")) return { error: 401 };
   const sid = m[2], c = authCache.get(sid);
   const want = sha(`${m[1]}_${sid}_${m[3]}`);
@@ -259,7 +272,7 @@ async function authFor(cfg, req, kind) {
 
 /** `fpa_<sid>_<secret>` (agent) / `fpt_<sid>_<secret>` (tab) → the session, if the token matches. */
 async function sessionFor(cfg, req, kind) {
-  const m = /^Bearer\s+(fp[at])_([A-Za-z0-9]{10,40})_([A-Za-z0-9_-]{20,})$/.exec(String(req.headers.authorization || ""));
+  const m = /^Bearer\s+(fp[at])_([A-Za-z0-9]{10,40})_([A-Za-z0-9_-]{20,})$/.exec(bearerOf(req, kind));
   if (!m || m[1] !== (kind === "agent" ? "fpa" : "fpt")) return { error: 401 };
   const sid = m[2];
   const s = await getJson(cfg, `${P(sid)}/session.json`);

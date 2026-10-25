@@ -32,6 +32,7 @@ export function ClaudeChatPanel() {
   const [text, setText] = useState("");
   const [conv, setConv] = useState(loadConv);
   const [copied, setCopied] = useState<string | null>(null);
+  const [shell, setShell] = useState<"ps" | "cmd">("ps");
   const listRef = useRef<HTMLDivElement>(null);
   const convRef = useRef(conv);
   convRef.current = conv;
@@ -111,6 +112,14 @@ export function ClaudeChatPanel() {
     `npx -y @builderpluss/floorplan-bridge pair ${session.linkCode ?? "<code>"}${editorFlag}`,
     "npx -y @builderpluss/floorplan-bridge host",
   ];
+  // ONE line that connects Claude Code to THIS tab and starts it: adds an MCP server named for this session
+  // (the key in the URL is this session's agent token — no header, so it survives every shell's quoting),
+  // then opens Claude with a first prompt. `;` chains in PowerShell / Mac / Linux, `&` in Command Prompt.
+  const origin = typeof window !== "undefined" ? window.location.origin : PROD_EDITOR;
+  const server = `bpluss-${(session.linkCode ?? session.sessionId.slice(-6)).toLowerCase()}`;
+  const add = session.agentToken ? `claude mcp add --scope user --transport http ${server} "${origin}/mcp?key=${session.agentToken}"` : "";
+  const start = `claude "You are connected to my open BuilderPluss editor through the MCP server ${server}. Call its get_state tool, tell me briefly what is on the canvas, then wait for my instructions."`;
+  const oneLine = add ? (shell === "cmd" ? `${add} & ${start}` : `${add} ; ${start}`) : "";
 
   if (!open) {
     return (
@@ -138,18 +147,39 @@ export function ClaudeChatPanel() {
 
       <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3 text-sm">
         {!host ? (
-          <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-slate-700">
-            <p className="font-medium">Start Claude on your computer (once per session)</p>
-            <p>Needs Node 22+ and Claude Code installed and signed in. In a terminal run:</p>
-            {cmds.map((c) => (
-              <div key={c} className="flex items-start gap-1">
-                <pre className="flex-1 whitespace-pre-wrap break-all rounded border border-amber-200 bg-white p-1.5 font-mono text-[11px] select-all">{c}</pre>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copy(c)} aria-label="Copy command">
-                  {copied === c ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                </Button>
+          <div className="space-y-3">
+            {oneLine ? (
+              <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[12px] text-slate-700">
+                <p className="font-medium">Use Claude Code with this editor — one command</p>
+                <p>Needs Claude Code installed and signed in. Paste this into a terminal; Claude starts already connected to this tab.</p>
+                <div className="flex gap-1" role="tablist" aria-label="Terminal">
+                  {([["ps", "PowerShell / Mac / Linux"], ["cmd", "Command Prompt"]] as const).map(([k, label]) => (
+                    <button key={k} type="button" role="tab" aria-selected={shell === k} onClick={() => setShell(k)}
+                      className={`rounded px-2 py-0.5 text-[11px] ${shell === k ? "bg-emerald-600 text-white" : "bg-white text-slate-600 border border-emerald-200"}`}>{label}</button>
+                  ))}
+                </div>
+                <div className="flex items-start gap-1">
+                  <pre className="flex-1 whitespace-pre-wrap break-all rounded border border-emerald-200 bg-white p-1.5 font-mono text-[11px] select-all">{oneLine}</pre>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copy(oneLine)} aria-label="Copy command">
+                    {copied === oneLine ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-slate-500">Then talk to Claude in that terminal — it draws here live. The command contains this session’s key: don’t share it. It stops working when you disconnect or the session expires (12 h).</p>
               </div>
-            ))}
-            <p className="text-[11px] text-slate-500">Claude then runs on your machine with only the floorplan tools — it cannot touch your files.</p>
+            ) : null}
+            <details className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-slate-700">
+              <summary className="cursor-pointer font-medium">Or chat in this panel (runs Claude on your computer)</summary>
+              <p className="mt-2">Needs Node 22+ and Claude Code installed and signed in. In a terminal run:</p>
+              {cmds.map((c) => (
+                <div key={c} className="mt-1 flex items-start gap-1">
+                  <pre className="flex-1 whitespace-pre-wrap break-all rounded border border-amber-200 bg-white p-1.5 font-mono text-[11px] select-all">{c}</pre>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copy(c)} aria-label="Copy command">
+                    {copied === c ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              ))}
+              <p className="mt-1 text-[11px] text-slate-500">Claude then runs on your machine with only the floorplan tools — it cannot touch your files.</p>
+            </details>
           </div>
         ) : items.length === 0 ? (
           <p className="text-[12px] text-slate-500">Ask Claude to draw or change the plan — e.g. “draw a 4 m × 3 m room with a door on the south wall”.</p>
