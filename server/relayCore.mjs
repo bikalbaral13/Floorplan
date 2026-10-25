@@ -79,6 +79,54 @@ const VIEWER_ORIGINS = [process.env.R2_PUBLIC_URL, process.env.VITE_R2_PUBLIC_UR
   .map((u) => { try { return new URL(String(u ?? "").trim().replace(/^["']|["']$/g, "")).origin; } catch { return null; } }).filter(Boolean);
 const originAllowed = (o) => !o || LOCAL_ORIGIN.test(o) || PREVIEW_ORIGIN.test(o) || ALLOWED_ORIGINS.includes(o);
 
+/* ── realtime relay (packages/relay-do): a Cloudflare Durable Object per session ─────────────────────────
+ * With RELAY_DO_URL + RELAY_DO_SECRET set, calls for a tab that is connected over WebSocket go to that
+ * session's room instead of the R2 calls/ + results/ queue: one HTTPS hop each way, no polling. Everything
+ * else (session.json, tokens, tickets, designs, the step gate) stays here in R2. A tab still on the long-poll
+ * fallback keeps the R2 path, so both kinds of tab work during the move. Read lazily: the Vite dev server
+ * loads .env after this module is imported. */
+export function doConfig(env = process.env) {
+  const url = unquote(env.RELAY_DO_URL).replace(/\/+$/, ""), secret = unquote(env.RELAY_DO_SECRET);
+  return url && secret ? { url, secret } : null;
+}
+const doWsBase = () => doConfig()?.url.replace(/^http/, "ws") ?? null;
+/** One server-to-server request to a session's room. Throws when the relay cannot be reached. */
+async function doRoom(sid, sub, body) {
+  const d = doConfig();
+  if (!d) throw new Error("realtime relay not configured");
+  const t0 = performance.now();
+  try {
+    const r = await fetch(`${d.url}/v1/room/${sid}/${sub}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "x-relay-secret": d.secret, "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j) throw new Error(`realtime relay ${sub}: HTTP ${r.status}`);
+    return j;
+  } finally {
+    const t = timing.getStore();
+    if (t) { t.doOps = (t.doOps ?? 0) + 1; t.doMs = (t.doMs ?? 0) + (performance.now() - t0); }
+  }
+}
+/** Tell the room which token hashes may connect. Best effort: without it the tab falls back to long-poll. */
+async function doRegister(sid, meta) {
+  if (!doConfig()) return;
+  try { await doRoom(sid, "register", meta); } catch (e) { console.warn(`[relay] DO register failed for ${sid}: ${e.message}`); }
+}
+/** Room state per instance for 2 s, so a burst of calls asks the room once. */
+const doStateCache = new Map();
+async function doState(sid, fresh = false) {
+  const hit = doStateCache.get(sid);
+  if (!fresh && hit && Date.now() - hit.at < 2_000) return hit.st;
+  let st = null;
+  try { st = await doRoom(sid, "state"); } catch { st = null; }
+  doStateCache.set(sid, { at: Date.now(), st });
+  return st;
+}
+/** Largest message sent through the room inline; bigger args / results go through the R2 blob area. */
+const WS_INLINE_LIMIT = 900_000;
+
 /* ── small helpers ──────────────────────────────────────────────────────────────────────────────────── */
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const rand = (n) => crypto.randomBytes(n).toString("base64url");
@@ -115,7 +163,7 @@ const send = (res, status, body, headers = {}) => {
   const t = timing.getStore();
   if (t && !res.headersSent) {
     const total = performance.now() - t.start;
-    res.setHeader("Server-Timing", `total;dur=${total.toFixed(0)}, r2;dur=${t.r2ms.toFixed(0)};desc="${t.ops} ops${t.notes.slow ? `; slow: ${t.notes.slow.join(", ")}` : ""}"`);
+    res.setHeader("Server-Timing", `total;dur=${total.toFixed(0)}, r2;dur=${t.r2ms.toFixed(0)};desc="${t.ops} ops${t.notes.slow ? `; slow: ${t.notes.slow.join(", ")}` : ""}"${t.doOps ? `, do;dur=${t.doMs.toFixed(0)};desc="${t.doOps} ops"` : ""}`);
     if (process.env.RELAY_TIMING === "1") console.log(`[relay] ${t.route} ${total.toFixed(0)}ms r2=${t.ops}ops/${t.r2ms.toFixed(0)}ms`, JSON.stringify(t.notes));
   }
   for (const [k, v] of Object.entries({ "Content-Type": "application/json", "Cache-Control": "no-store", ...headers })) res.setHeader(k, v);
@@ -138,10 +186,43 @@ const readBuffer = (req, limit) => new Promise((resolve, reject) => {
   req.on("end", () => resolve(Buffer.concat(chunks)));
   req.on("error", reject);
 });
-async function getJson(cfg, key) {
+async function getJsonR2(cfg, key) {
   try { const t = await getObjectText(cfg, key, 8_000_000); return t.text ? JSON.parse(t.text) : null; } catch { return null; }
 }
-const putJson = (cfg, key, v) => putObject(cfg, key, JSON.stringify(v));
+const putJsonR2 = (cfg, key, v) => putObject(cfg, key, JSON.stringify(v));
+
+/* ── session.json lives in the room too ──────────────────────────────────────────────────────────────────
+ * With the realtime relay on, every session.json read is answered by the session's Durable Object (one
+ * ~20–80 ms hop, which also returns the room state, so tabLink needs no second request) instead of R2
+ * (150 ms–2 s). Writes go to BOTH, in parallel: R2 stays the durable copy and what the long-poll path and a
+ * relay outage fall back to. A room with no copy yet (a session from before this change, or a room that was
+ * reset) is seeded from R2 with seedOnly, so it can never overwrite a newer write. If the room write fails,
+ * its copy is dropped so the next read goes to R2 rather than to a stale copy. */
+const SESSION_KEY = /^relay\/([A-Za-z0-9]{10,40})\/session\.json$/;
+async function getJson(cfg, key) {
+  const m = doConfig() ? SESSION_KEY.exec(key) : null;
+  if (!m) return getJsonR2(cfg, key);
+  const sid = m[1];
+  try {
+    const j = await doRoom(sid, "session");
+    doStateCache.set(sid, { at: Date.now(), st: j.state ?? null });
+    if (j.session) { note("sessionFrom", "do"); return j.session; }
+  } catch { /* relay down: R2 */ }
+  note("sessionFrom", "r2");
+  const s = await getJsonR2(cfg, key);
+  if (s) await doRoom(sid, "session", { session: s, seedOnly: true }).catch(() => {});
+  return s;
+}
+async function putJson(cfg, key, v) {
+  const m = doConfig() ? SESSION_KEY.exec(key) : null;
+  if (!m) return putJsonR2(cfg, key, v);
+  const sid = m[1];
+  const toRoom = doRoom(sid, "session", { session: v }).catch(async (e) => {
+    console.warn(`[relay] DO session write failed for ${sid}: ${e.message}`);
+    await doRoom(sid, "session", { session: null }).catch(() => {});
+  });
+  await Promise.all([putJsonR2(cfg, key, v), toRoom]);
+}
 
 /** Presigned SigV4 URL for one object (the tab uploads a big result straight to the bucket, and the agent
  *  can download one without it passing through a size-capped function). */
@@ -203,6 +284,7 @@ async function pair(cfg, req, res, url) {
   // claude.ai connector — which can carry no Authorization header — can drive this tab too.
   const linkCode = Array.from(crypto.randomBytes(6), (b) => LINK_ALPHABET[b % LINK_ALPHABET.length]).join("");
   await putJson(cfg, `relay/links/${linkCode}.json`, { sid, expiresAt: now + SESSION_TTL_MS });
+  await doRegister(sid, { tabHash: sha(tabToken), agentHash: sha(agentToken), expiresAt: now + SESSION_TTL_MS });
   send(res, 200, pairReply(sid, tabToken, agentToken, requestOrigin(req), linkCode, now + SESSION_TTL_MS));
   void url;
 }
@@ -214,8 +296,12 @@ function requestOrigin(req) {
 }
 function pairReply(sid, tabToken, agentToken, origin, linkCode, expiresAt) {
   const mcpUrl = `${origin.replace(/\/+$/, "")}/mcp`;
+  const ws = doWsBase();
   return { ok: true, sessionId: sid, tabToken, agentToken, mcpUrl, linkCode, expiresAt,
-    command: `claude mcp add --transport http floorplan ${mcpUrl} --header "Authorization: Bearer ${agentToken}"` };
+    command: `claude mcp add --transport http floorplan ${mcpUrl} --header "Authorization: Bearer ${agentToken}"`,
+    // Realtime relay: the tab's socket, and a local-bridge command that reaches this tab without localhost.
+    ...(ws ? { wsUrl: `${ws}/v1/tab/${sid}`,
+      bridgeCommand: `claude mcp add floorplan -e FP_BRIDGE_RELAY=${ws} -e FP_BRIDGE_TOKEN=${agentToken} -- npx -y @builderpluss/floorplan-bridge` } : {}) };
 }
 const rateLimited = (req) => {
   const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "?").split(",")[0].trim();
@@ -247,6 +333,7 @@ async function claim(cfg, req, res) {
   const agentToken = `fpa_${c.sid}_${rand(24)}`, tabToken = `fpt_${c.sid}_${rand(24)}`;
   s.agentHash = sha(agentToken); s.tabHash = sha(tabToken); s.claimedAt = Date.now();
   await putJson(cfg, `${P(c.sid)}/session.json`, s);
+  await doRegister(c.sid, { tabHash: s.tabHash, agentHash: s.agentHash, expiresAt: s.expiresAt });
   send(res, 200, { ...pairReply(c.sid, tabToken, agentToken, requestOrigin(req), c.linkCode, s.expiresAt), design: s.design ?? null });
 }
 
@@ -339,10 +426,20 @@ async function blob(cfg, req, res) {
   send(res, 200, { ok: true, putUrl: presign(cfg, "PUT", `${P(a.sid)}/blobs/${b.id}.json`, 300) });
 }
 
+/** A presigned GET for call arguments too big for one socket frame (realtime relay, `argsBlob`). */
+async function argsUrl(cfg, req, res, url) {
+  const a = await authFor(cfg, req, "tab");
+  if (a.error) return send(res, 401, { ok: false });
+  const id = String(url.searchParams.get("id") ?? "");
+  if (!/^c_[A-Za-z0-9_]+$/.test(id)) return send(res, 400, { ok: false });
+  send(res, 200, { ok: true, getUrl: presign(cfg, "GET", `${P(a.sid)}/blobs/${id}.args`, 300) });
+}
+
 async function endSession(cfg, req, res) {
   const a = await sessionFor(cfg, req, "tab");
   if (a.error) return send(res, 200, { ok: true });
   authCache.delete(a.sid);
+  if (doConfig()) await doRoom(a.sid, "end", {}).catch(() => {});
   for (const k of await listObjects(cfg, `${P(a.sid)}/`)) await deleteObject(cfg, k).catch(() => {});
   send(res, 200, { ok: true });
 }
@@ -406,7 +503,14 @@ async function callTool(cfg, sid, name, args, preloaded = null) {
     if (Date.now() > meta.deadline) return errText(meta.tool === "checkpoint"
       ? "no answer in 30 min — the checkpoint card is still open in the app; ask the user to answer it, or re-run the step."
       : `the editor did not finish ${meta.tool} in time — is the tab still open and connected?`);
-    const r = await waitResult(cfg, sid, id, Math.min(meta.deadline, Date.now() + WAIT_MS));
+    let r;
+    if (meta.via === "do") {
+      let a;
+      try { a = await doRoom(sid, "await", { id, waitMs: Math.min(meta.deadline - Date.now(), WAIT_MS) }); }
+      catch (e) { return text({ pending: true, ticket: id, tool: meta.tool, hint: `The realtime relay did not answer (${e.message}). Call await_result with this ticket again.` }); }
+      if (a.unknown) { await deleteObject(cfg, `${P(sid)}/tickets/${id}.json`).catch(() => {}); return errText(`the editor lost call ${id} (${meta.tool}) — check the canvas with get_state before retrying`); }
+      r = a.done ? a.r : null;
+    } else r = await waitResult(cfg, sid, id, Math.min(meta.deadline, Date.now() + WAIT_MS));
     if (!r) return text({ pending: true, ticket: id, tool: meta.tool, hint: "Still running. Call await_result with this ticket again." });
     await deleteObject(cfg, `${P(sid)}/tickets/${id}.json`).catch(() => {});
     return finish(cfg, sid, meta, r);
@@ -425,7 +529,8 @@ async function callTool(cfg, sid, name, args, preloaded = null) {
 
   // The explicit design tools always run headless; the canvas tools do only when no tab is connected (a
   // latch refreshed within ~45 s). A connected-but-slow tab keeps the ticket path, so no call runs twice.
-  let tabUp = !!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000;
+  let via = await tabLink(cfg, sid, s);
+  let tabUp = !!via;
   // A tab that is still loading (a link opened in the last few minutes, or a reload) connects within seconds: a call
   // that needs it waits up to TAB_WAIT_MS for the latch instead of failing with EDITOR_NOT_CONNECTED.
   if (!tabUp && !HEADLESS_TOOL_NAMES.has(name) && Date.now() - (s.linkedAt ?? s.createdAt ?? 0) < TAB_WAIT_WINDOW_MS) {
@@ -433,7 +538,9 @@ async function callTool(cfg, sid, name, args, preloaded = null) {
     while (!tabUp && Date.now() < until) {
       await new Promise((r) => setTimeout(r, 750));
       const fresh = await getJson(cfg, `${P(sid)}/session.json`);
-      if (fresh?.latch && Date.now() - fresh.latch.seenAt <= LATCH_STALE_MS + 15_000) { s.latch = fresh.latch; tabUp = true; }
+      if (fresh?.latch) s.latch = fresh.latch;
+      via = await tabLink(cfg, sid, s, true);
+      tabUp = !!via;
     }
   }
 
@@ -444,11 +551,11 @@ async function callTool(cfg, sid, name, args, preloaded = null) {
     await putJson(cfg, `${P(sid)}/session.json`, s);
     const info = { [saved.byPath ? "loaded" : "saved"]: saved.path, replaced: saved.replaced, ...saved.counts };
     if (!tabUp) return text({ ...info, live: false, note: "no editor tab connected — saved to the Library only; it opens from Library ▸ Designs, and connect_editor makes later loads show live" });
-    return enqueue(cfg, sid, s, "import_plan", { json: saved.text, path: saved.path }, info);
+    return enqueue(cfg, sid, s, "import_plan", { json: saved.text, path: saved.path }, info, via);
   }
   if (isWorkflowTool(name)) {
     if (!tabUp) return errText(`${name} runs in the live editor — no editor tab is connected (open the editor and Connect Claude)`);
-    return enqueue(cfg, sid, s, "run_mcp_flow_tool", { tool: name, args });
+    return enqueue(cfg, sid, s, "run_mcp_flow_tool", { tool: name, args }, undefined, via);
   }
   if (HEADLESS_TOOL_NAMES.has(name) || !tabUp) {
     const before = s.design;
@@ -456,7 +563,25 @@ async function callTool(cfg, sid, name, args, preloaded = null) {
     if (s.design !== before) await putJson(cfg, `${P(sid)}/session.json`, s);
     return out;
   }
-  return enqueue(cfg, sid, s, name, args);
+  return enqueue(cfg, sid, s, name, args, undefined, via);
+}
+
+/** How this session's tab is reached right now: "do" (WebSocket to the room), "r2" (long-poll latch), or
+ *  null (no tab). The room is asked first — a tab that just moved to its socket still has a fresh R2 latch
+ *  for a while, and calls queued in R2 would then sit there unread. A tab on the socket also reports which
+ *  design it has open; that is copied into session.json the way /next does it. */
+async function tabLink(cfg, sid, s, fresh = false) {
+  if (doConfig()) {
+    const st = await doState(sid, fresh);
+    if (st?.tabUp) {
+      if (st.design && validDesignPath(st.design) && st.design !== s.design) {
+        s.design = st.design; s.designSetBy = "tab";
+        await putJson(cfg, `${P(sid)}/session.json`, s).catch(() => {});
+      }
+      return "do";
+    }
+  }
+  return tabUpFor(s) ? "r2" : null;
 }
 
 /* ── Workflow tools: opted-in flows (`"mcp": true`) as their own `wf_*` MCP tools. The connected TAB builds
@@ -469,9 +594,18 @@ export async function workflowToolsFor(cfg, sid) {
   const hit = wfCache.get(sid);
   if (hit && Date.now() - hit.at < 60_000) return hit.tools;
   const s = await getJson(cfg, `${P(sid)}/session.json`);
-  if (!s || !(!!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000)) return [];
+  const via = s ? await tabLink(cfg, sid, s) : null;
+  if (!via) return [];
   const now = Date.now();
   const id = `c_${now}_${rand(4).replace(/[^A-Za-z0-9]/g, "x")}`;
+  if (via === "do") {
+    let a = null;
+    try { a = await doRoom(sid, "call", { id, tool: "list_mcp_flow_tools", args: {}, timeoutMs: 15_000, readOnly: true, waitMs: 12_000 }); } catch { /* relay down */ }
+    if (!a?.done) return hit?.tools ?? [];
+    const tools = a.r.ok && Array.isArray(a.r.result?.tools) ? a.r.result.tools : [];
+    wfCache.set(sid, { at: Date.now(), tools });
+    return tools;
+  }
   await putJson(cfg, `${P(sid)}/calls/${id}.json`, { id, tool: "list_mcp_flow_tools", args: {}, createdAt: now, deadline: now + 15_000, state: "queued" });
   const r = await waitResult(cfg, sid, id, now + 12_000);
   if (!r) return hit?.tools ?? [];
@@ -482,13 +616,14 @@ export async function workflowToolsFor(cfg, sid) {
 }
 
 /** Queue one command for the tab and wait for it (or hand back a ticket). `extra` is merged into a success result. */
-async function enqueue(cfg, sid, s, name, args, extra) {
+async function enqueue(cfg, sid, s, name, args, extra, via = "r2") {
   const now = Date.now();
   const id = `c_${now}_${rand(4).replace(/[^A-Za-z0-9]/g, "x")}`;
   const deadline = now + timeoutFor(name);
   const callArgs = name === "checkpoint" ? { ...args, step: args.step ?? s.run.step ?? "checkpoint" } : args;
   const call = { id, tool: name, args: callArgs, createdAt: now, deadline, state: "queued", step: name === "checkpoint" ? s.run.step : undefined, final: !!args.final };
   const argText = JSON.stringify(callArgs);
+  if (via === "do") return enqueueDo(cfg, sid, call, argText, extra);
   if (argText.length > INLINE_LIMIT) {                                   // big arguments (an inline image) wait in the blob area
     await putObject(cfg, `${P(sid)}/blobs/${id}.args`, argText);
     call.args = null; call.argsBlob = true;
@@ -502,6 +637,30 @@ async function enqueue(cfg, sid, s, name, args, extra) {
   note("wait", Date.now() - now);
   if (r) return extra && r.ok ? text({ ...extra, live: true, tab: r.result }) : finish(cfg, sid, call, r);
   await putJson(cfg, `${P(sid)}/tickets/${id}.json`, { ...call, args: undefined });
+  return text({ pending: true, ticket: id, tool: name,
+    hint: name === "checkpoint" ? "The card is open in the app. Call await_result with this ticket to keep waiting for the user." : "Still running in the editor. Call await_result with this ticket to keep waiting." });
+}
+
+/** enqueue over the realtime relay: one request to the room, which pushes the call down the tab's socket
+ *  and holds until the result comes back up it (or hands back a ticket, like the R2 path). */
+async function enqueueDo(cfg, sid, call, argText, extra) {
+  const { id, tool: name, deadline } = call;
+  let argsBlob = false;
+  if (argText.length > WS_INLINE_LIMIT) {                                 // too big for one socket frame: the tab fetches it
+    await putObject(cfg, `${P(sid)}/blobs/${id}.args`, argText);
+    argsBlob = true;
+  }
+  const t0 = Date.now();
+  let a;
+  try {
+    a = await doRoom(sid, "call", { id, tool: name, args: argsBlob ? null : call.args, argsBlob, timeoutMs: deadline - t0,
+      readOnly: READ_ONLY.test(name), waitMs: Math.min(deadline - t0, WAIT_MS) });
+  } catch (e) {
+    return errText(`the realtime relay could not be reached (${e.message}) — reload the editor tab to reconnect, then retry`);
+  }
+  note("wait", Date.now() - t0);
+  if (a.done) return extra && a.r.ok ? text({ ...extra, live: true, tab: a.r.result }) : finish(cfg, sid, call, a.r);
+  await putJson(cfg, `${P(sid)}/tickets/${id}.json`, { ...call, args: undefined, via: "do" });
   return text({ pending: true, ticket: id, tool: name,
     hint: name === "checkpoint" ? "The card is open in the app. Call await_result with this ticket to keep waiting for the user." : "Still running in the editor. Call await_result with this ticket to keep waiting." });
 }
@@ -577,7 +736,7 @@ export async function linkConnector(cfg, user, code) {
   const old = prev?.sid && prev.sid !== l.sid ? await getJson(cfg, `${P(prev.sid)}/session.json`) : null;
   if (old?.design && !s.design) { s.design = old.design; s.designSetBy = "agent"; await putJson(cfg, `${P(l.sid)}/session.json`, s); }
   await putJson(cfg, userKey(user), { sid: l.sid, linked: true, at: Date.now() });
-  return { ok: true, linked: true, tabConnected: tabUpFor(s), design: s.design ?? null, expiresAt: s.expiresAt };
+  return { ok: true, linked: true, tabConnected: !!(await tabLink(cfg, l.sid, s)), design: s.design ?? null, expiresAt: s.expiresAt };
 }
 
 /** open_editor: a new session linked to this connector user, and the link that connects a tab to it. */
@@ -596,6 +755,8 @@ export async function openEditor(cfg, user) {
   else await putJson(cfg, `${P(useSid)}/session.json`, { createdAt: now, linkedAt: now, expiresAt: now + SESSION_TTL_MS, agentHash: "", tabHash: "", latch: null,
     run: newRunState(), opened: true, ...(design ? { design, designSetBy: "agent" } : {}) });
   await putJson(cfg, `relay/links/${linkCode}.json`, { sid: useSid, expiresAt: now + SESSION_TTL_MS });
+  // The new link takes over: older tab sockets in the room are closed; the claim registers the new tab.
+  await doRegister(useSid, { tabHash: "", agentHash: keep ? old.agentHash ?? "" : "", expiresAt: Math.max(old?.expiresAt ?? 0, now + SESSION_TTL_MS), reset: true });
   const token = rand(24);
   await putJson(cfg, claimKey(token), { sid: useSid, linkCode, expiresAt: now + CLAIM_TTL_MS });
   await putJson(cfg, userKey(user), { sid: useSid, linked: true, at: now });
@@ -608,8 +769,9 @@ export async function connectorStatus(cfg, user) {
   const link = await getJson(cfg, userKey(user));
   const s = link?.sid ? await getJson(cfg, `${P(link.sid)}/session.json`) : null;
   const linked = !!link?.linked && live(s);
-  return { linked, tabConnected: linked && tabUpFor(s), design: live(s) ? s.design ?? null : null, stepState: live(s) ? stepGate(s.run ?? newRunState()).stepState() : null,
-    mode: linked && tabUpFor(s) ? "LIVE — canvas tools drive the open editor tab" : "HEADLESS — canvas tools edit the use_design file in the Library; call open_editor (or connect_editor with the code the editor shows) to go live" };
+  const up = linked && !!(await tabLink(cfg, link.sid, s));
+  return { linked, tabConnected: up, design: live(s) ? s.design ?? null : null, stepState: live(s) ? stepGate(s.run ?? newRunState()).stepState() : null,
+    mode: up ? "LIVE — canvas tools drive the open editor tab" : "HEADLESS — canvas tools edit the use_design file in the Library; call open_editor (or connect_editor with the code the editor shows) to go live" };
 }
 
 /** The workflow tools of the tab a connector user is linked to ([] when not linked / no tab). */
@@ -653,6 +815,7 @@ async function handleRelayTimed(req, res, route, url, cfg) {
     if (route === "/next" && req.method === "GET") return await next(cfg, req, res, url);
     if (route === "/result" && req.method === "POST") return await result(cfg, req, res);
     if (route === "/blob" && req.method === "POST") return await blob(cfg, req, res);
+    if (route === "/args" && req.method === "GET") return await argsUrl(cfg, req, res, url);
     if (route === "/session" && req.method === "DELETE") return await endSession(cfg, req, res);
     if (route === "/status" && req.method === "GET") return await status(cfg, req, res);
     send(res, 404, { ok: false, error: `no relay route ${req.method} ${route}` });

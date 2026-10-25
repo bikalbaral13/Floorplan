@@ -67,3 +67,8 @@ pipeline-work/
 _archive/
 
 backups/
+
+# realtime relay (packages/relay-do)
+.dev.vars
+.wrangler/
+packages/relay-do/node_modules/

@@ -117,6 +117,12 @@ export function ConnectClaudeButton({ variant = "button" }: { variant?: "button"
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy command"}
                   </Button>
                   <p className="text-[11px] text-slate-500">Shown in this tab only. Anyone with this command can draw in this tab until you disconnect.</p>
+                  {session.bridgeCommand ? (
+                    <details className="text-[11px] text-slate-600">
+                      <summary className="cursor-pointer">Faster: local bridge over the realtime relay (Node 22+)</summary>
+                      <pre className="mt-1 whitespace-pre-wrap break-all rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] select-all">{session.bridgeCommand}</pre>
+                    </details>
+                  ) : null}
                 </div>
               ) : (
                 <p className="text-slate-600">This tab is connected. The command was shown when you connected; disconnect and connect again for a new one.</p>

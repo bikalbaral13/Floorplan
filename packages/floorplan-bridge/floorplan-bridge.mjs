@@ -24,17 +24,71 @@ const waiters = [];        // pending long-poll responders waiting for a command
 const pending = new Map(); // command id → { resolve, reject, timer }
 
 
+// ── Realtime relay mode (FP_BRIDGE_RELAY + FP_BRIDGE_TOKEN, Node 22+): instead of waiting for the tab to poll
+//    127.0.0.1, this bridge connects OUTBOUND to the session's room (packages/relay-do) and the tab is reached
+//    through it. No local port is needed by the browser, so no local-network prompt. The token is the agent
+//    token Connect Claude shows (`fpa_<session>_<secret>`). ──
+const RELAY = String(process.env.FP_BRIDGE_RELAY || "").trim().replace(/\/+$/, "");
+const RELAY_TOKEN = String(process.env.FP_BRIDGE_TOKEN || "").trim();
+const READ_ONLY = /^(get_|list_|export_plan$|snapshot_canvas$|compile_flow$|flow_node_catalog$|analyze_underlay$)/;
+let relayMode = false, relaySock = null, relayTabUp = false, relayFailures = 0;
+const relayOutbox = new Map(); // call id → frame, re-sent after a reconnect until its result arrives
+if (RELAY && RELAY_TOKEN) {
+  const m = /^fpa_([A-Za-z0-9]{10,40})_/.exec(RELAY_TOKEN);
+  if (typeof WebSocket === "undefined") process.stderr.write("[floorplan-bridge] FP_BRIDGE_RELAY needs Node 22+ (global WebSocket) — using the local browser channel instead\n");
+  else if (!m) process.stderr.write("[floorplan-bridge] FP_BRIDGE_TOKEN is not an agent token (fpa_…) — using the local browser channel instead\n");
+  else { relayMode = true; relayConnect(`${RELAY}/v1/agent/${m[1]}?t=${encodeURIComponent(RELAY_TOKEN)}`); }
+}
+function relayConnect(url) {
+  let opened = false, beat = null;
+  const ws = new WebSocket(url);
+  ws.onopen = () => {
+    opened = true; relayFailures = 0; relaySock = ws;
+    ws.send(JSON.stringify({ type: "hello" }));
+    for (const f of relayOutbox.values()) ws.send(f);
+    beat = setInterval(() => { try { ws.send(JSON.stringify({ type: "ping" })); } catch { /* closing */ } }, 15000);
+    process.stderr.write("[floorplan-bridge] connected to the realtime relay\n");
+  };
+  ws.onmessage = (ev) => {
+    let msg; try { msg = JSON.parse(String(ev.data)); } catch { return; }
+    if (msg.type === "welcome" || msg.type === "pong") relayTabUp = !!msg.tabUp;
+    else if (msg.type === "tab") relayTabUp = !!msg.up;
+    else if (msg.type === "result" && msg.id) {
+      relayOutbox.delete(msg.id);
+      const p = pending.get(msg.id);
+      if (p) { clearTimeout(p.timer); pending.delete(msg.id); msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.blob ? "result too large for the relay — ask for a smaller export" : msg.error || "command failed")); }
+    }
+  };
+  ws.onclose = (ev) => {
+    if (beat) clearInterval(beat);
+    if (relaySock === ws) relaySock = null;
+    relayTabUp = false;
+    if (ev.code === 4001) { process.stderr.write("[floorplan-bridge] relay session ended — click Connect Claude again and update FP_BRIDGE_TOKEN\n"); return; }
+    if (!opened) relayFailures++;
+    if (relayFailures === 3) process.stderr.write("[floorplan-bridge] cannot reach the realtime relay (token expired, or offline) — still retrying\n");
+    setTimeout(() => relayConnect(url), Math.min(10000, 500 * 2 ** Math.min(relayFailures, 5))).unref?.();
+  };
+  ws.onerror = () => { /* onclose follows */ };
+}
+
 function enqueueCommand(tool, args, timeoutMs = timeoutFor(tool)) {
-  const id = `c${++seq}`;
+  const id = relayMode ? `c_${Date.now().toString(36)}_${++seq}` : `c${++seq}`;
   const cmd = { id, tool, args };
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
+      relayOutbox.delete(id);
       reject(new Error(tool === "checkpoint"
         ? `no answer in ${Math.round(timeoutMs / 60000)} min — the checkpoint card is still open in the app; ask the user to answer it, or re-run the step.`
         : "browser did not respond in 60s — is the app open with the agent bridge enabled (localStorage bp.agentBridge=\"1\" or ?agent=1)?"));
     }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
+    if (relayMode) {
+      const f = JSON.stringify({ type: "call", id, tool, args, timeoutMs, readOnly: READ_ONLY.test(tool) });
+      relayOutbox.set(id, f);
+      if (relaySock) relaySock.send(f);   // else sent on (re)connect
+      return;
+    }
     const w = waiters.shift();
     if (w) w(cmd);        // hand straight to a waiting poller
     else queue.push(cmd); // else hold until the next poll
@@ -171,7 +225,7 @@ function replyErr(id, code, message) { send({ jsonrpc: "2.0", id, error: { code,
 //    with no tab polling there are none. Refreshed every 30 s; a change is announced with list_changed. ──
 let wfTools = [];
 let wfNames = "";
-const tabActive = () => !!latchedClient && Date.now() - (lastSeen.get(latchedClient) ?? 0) <= LATCH_STALE_MS;
+const tabActive = () => relayMode ? relayTabUp : !!latchedClient && Date.now() - (lastSeen.get(latchedClient) ?? 0) <= LATCH_STALE_MS;
 async function refreshWorkflowTools() {
   if (!tabActive()) { wfTools = []; }
   else {

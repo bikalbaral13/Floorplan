@@ -115,6 +115,16 @@
       ],
       "port": 5190,
       "autoPort": false
+    },
+    {
+      "name": "dev-2502-relay",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set RELAY_DO_URL=http://127.0.0.1:8787&& set RELAY_DO_SECRET=dev-secret&& npx vite --host --port 2502 --strictPort"
+      ],
+      "port": 2502,
+      "autoPort": false
     }
   ]
 }

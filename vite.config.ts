@@ -35,6 +35,8 @@ const relayDev = (env: Record<string, string>): Plugin => ({
   name: "mcp-relay",
   configureServer(server) {
     const cfg = relayConfig(env);
+    // Realtime relay (packages/relay-do, `npm run dev` there): relayCore reads these from process.env.
+    for (const k of ["RELAY_DO_URL", "RELAY_DO_SECRET"]) if (env[k] && !process.env[k]) process.env[k] = env[k];
     server.middlewares.use("/__relay", (req, res) => {
       const url = new URL(req.url ?? "/", "http://local");
       void handleRelay(req, res, url.pathname, url, cfg);

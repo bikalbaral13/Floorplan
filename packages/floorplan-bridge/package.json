@@ -1,6 +1,6 @@
 {
   "name": "@builderpluss/floorplan-bridge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server that lets Claude Code drive the BuilderPluss floorplan editor open in your browser (https://floorplan-indol.vercel.app).",
   "type": "module",
   "bin": {

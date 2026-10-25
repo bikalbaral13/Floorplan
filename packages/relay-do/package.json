@@ -1,0 +1,15 @@
+{
+  "name": "@builderpluss/relay-do",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Realtime relay for the BuilderPluss editor: Cloudflare Worker + one Durable Object per relay session.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "test": "node test/room.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}

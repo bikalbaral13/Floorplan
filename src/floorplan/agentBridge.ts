@@ -31,7 +31,11 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
 /* ── Hosted relay (Connect Claude) ────────────────────────────────────────────────────────────────────
  * The same command loop, pointed at this app's own `/__relay` routes (server/relayCore.mjs) instead of a
  * local bridge. The session lives in sessionStorage so a reload keeps the connection and a new tab does not. */
-export interface RelaySession { sessionId: string; tabToken: string; agentToken?: string; command?: string; mcpUrl?: string; linkCode?: string; expiresAt: number }
+export interface RelaySession { sessionId: string; tabToken: string; agentToken?: string; command?: string; mcpUrl?: string; linkCode?: string; expiresAt: number;
+  /** Realtime relay (packages/relay-do): the tab's WebSocket. Absent → long-poll /__relay/next. */
+  wsUrl?: string;
+  /** `claude mcp add …` for the local bridge reaching this tab through the realtime relay. */
+  bridgeCommand?: string }
 export type RelayState = "off" | "connecting" | "connected" | "idle" | "offline" | "expired";
 const RELAY_KEY = "bp.relaySession";
 export function getRelaySession(): RelaySession | null {
@@ -52,7 +56,7 @@ export async function pairRelay(): Promise<RelaySession> {
   const res = await fetch("/__relay/pair", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || !j.ok) throw new Error(j.error || `could not connect (${res.status})`);
-  const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, linkCode: j.linkCode, expiresAt: j.expiresAt };
+  const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, linkCode: j.linkCode, expiresAt: j.expiresAt, wsUrl: j.wsUrl, bridgeCommand: j.bridgeCommand };
   setRelaySession(s);
   return s;
 }
@@ -72,7 +76,7 @@ export function claimRelayFromUrl(): Promise<RelaySession | null> {
     const res = await fetch("/__relay/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: m[1] }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.ok) throw new Error(j.error || `could not connect (${res.status})`);
-    const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, linkCode: j.linkCode, expiresAt: j.expiresAt };
+    const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, linkCode: j.linkCode, expiresAt: j.expiresAt, wsUrl: j.wsUrl, bridgeCommand: j.bridgeCommand };
     setRelaySession(s);
     return s;
   })());
@@ -132,6 +136,13 @@ export function startAgentBridge(base = bridgeBase()): () => void {
   if (relay) base = "/__relay";
   const auth: Record<string, string> = relay ? { authorization: `Bearer ${relay.tabToken}` } : {};
   if (relay) emitRelayState("connecting");
+
+  // Realtime relay: a WebSocket to this session's room. Falls back to the long-poll loop below when the
+  // socket never opens (relay down, a proxy that blocks WebSockets).
+  if (relay?.wsUrl && typeof WebSocket !== "undefined") {
+    const stopSocket = startRelaySocket(relay, auth, () => { if (!stopped) void loop(); });
+    return () => { stopped = true; running = false; stopSocket(); };
+  }
 
   /** Run one command and post its result back. Every handler runs inside an agent-write span so the
    *  revision log can tell the agent's changes from the user's (see agentRevisions.ts). */
@@ -205,4 +216,147 @@ export function startAgentBridge(base = bridgeBase()): () => void {
 
   void loop();
   return () => { stopped = true; running = false; };
+}
+
+/* ── Realtime relay client ──────────────────────────────────────────────────────────────────────────────
+ * One WebSocket to the session's Durable Object (packages/relay-do). Calls arrive as {type:"cmd"} frames and
+ * results go back up the same socket — no polling. A heartbeat every 15 s keeps the room's view of this tab
+ * fresh (and carries focus + the open design). A dropped socket reconnects with backoff; the room then
+ * re-sends this tab's unfinished calls, and a call that already ran is answered from RESULT_CACHE instead of
+ * running twice. */
+type Cmd = { id: string; tool: string; args?: Record<string, unknown>; argsBlob?: boolean };
+const WS_INLINE_LIMIT = 900_000;
+const HEARTBEAT_MS = 15_000;
+const RESULT_CACHE = new Map<string, string>();   // call id → the result frame already sent
+const rememberResult = (id: string, frame: string) => {
+  RESULT_CACHE.set(id, frame);
+  while (RESULT_CACHE.size > 50) RESULT_CACHE.delete(RESULT_CACHE.keys().next().value as string);
+};
+
+async function execute(cmd: Cmd): Promise<{ ok: boolean; result: unknown; error: string }> {
+  beginAgentWrite(cmd.tool);
+  try {
+    const fn = handlers.get(cmd.tool);
+    if (!fn) throw new Error(`no handler registered for "${cmd.tool}"`);
+    return { ok: true, result: await fn(cmd.args ?? {}), error: "" };
+  } catch (e) {
+    return { ok: false, result: null, error: e instanceof Error ? e.message : "handler error" };
+  } finally {
+    endAgentWrite();
+  }
+}
+
+function startRelaySocket(relay: RelaySession, auth: Record<string, string>, fallback: () => void): () => void {
+  let stopped = false;
+  let ws: WebSocket | null = null;
+  let everOpened = false;
+  let failures = 0;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+  const inflight = new Set<string>();
+  let chain: Promise<void> = Promise.resolve();   // non-detached calls run strictly in arrival order
+
+  const focused = () => (typeof document !== "undefined" && document.hasFocus());
+  const frame = (type: string, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ type, client: CLIENT_ID, focused: focused(), design: linkedDesignPath ?? undefined, ...extra });
+  const sendRaw = (s: string) => { if (ws && ws.readyState === WebSocket.OPEN) { ws.send(s); return true; } return false; };
+  const onFocusChange = () => sendRaw(frame("ping"));
+
+  const deliver = async (id: string, out: { ok: boolean; result: unknown; error: string }) => {
+    let f = JSON.stringify({ type: "result", id, ...out });
+    if (f.length > WS_INLINE_LIMIT) {
+      // Too big for one frame: upload to the relay's blob area (the same path the long-poll relay uses).
+      try {
+        const b = await fetch("/__relay/blob", { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify({ id }) }).then((r) => r.json());
+        await fetch(b.putUrl, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(out.result) });
+        f = JSON.stringify({ type: "result", id, ok: out.ok, blob: true, error: out.error });
+      } catch {
+        f = JSON.stringify({ type: "result", id, ok: false, error: "result too large to send over the relay" });
+      }
+    }
+    rememberResult(id, f);
+    sendRaw(f);   // if the socket is down, the room re-sends the call on reconnect and the cache answers it
+  };
+
+  const handle = async (c: Cmd) => {
+    const cached = RESULT_CACHE.get(c.id);
+    if (cached) { sendRaw(cached); return; }
+    if (inflight.has(c.id)) return;                 // a re-send while it still runs: the result goes out when done
+    inflight.add(c.id);
+    try {
+      let args = c.args;
+      if (c.argsBlob) {
+        const u = await fetch(`/__relay/args?id=${encodeURIComponent(c.id)}`, { headers: auth }).then((r) => r.json());
+        args = await fetch(u.getUrl).then((r) => r.json());
+      }
+      await deliver(c.id, await execute({ ...c, args }));
+    } finally {
+      inflight.delete(c.id);
+    }
+  };
+
+  const connect = () => {
+    if (stopped) return;
+    const url = `${relay.wsUrl}?t=${encodeURIComponent(relay.tabToken)}`;
+    let opened = false;
+    try { ws = new WebSocket(url); } catch { scheduleRetry(); return; }
+    ws.onopen = () => {
+      opened = true; everOpened = true; failures = 0;
+      sendRaw(frame("hello"));
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = setInterval(() => sendRaw(frame("ping")), HEARTBEAT_MS);
+    };
+    ws.onmessage = (ev) => {
+      let m: { type?: string; latched?: boolean } & Partial<Cmd>;
+      try { m = JSON.parse(String(ev.data)); } catch { return; }
+      if (m.type === "welcome" || m.type === "latch") emitRelayState(m.latched === false ? "idle" : "connected", { transport: "ws" });
+      else if (m.type === "cmd" && m.id && m.tool) {
+        emitRelayState("connected", { transport: "ws" });
+        const c = m as Cmd;
+        if (DETACHED_TOOLS.has(c.tool)) void handle(c);
+        else chain = chain.then(() => handle(c)).catch(() => {});
+      }
+    };
+    ws.onclose = (ev) => {
+      if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+      ws = null;
+      if (stopped) return;
+      // 4001 session ended / 4002 a newer editor link took this session over.
+      if (ev.code === 4001 || ev.code === 4002) { setRelaySession(null); emitRelayState("expired"); stopped = true; running = false; return; }
+      if (!opened) failures++;
+      emitRelayState("offline", { transport: "ws" });
+      if (!everOpened && failures >= 3) { void checkThenFallback(); return; }
+      scheduleRetry();
+    };
+  };
+  const scheduleRetry = () => {
+    if (stopped) return;
+    const delay = Math.min(10_000, 500 * 2 ** Math.min(failures, 5));
+    retry = setTimeout(connect, delay);
+  };
+  /** The socket never opened: an expired session gets a 401 here; anything else falls back to long-poll. */
+  const checkThenFallback = async () => {
+    try {
+      const r = await fetch("/__relay/status", { headers: auth });
+      if (r.status === 401) { setRelaySession(null); emitRelayState("expired"); stopped = true; running = false; return; }
+    } catch { /* offline: long-poll will retry */ }
+    stop(); stopped = false;
+    console.warn("[agentBridge] realtime relay unreachable — falling back to long-poll");
+    fallback();
+  };
+  const stop = () => {
+    stopped = true;
+    if (heartbeat) clearInterval(heartbeat);
+    if (retry) clearTimeout(retry);
+    window.removeEventListener("focus", onFocusChange);
+    window.removeEventListener("blur", onFocusChange);
+    try { ws?.close(1000, "stopped"); } catch { /* gone */ }
+  };
+
+  window.addEventListener("focus", onFocusChange);
+  window.addEventListener("blur", onFocusChange);
+  // A tab coming back online reconnects at once instead of waiting out the backoff.
+  window.addEventListener("online", () => { if (!stopped && !ws) { if (retry) clearTimeout(retry); connect(); } });
+  connect();
+  return stop;
 }
