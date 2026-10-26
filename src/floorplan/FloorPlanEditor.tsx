@@ -212,7 +212,7 @@ import { FilePickerDialog, type FilePickerOption } from "./components/dialogs/Fi
 import { NavigatorBar, readNavigatorOpen, saveNavigatorOpen } from "./components/NavigatorBar";
 import { NavFoldSection, DrawingsSection, ElementRow, buildElements, elementMatches, NavIcons, type NavElement } from "./components/NavPlanSections";
 import { buildSelectionContext, selectionForAgent, setSelectionByPaths, useLibrarySelection } from "./librarySelection";
-import { sendToInbox, useInboxStatus, waitForPrompt, askUser, answerAsk, hasPendingAsk } from "./chatInbox";
+import { sendToInbox, useInboxStatus, waitForPrompt, askUser, answerAsk, hasPendingAsk, requeueFront, CLAUDE_MODELS, type ClaudeModel } from "./chatInbox";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ImportMoodboardDialog } from "./components/dialogs/ImportMoodboardDialog";
 import { DesignPlacementPanel } from "./components/DesignPlacementPanel";
@@ -6399,6 +6399,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // busy + fold state. Key/model persisted to localStorage.
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
   const [aiSendBusy, setAiSendBusy] = useState<boolean>(false);
+  // The Claude model picked in the chat bar; sent with every prompt (remembered per browser).
+  const [claudeModel, setClaudeModel] = useState<ClaudeModel>(() => {
+    try { const v = localStorage.getItem("bp.claudeModel"); if (v === "opus" || v === "sonnet" || v === "haiku") return v; } catch { /* storage blocked */ }
+    return "sonnet";
+  });
+  const claudeModelRef = useRef(claudeModel);
+  claudeModelRef.current = claudeModel;
+  const changeClaudeModel = useCallback((m: ClaudeModel) => {
+    setClaudeModel(m);
+    try { localStorage.setItem("bp.claudeModel", m); } catch { /* storage blocked */ }
+  }, []);
   // While Claude Code works on a chat prompt, log every editor command it runs as a step in the chat
   // (ChatAIPanel folds a run of steps into one "Working… (N steps)" block the user can unfold).
   /** Last time any command from Claude Code reached this tab (see the watchdog below). */
@@ -6694,7 +6705,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       setAiMessages((m) => [...m, { role: "user", text: file ? `${prompt}
 📎 ${file.name} (attachments are not passed to Claude Code yet)` : prompt }]);
       setAiCollapsed(false);
-      sendToInbox({ prompt, selection: selectionForAgent(librarySelectionRef.current), attachment: file?.name, sentAt: Date.now() });
+      sendToInbox({ prompt, selection: selectionForAgent(librarySelectionRef.current), attachment: file?.name, model: claudeModelRef.current, sentAt: Date.now() });
       if (!claudeListeningRef.current) {
         setAiMessages((m) => [...m, { role: "tool", text: "▸ Queued — Claude picks this up as soon as it is listening (the dot turns green). Not connected? Double-click BuilderPluss-Chat.bat and keep its window open." }]);
       }
@@ -6801,7 +6812,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     if (!label) {
       if (chatModeRef.current === "auto") {
         setAiMessages((m) => [...m, { role: "tool", text: "▸ Sent to Claude" }]);
-        sendToInbox({ prompt: rec.text, selection: selectionForAgent(librarySelectionRef.current), sentAt: Date.now() });
+        sendToInbox({ prompt: rec.text, selection: selectionForAgent(librarySelectionRef.current), model: claudeModelRef.current, sentAt: Date.now() });
       }
       return;
     }
@@ -9289,7 +9300,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       };
     }
     // ── The Chat box as Claude Code's inbox, and the navigator's Library selection (chat.* / library.selection). ──
-    registerAgentCommand("chat_wait_prompt", async () => {
+    registerAgentCommand("chat_wait_prompt", async (a) => {
+      // The launcher tells us which model this Claude runs on (`running`). A prompt asking for another model
+      // goes back to the front of the queue and this Claude is told to exit: the launcher restarts Claude on
+      // `switchModel`, and that one takes the prompt.
+      const running = typeof a.running === "string" ? a.running.toLowerCase() : "";
       // A fresh wait while a reply is still "in progress" means the Claude that took that prompt is gone
       // (it restarted or a new one connected) and will never answer it: end the spinner and say so.
       if (aiSendBusyRef.current && !hasPendingAsk()) {
@@ -9298,6 +9313,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
       const p = await asUserInteraction(() => waitForPrompt());
       if (!p) return { superseded: true, note: "A newer chat.wait took over this one — nothing to do for this call." };
+      if (running && p.model && p.model !== running) {
+        requeueFront(p);
+        const label = CLAUDE_MODELS.find((m) => m.id === p.model)?.label ?? p.model;
+        setAiMessages((m) => [...m, { role: "tool", text: `▸ Switching Claude to ${label}…` }]);
+        return { switchModel: p.model, note: `The user picked ${p.model}. Do NOT work on this prompt: stop now and print exactly SWITCH:${p.model} as your final output. The launcher restarts Claude on that model.` };
+      }
       claudeLastSeenRef.current = Date.now();
       setAiSendBusy(true);   // the chat shows a green signal while Claude Code works (no log line)
       return { ...p, note: "The user is in the editor chat and CANNOT see your terminal. Ask every question with chat.ask (options for choices) and wait for its answer — never ask in the terminal or with your own question tool. Follow any `skill` items; read files with library.read (paths are Library-relative). Work on the live canvas, post progress with chat.reply, finish with chat.reply { final: true }, then chat.wait again." };
@@ -32211,6 +32232,8 @@ User request: ${aiPrompt.trim()}`;
           claudeAsking={inboxStatus.asking}
           onAnswer={answerChatAsk}
           chatMode={chatMode}
+          claudeModel={claudeModel}
+          onClaudeModelChange={changeClaudeModel}
           onPickSuggestion={handlePickSuggestion}
           onUndoCommand={handleUndoCommand}
           engineNote={engineNote}

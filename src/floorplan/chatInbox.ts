@@ -10,8 +10,17 @@ export interface InboxPrompt {
   /** The navigator's ticked Library items at send time. */
   selection: { path: string; kind: string; size: number; url?: string }[];
   attachment?: string;
+  /** The Claude model the user picked in the chat bar (opus / sonnet / haiku). */
+  model?: ClaudeModel;
   sentAt: number;
 }
+
+export type ClaudeModel = "opus" | "sonnet" | "haiku";
+export const CLAUDE_MODELS: { id: ClaudeModel; label: string; title: string }[] = [
+  { id: "opus", label: "Opus", title: "Opus — most capable, slowest" },
+  { id: "sonnet", label: "Sonnet", title: "Sonnet — fast and capable (recommended)" },
+  { id: "haiku", label: "Haiku", title: "Haiku — fastest, for quick simple edits" },
+];
 
 const queue: InboxPrompt[] = [];
 /** Blocked chat_wait_prompt calls. A waiter is called with null when a NEWER wait replaces it. */
@@ -44,6 +53,12 @@ export function waitForPrompt(): Promise<InboxPrompt | null> {
 }
 
 export const inboxQueued = () => queue.length;
+
+/** Put a prompt back at the FRONT of the queue (a Claude on the wrong model handed it back). */
+export function requeueFront(p: InboxPrompt) {
+  queue.unshift(p);
+  notify();
+}
 
 /* ── chat_ask (chat.ask): Claude Code asks the USER a question in the Chat box and waits for the answer.
  *  While a question is open, the next thing the user sends (typed, or a clicked option) is its answer —

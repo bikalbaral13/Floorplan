@@ -7,6 +7,7 @@ import type { ToolInfo } from "../ai/toolCatalog";
 import { useLibraryBase } from "../useLibraryBase";
 import { LibrarySourceNote } from "./LibrarySourceNote";
 import { KIND_LABEL, KIND_ORDER, useLibrarySelection } from "../librarySelection";
+import { CLAUDE_MODELS, type ClaudeModel } from "../chatInbox";
 
 export interface ChatMessage {
   /** "tool" = one agent tool call / result line (rendered as a compact mono log row).
@@ -111,6 +112,9 @@ export interface ChatAIPanelProps {
   /** Chat Mode (Settings): AI = Claude, Manual = local Command Engine only, Auto = engine first. */
   chatMode?: ChatMode;
   onChatModeChange?: (m: ChatMode) => void;
+  /** Which Claude model answers (the launcher restarts Claude on it when it changes). */
+  claudeModel?: ClaudeModel;
+  onClaudeModelChange?: (m: ClaudeModel) => void;
   /** A "did you mean" chip was clicked: option index into that suggestion, or -1 = none of these. */
   onPickSuggestion?: (cmdId: number, option: number) => void;
   /** Undo a command the engine ran. */
@@ -137,7 +141,7 @@ export const ChatAIPanel = ({
   tools, access, examples, engine = "gemini", onEngineChange, claudeListening = false,
   claudeWorking = false, claudeAsking = false, onAnswer,
   onImportCanvas, onExport,
-  chatMode = "ai", onChatModeChange, onPickSuggestion, onUndoCommand, engineNote,
+  chatMode = "ai", onChatModeChange, claudeModel = "sonnet", onClaudeModelChange, onPickSuggestion, onUndoCommand, engineNote,
 }: ChatAIPanelProps) => {
   const [openJson, setOpenJson] = useState<Record<number, boolean>>({});
   /** Ticked options of an open multi-select question (by message index). */
@@ -346,7 +350,7 @@ export const ChatAIPanel = ({
           </>
         )}
         {/* What the agent will read — the navigator's ticked Library items — and the conversation fold. */}
-        {(selection.length > 0 || onEngineChange || onChatModeChange || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
+        {(selection.length > 0 || onEngineChange || onChatModeChange || onClaudeModelChange || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
           {selection.length > 0 && <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {selGroups.map((g) => (
@@ -366,6 +370,13 @@ export const ChatAIPanel = ({
                 </button>
               ))}
             </div>
+          )}
+          {onClaudeModelChange && (
+            <select value={claudeModel} onChange={(e) => onClaudeModelChange(e.target.value as ClaudeModel)}
+              aria-label="Claude model" title={CLAUDE_MODELS.find((m) => m.id === claudeModel)?.title}
+              className="shrink-0 cursor-pointer rounded-md border-0 bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 outline-none hover:bg-slate-200">
+              {CLAUDE_MODELS.map((m) => <option key={m.id} value={m.id} title={m.title}>{m.label}</option>)}
+            </select>
           )}
           {onChatModeChange && (
             <div className="flex shrink-0 items-center rounded-md bg-slate-100 p-0.5 text-[10px] font-semibold" role="group" aria-label="Chat mode">
