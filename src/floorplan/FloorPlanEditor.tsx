@@ -247,7 +247,6 @@ import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
-import { ClaudeChatPanel } from "./components/ClaudeChatPanel";
 import { PushButton } from "@/components/PushButton";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
 import { showCheckpoint, resolveOpenCheckpoint, isCheckpointOpen } from "./checkpointHud";
@@ -6662,7 +6661,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       setAiCollapsed(false);
       sendToInbox({ prompt, selection: selectionForAgent(librarySelectionRef.current), attachment: file?.name, sentAt: Date.now() });
       if (!claudeListeningRef.current) {
-        setAiMessages((m) => [...m, { role: "tool", text: "▸ Queued for Claude Code. Connect Claude (Preferences), then tell Claude Code: \"listen to the editor chat\" — it picks this up with chat.wait." }]);
+        setAiMessages((m) => [...m, { role: "tool", text: "▸ Queued — Claude picks this up as soon as it is listening (the dot turns green). Not connected? Double-click BuilderPluss-Chat.bat and keep its window open." }]);
       }
       return;
     }
@@ -45045,8 +45044,8 @@ User request: ${aiPrompt.trim()}`;
           must never hold. */}
       {/* Connect Claude's dialog lives here, always mounted; Preferences ▸ Connect Claude opens it. */}
       <ConnectClaudeButton variant="host" />
-      {/* Claude inside the canvas: chat with a headless Claude on the user's own bridge (realtime relay only). */}
-      <ClaudeChatPanel />
+      {/* The separate "Claude inside the canvas" panel (ClaudeChatPanel, bridge host) is no longer mounted:
+          the bottom chat bar is the one chat UI; it reaches Claude Code through chat.wait / chat.reply. */}
       <FilePickerDialog open={importPickerOpen} onOpenChange={setImportPickerOpen} title="Import" description="What do you want to bring in?" options={importOptions} />
       <FilePickerDialog open={exportPickerOpen} onOpenChange={setExportPickerOpen} title="Export" description="Save the plan as…" options={exportOptions} />
       <ImportMoodboardDialog
