@@ -87,7 +87,7 @@ export const NavigatorBar = ({ overlay = false, preferences, open, onToggle, pla
       {/* The whole middle scrolls; the Library tree keeps a usable height and each section caps its own. */}
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
         <NavFoldSection title="Library" icon={<Cloud className="h-3.5 w-3.5 text-sky-600" />} storageKey="bp.editor.navLibraryOpen" defaultOpen grow first>
-          <div className={planSections ? "h-[22rem] min-h-0" : "h-full min-h-[22rem]"}>
+          <div className="h-full min-h-0">
             <CloudInspectDialog variant="panel" open onOpenChange={() => {}} query={query} />
           </div>
         </NavFoldSection>

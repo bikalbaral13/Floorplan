@@ -18,7 +18,7 @@ export function NavFoldSection({ title, icon, count, storageKey, defaultOpen = f
   const [open, setOpen] = useState(() => readOpen(storageKey, defaultOpen));
   const toggle = () => setOpen((o) => { writeOpen(storageKey, !o); return !o; });
   return (
-    <div className={`flex shrink-0 flex-col ${first ? "" : "border-t border-slate-200 pt-2"}`}>
+    <div className={`flex flex-col ${grow && open ? "min-h-[22rem] flex-1" : "shrink-0"} ${first ? "" : "border-t border-slate-200 pt-2"}`}>
       <button type="button" onClick={toggle} aria-expanded={open}
         className="flex items-center gap-1.5 rounded px-1 pb-1.5 text-left hover:text-slate-800">
         {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
@@ -26,7 +26,8 @@ export function NavFoldSection({ title, icon, count, storageKey, defaultOpen = f
         <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</span>
         {count != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{count}</span>}
       </button>
-      {open && <div className={`overflow-y-auto overflow-x-hidden pr-0.5 ${grow ? "max-h-[26rem]" : "max-h-72"}`}>{children}</div>}
+      {/* grow: the section takes every free pixel of the navigator (down to the account bar), not a fixed cap. */}
+      {open && <div className={`overflow-y-auto overflow-x-hidden pr-0.5 ${grow ? "min-h-0 flex-1" : "max-h-72"}`}>{children}</div>}
     </div>
   );
 }
