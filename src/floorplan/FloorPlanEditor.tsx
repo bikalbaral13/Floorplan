@@ -246,6 +246,9 @@ import { grantItems, type AgentDefinition } from "./ai/agentDefs";
 import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
 import { registerAgentCommand, AGENT_STEP_EVENT, type AgentStepDetail, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
+/** No word at all from Claude Code for this long while it is answering → treat it as disconnected. */
+const CLAUDE_SILENT_MS = 150_000;
+const CLAUDE_GONE_NOTE = "Claude stopped responding — it may have disconnected. Make sure the BuilderPluss-Chat.bat window is still open (double-click it again to reconnect), then send your message again.";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
 import { PushButton } from "@/components/PushButton";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
@@ -6398,19 +6401,35 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [aiSendBusy, setAiSendBusy] = useState<boolean>(false);
   // While Claude Code works on a chat prompt, log every editor command it runs as a step in the chat
   // (ChatAIPanel folds a run of steps into one "Working… (N steps)" block the user can unfold).
+  /** Last time any command from Claude Code reached this tab (see the watchdog below). */
+  const claudeLastSeenRef = useRef(Date.now());
   const aiSendBusyRef = useRef(false);
   aiSendBusyRef.current = aiSendBusy;
   useEffect(() => {
     const brief = (v: unknown) => { const t = typeof v === "string" ? v : JSON.stringify(v); return t.length > 40 ? t.slice(0, 40) + "…" : t; };
     const onStep = (e: Event) => {
+      claudeLastSeenRef.current = Date.now();
       if (!aiSendBusyRef.current) return;
-      const { tool, args } = (e as CustomEvent<AgentStepDetail>).detail;
+      const { tool, args, quiet } = (e as CustomEvent<AgentStepDetail>).detail;
+      if (quiet) return;
       const keys = Object.keys(args).slice(0, 3);
       const detail = keys.map((k) => `${k}: ${brief(args[k])}`).join(", ");
       setAiMessages((m) => [...m, { role: "tool", text: `· ${tool.replace(/_/g, " ")}${detail ? ` (${detail})` : ""}` }]);
     };
     window.addEventListener(AGENT_STEP_EVENT, onStep);
     return () => window.removeEventListener(AGENT_STEP_EVENT, onStep);
+  }, []);
+  // Watchdog: Claude picked up a prompt but has sent NOTHING (no command, no progress) for a long while —
+  // its process most likely died (the launcher window was closed). Stop the spinner and say how to reconnect
+  // instead of spinning forever. A late reply still posts normally if Claude was only slow.
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      if (!aiSendBusyRef.current || hasPendingAsk()) return;
+      if (Date.now() - claudeLastSeenRef.current < CLAUDE_SILENT_MS) return;
+      setAiSendBusy(false);
+      setAiMessages((m) => [...m, { role: "error", text: CLAUDE_GONE_NOTE }]);
+    }, 5000);
+    return () => window.clearInterval(t);
   }, []);
   const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
   /** Chat AI mode — "agent" = the Global Agent (full tool-loop over the live canvas + Flow gateway +
@@ -9271,8 +9290,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
     // ── The Chat box as Claude Code's inbox, and the navigator's Library selection (chat.* / library.selection). ──
     registerAgentCommand("chat_wait_prompt", async () => {
+      // A fresh wait while a reply is still "in progress" means the Claude that took that prompt is gone
+      // (it restarted or a new one connected) and will never answer it: end the spinner and say so.
+      if (aiSendBusyRef.current && !hasPendingAsk()) {
+        setAiSendBusy(false);
+        setAiMessages((m) => [...m, { role: "error", text: "Claude restarted before it finished your last message — please send it again." }]);
+      }
       const p = await asUserInteraction(() => waitForPrompt());
       if (!p) return { superseded: true, note: "A newer chat.wait took over this one — nothing to do for this call." };
+      claudeLastSeenRef.current = Date.now();
       setAiSendBusy(true);   // the chat shows a green signal while Claude Code works (no log line)
       return { ...p, note: "The user is in the editor chat and CANNOT see your terminal. Ask every question with chat.ask (options for choices) and wait for its answer — never ask in the terminal or with your own question tool. Follow any `skill` items; read files with library.read (paths are Library-relative). Work on the live canvas, post progress with chat.reply, finish with chat.reply { final: true }, then chat.wait again." };
     });

@@ -23,11 +23,13 @@ export function registerAgentCommand(name: string, fn: AgentHandler): void {
 
 /** Fired once per agent command the tab runs, so the chat can show Claude's work as foldable steps. */
 export const AGENT_STEP_EVENT = "bp:agent-step";
-export interface AgentStepDetail { tool: string; args: Record<string, unknown> }
+/** quiet = a bookkeeping command (chat plumbing, status): it still counts as "Claude is alive" but is
+ *  not shown as a step. */
+export interface AgentStepDetail { tool: string; args: Record<string, unknown>; quiet: boolean }
 const QUIET_STEPS = new Set(["chat_wait_prompt", "chat_reply", "chat_ask", "editor_status", "ping"]);
 function announceStep(tool: string, args: Record<string, unknown> | undefined) {
-  if (QUIET_STEPS.has(tool) || typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent<AgentStepDetail>(AGENT_STEP_EVENT, { detail: { tool, args: args ?? {} } }));
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AgentStepDetail>(AGENT_STEP_EVENT, { detail: { tool, args: args ?? {}, quiet: QUIET_STEPS.has(tool) } }));
 }
 
 // Dev only: run a registered command from the console / a test (`await __agentRun("get_state", {})`)
