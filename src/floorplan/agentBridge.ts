@@ -21,6 +21,15 @@ export function registerAgentCommand(name: string, fn: AgentHandler): void {
   handlers.set(name, fn);
 }
 
+/** Fired once per agent command the tab runs, so the chat can show Claude's work as foldable steps. */
+export const AGENT_STEP_EVENT = "bp:agent-step";
+export interface AgentStepDetail { tool: string; args: Record<string, unknown> }
+const QUIET_STEPS = new Set(["chat_wait_prompt", "chat_reply", "chat_ask", "editor_status", "ping"]);
+function announceStep(tool: string, args: Record<string, unknown> | undefined) {
+  if (QUIET_STEPS.has(tool) || typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AgentStepDetail>(AGENT_STEP_EVENT, { detail: { tool, args: args ?? {} } }));
+}
+
 // Dev only: run a registered command from the console / a test (`await __agentRun("get_state", {})`)
 // without a bridge or relay in between. Stripped from production builds.
 if (import.meta.env.DEV && typeof window !== "undefined") {
@@ -151,6 +160,7 @@ export function startAgentBridge(base = bridgeBase()): () => void {
     let result: unknown = null;
     let error = "";
     beginAgentWrite(cmd.tool);
+    announceStep(cmd.tool, cmd.args);
     try {
       const fn = handlers.get(cmd.tool);
       if (!fn) throw new Error(`no handler registered for "${cmd.tool}"`);
@@ -257,6 +267,7 @@ const rememberResult = (id: string, frame: string) => {
 
 async function execute(cmd: Cmd): Promise<{ ok: boolean; result: unknown; error: string }> {
   beginAgentWrite(cmd.tool);
+  announceStep(cmd.tool, cmd.args);
   try {
     const fn = handlers.get(cmd.tool);
     if (!fn) throw new Error(`no handler registered for "${cmd.tool}"`);

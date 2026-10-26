@@ -245,7 +245,7 @@ import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateF
 import { grantItems, type AgentDefinition } from "./ai/agentDefs";
 import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
-import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
+import { registerAgentCommand, AGENT_STEP_EVENT, type AgentStepDetail, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
 import { PushButton } from "@/components/PushButton";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
@@ -6396,6 +6396,22 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // busy + fold state. Key/model persisted to localStorage.
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
   const [aiSendBusy, setAiSendBusy] = useState<boolean>(false);
+  // While Claude Code works on a chat prompt, log every editor command it runs as a step in the chat
+  // (ChatAIPanel folds a run of steps into one "Working… (N steps)" block the user can unfold).
+  const aiSendBusyRef = useRef(false);
+  aiSendBusyRef.current = aiSendBusy;
+  useEffect(() => {
+    const brief = (v: unknown) => { const t = typeof v === "string" ? v : JSON.stringify(v); return t.length > 40 ? t.slice(0, 40) + "…" : t; };
+    const onStep = (e: Event) => {
+      if (!aiSendBusyRef.current) return;
+      const { tool, args } = (e as CustomEvent<AgentStepDetail>).detail;
+      const keys = Object.keys(args).slice(0, 3);
+      const detail = keys.map((k) => `${k}: ${brief(args[k])}`).join(", ");
+      setAiMessages((m) => [...m, { role: "tool", text: `· ${tool.replace(/_/g, " ")}${detail ? ` (${detail})` : ""}` }]);
+    };
+    window.addEventListener(AGENT_STEP_EVENT, onStep);
+    return () => window.removeEventListener(AGENT_STEP_EVENT, onStep);
+  }, []);
   const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
   /** Chat AI mode — "agent" = the Global Agent (full tool-loop over the live canvas + Flow gateway +
    *  parametric library, default); "flow" = tool-loop that builds the node-graph Flow (Operations

@@ -232,7 +232,28 @@ export const ChatAIPanel = ({
                 </p>
               )}
               {messages.map((m, i) => (
-                m.role === "command" ? (
+                // A run of tool/progress lines folds into ONE "Working… / N steps" block (rendered at its first
+                // line; the rest of the run renders nothing). Open while it is the live run, folded after.
+                m.role === "tool" && i > 0 && messages[i - 1].role === "tool" ? null
+                : m.role === "tool" ? (() => {
+                  let end = i;
+                  while (end + 1 < messages.length && messages[end + 1].role === "tool") end++;
+                  const steps = messages.slice(i, end + 1);
+                  const live = busy && end === messages.length - 1;
+                  return (
+                    <details key={i} open={live || undefined} className="group max-w-[95%] rounded border border-slate-200 bg-slate-50 text-[10px] text-slate-500">
+                      <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 px-2 py-0.5">
+                        <ChevronDown className="h-3 w-3 -rotate-90 transition-transform group-open:rotate-0" />
+                        {live ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wrench className="h-3 w-3" />}
+                        <span className="truncate">{live ? steps[steps.length - 1].text.replace(/^[▸·]\s*/, "") : `${steps.length} step${steps.length === 1 ? "" : "s"}`}</span>
+                      </summary>
+                      <ol className="space-y-0.5 border-t border-slate-200 px-2 py-1 font-mono">
+                        {steps.map((st, k) => <li key={k} className="whitespace-pre-wrap break-words">{st.text}</li>)}
+                      </ol>
+                    </details>
+                  );
+                })()
+                : m.role === "command" ? (
                   // Command Engine result: what it understood + did, the calls as JSON (folded), Undo.
                   <div key={i} className="flex justify-start">
                     <div className="max-w-[90%] space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-slate-800">
@@ -293,13 +314,6 @@ export const ChatAIPanel = ({
                         </div>
                       )}
                       {!m.answered && <div className="text-[10px] text-violet-500">{m.options?.length ? "Pick an answer, or type your own below." : "Type your answer below."}</div>}
-                    </div>
-                  </div>
-                ) : m.role === "tool" ? (
-                  // Agent tool activity — compact mono log line (▸ call / ✓ ✗ result).
-                  <div key={i} className="flex justify-start">
-                    <div className="max-w-[95%] truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-500" title={m.text}>
-                      {m.text}
                     </div>
                   </div>
                 ) : (
