@@ -247,6 +247,22 @@ import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
 import { registerAgentCommand, AGENT_STEP_EVENT, type AgentStepDetail, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
 /** No word at all from Claude Code for this long while it is answering → treat it as disconnected. */
+/** Words the user / agent may use for each Views-panel mode. */
+const VIEW_MODE_ALIASES: Record<string, "2d" | "3d" | "both" | "views" | "layout"> = {
+  "2d": "2d", plan: "2d", floorplan: "2d", "2dplan": "2d", top: "2d",
+  "3d": "3d", "3dmodel": "3d", model: "3d", threed: "3d",
+  both: "both", split: "both", "2d3d": "both", "2dand3d": "both", sidebyside: "both",
+  views: "views", elevation: "views", elevations: "views", sections: "views",
+  layout: "layout", sheet: "layout", layoutsheet: "layout", paper: "layout", print: "layout",
+};
+const VIEW_MODE_LABEL = { "2d": "Plan", "3d": "3D model", both: "Plan + 3D", views: "Elevations", layout: "Layout sheet" } as const;
+/** Display items in the Layers panel (not user layers), by the names people say. */
+const DISPLAY_LAYER_ALIASES_PUBLIC = {
+  grid: "grid", space: "rooms", spaces: "rooms", rooms: "rooms", room: "rooms", nodes: "nodes", segments: "segments",
+  doors: "doors", windows: "windows", objects: "objects", furniture: "objects", dimensions: "measure", measure: "measure",
+  text: "text", labels: "text", underlay: "underlay", guides: "guides", drawing: "drawing",
+} as const;
+const DISPLAY_LAYER_ALIASES = DISPLAY_LAYER_ALIASES_PUBLIC as unknown as Record<string, keyof LayerVisibility>;
 const CLAUDE_SILENT_MS = 150_000;
 const CLAUDE_GONE_NOTE = "Claude stopped responding — it may have disconnected. Make sure the BuilderPluss-Chat.bat window is still open (double-click it again to reconnect), then send your message again.";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
@@ -3612,6 +3628,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     placement2dSymbol: false,
     placementRenderedSymbol: false,
   });
+  /** Latest display-layer visibility for agent commands (set_layer_visibility), outside React's render. */
+  const layerVisibilityRef = useRef(layerVisibility);
+  layerVisibilityRef.current = layerVisibility;
   /** 2D presentation style (see LayerVisibility.presentation): on unless explicitly switched off. */
   const presentation = layerVisibility.presentation !== false;
   /** GENERAL wall-carve footprints (world px): every placed object that declares `cutsWall` subtracts its
@@ -9140,6 +9159,55 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     registerAgentCommand("list_layers", () => agentApi().listLayers());
     registerAgentCommand("create_layer", (a) => agentApi().createLayer(a));
     registerAgentCommand("move_to_layer", (a) => agentApi().moveToLayer(a));
+    // ── Views panel + layer visibility from chat ("show the 3D model", "hide the Dimension layer"). ──
+    registerAgentCommand("set_view_mode", (a) => {
+      const raw = String(a.mode ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+      const mode = VIEW_MODE_ALIASES[raw];
+      if (!mode) throw new Error(`Unknown view "${a.mode}". Use one of: plan (2d), 3d, both, elevations, layout.`);
+      setViewMode(mode);
+      return { viewMode: mode, label: VIEW_MODE_LABEL[mode] };
+    });
+    registerAgentCommand("set_layer_visibility", (a) => {
+      const names = (Array.isArray(a.layers) ? a.layers : a.layer != null ? [a.layer] : []).map((x) => String(x).trim()).filter(Boolean);
+      const only = a.only === true;
+      const all = a.all === true;
+      if (!names.length && !all) throw new Error("set_layer_visibility needs `layers` (names or ids), or all: true");
+      const mode: boolean | "toggle" = a.visible === "toggle" ? "toggle" : a.visible !== false;
+      const st = historyRef.current.state;
+      const planLayers = st.layers ?? [];
+      const norm = (x: string) => x.toLowerCase().replace(/[\s_-]+/g, "");
+      const changed: string[] = [];
+      const unknown: string[] = [];
+      // Plan layers (the user's layers, by id or name) — and with only:true every other one is hidden.
+      const hitPlan = new Set<string>();
+      const hitDisplay = new Set<keyof LayerVisibility>();
+      for (const n of names) {
+        const pl = planLayers.find((l) => l.id === n || norm(l.name ?? "") === norm(n));
+        const dk = DISPLAY_LAYER_ALIASES[norm(n)];
+        if (pl) hitPlan.add(pl.id);
+        else if (dk) hitDisplay.add(dk);
+        else unknown.push(n);
+      }
+      const next = (cur: boolean) => (mode === "toggle" ? !cur : mode);
+      const layers = planLayers.map((l) => {
+        const hit = all || hitPlan.has(l.id);
+        if (!hit && !(only && hitPlan.size)) return l;
+        const vis = hit ? next(l.visible !== false) : false;
+        if (vis !== (l.visible !== false)) changed.push(`${l.name ?? l.id}: ${vis ? "shown" : "hidden"}`);
+        return { ...l, visible: vis };
+      });
+      if (changed.length) historyRef.current.set({ ...st, layers });
+      if (hitDisplay.size) {
+        const upd = { ...layerVisibilityRef.current };
+        for (const k of hitDisplay) { upd[k] = next(!!upd[k]); changed.push(`${k}: ${upd[k] ? "shown" : "hidden"}`); }
+        layerVisibilityRef.current = upd;   // so a second call before the next render sees this one
+        setLayerVisibility(upd);
+      }
+      return {
+        changed,
+        ...(unknown.length ? { unknown, layers: planLayers.map((l) => l.name ?? l.id), displayItems: Object.keys(DISPLAY_LAYER_ALIASES_PUBLIC) } : {}),
+      };
+    });
     registerAgentCommand("attach_space_object", (a) => agentApi().attachSpaceObject(a));
     registerAgentCommand("set_flow_live", (a) => agentApi().setFlowLive(a));
     registerAgentCommand("list_objects", () => agentApi().listObjects());

@@ -52,6 +52,10 @@ export const GROUPS = {
       fit_to_rect: "fit_plan_to_rect", tools: "list_draw_tools",
     },
   },
+  view: {
+    summary: "What the live editor shows: op:mode switches the Views panel (plan / 3d / both / elevations / layout); op:layers shows, hides or isolates layers and display items (grid, spaces, dimensions…). Use for 'show it in 3D', 'hide the Dimension layer', 'show only the furniture layer'.",
+    ops: { mode: "set_view_mode", layers: "set_layer_visibility" },
+  },
   layers: {
     summary: "Canvas layers.",
     ops: { list: "list_layers", create: "create_layer", move: "move_to_layer" },
@@ -109,7 +113,7 @@ export const GROUPS = {
  *  still callable so an old prompt gets a clear answer. MCP_FULL_TOOLS=1 lists them again. */
 export const HIDDEN_GROUPS = new Set(["viewer", "skills", "workflow"]);
 /** Listing order: what a chat needs first. Groups not named here follow in GROUPS order. */
-const ORDER = ["session", "project", "pipeline", "design", "objects", "library", "chat", "step", "underlay", "moodboard", "pipelines", "app"];
+const ORDER = ["session", "project", "pipeline", "design", "view", "objects", "library", "chat", "step", "underlay", "moodboard", "pipelines", "app"];
 
 export const HIDDEN_OPS = {
   draw: ["segment", "wall", "freehand", "opening", "style", "delete", "tools"],   // tools = the ~360 KB schema dump; objects.list { object } gives one object's params
