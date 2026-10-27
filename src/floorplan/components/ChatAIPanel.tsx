@@ -29,11 +29,14 @@ export interface ChatMessage {
   via?: string;
 }
 
-/** Languages for voice mode. Nepali recognition works in Chrome / Edge (Google speech); read-aloud uses a
- *  Nepali voice when the device has one, else a Hindi one (same Devanagari script), else the default. */
+/** Languages for voice mode. Nepali / Hindi / Tamil recognition works in Chrome / Edge (Google speech);
+ *  read-aloud uses a voice in that language when the device has one (Nepali falls back to Hindi — same
+ *  Devanagari script), else the default. */
 const VOICE_LANGS = [
   { id: "en-US", label: "🎙 English" },
   { id: "ne-NP", label: "🎙 नेपाली" },
+  { id: "hi-IN", label: "🎙 हिन्दी" },
+  { id: "ta-IN", label: "🎙 தமிழ்" },
 ];
 function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return undefined;
