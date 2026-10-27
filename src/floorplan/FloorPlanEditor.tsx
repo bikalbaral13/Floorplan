@@ -6033,8 +6033,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const pipelineRevealRef = useRef<(() => void) | null>(null);
   const pipelineTabs = usePipelineTabs({ onSelect: (ids) => pipelineSelectRef.current?.(ids), onReveal: () => pipelineRevealRef.current?.() });
   useEffect(() => { if (isMobile) setNavOpen(false); }, [isMobile]);
-  const [planPanelOpen, setPlanPanelOpen] = useState(() => { try { return localStorage.getItem("bp.editor.planPanelOpen") !== "0"; } catch { return true; } });
-  const togglePlanPanel = () => setPlanPanelOpen((o) => { try { localStorage.setItem("bp.editor.planPanelOpen", o ? "0" : "1"); } catch { /* */ } return !o; });
+  // On a phone the side panels overlay the canvas: they start CLOSED, remember their state apart from the
+  // desktop's (".m" keys), and only one is open at a time (opening one closes the other).
+  const phoneLayout = typeof window !== "undefined" && window.innerWidth < 768;
+  const panelKey = (k: string) => (phoneLayout ? `${k}.m` : k);
+  const [planPanelOpen, setPlanPanelOpen] = useState(() => { try { const v = localStorage.getItem(panelKey("bp.editor.planPanelOpen")); return v == null ? !phoneLayout : v !== "0"; } catch { return !phoneLayout; } });
+  const togglePlanPanel = () => setPlanPanelOpen((o) => {
+    try { localStorage.setItem(panelKey("bp.editor.planPanelOpen"), o ? "0" : "1"); } catch { /* */ }
+    if (!o && phoneLayout) setPipeOpen(false);
+    return !o;
+  });
   const toggleNav = () => setNavOpen((o) => { if (!isMobile) saveNavigatorOpen(!o); return !o; });
   /** Layers section: search across layer names and the elements on them; which layer rows are folded open. */
   const [navQuery, setNavQuery] = useState("");
@@ -6062,11 +6070,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
   /** The Pipeline column at the far right (mirror of the Library navigator on the far left). */
-  const [pipeOpen, setPipeOpen] = useState(() => { try { return localStorage.getItem("bp.editor.pipeOpen") !== "0"; } catch { return true; } });
-  const togglePipe = () => setPipeOpen((o) => { try { localStorage.setItem("bp.editor.pipeOpen", o ? "0" : "1"); } catch { /* */ } return !o; });
+  const [pipeOpen, setPipeOpen] = useState(() => { try { const v = localStorage.getItem(panelKey("bp.editor.pipeOpen")); return v == null ? !phoneLayout : v !== "0"; } catch { return !phoneLayout; } });
+  const togglePipe = () => setPipeOpen((o) => {
+    try { localStorage.setItem(panelKey("bp.editor.pipeOpen"), o ? "0" : "1"); } catch { /* */ }
+    if (!o && phoneLayout) setPlanPanelOpen(false);
+    return !o;
+  });
   pipelineRevealRef.current = () => {
     setPipeOpen(true);
-    try { localStorage.setItem("bp.editor.pipeOpen", "1"); } catch { /* */ }
+    if (phoneLayout) setPlanPanelOpen(false);
+    try { localStorage.setItem(panelKey("bp.editor.pipeOpen"), "1"); } catch { /* */ }
   };
   const [toolsPanelExpanded, setToolsPanelExpanded] = useState<boolean>(true);
   const [infoPanelExpanded, setInfoPanelExpanded] = useState<boolean>(true);

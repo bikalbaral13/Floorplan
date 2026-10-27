@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, type ReactNode } from "react";
 import { Sparkles, ChevronDown, ChevronUp, Send, Loader2, Paperclip, X, FileText, SlidersHorizontal, RotateCcw, Copy, Wrench, Download, Boxes, Workflow, Files, GitBranch, Upload, Mic, MicOff } from "lucide-react";
 import { useDictation } from "./useDictation";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ToolInfo } from "../ai/toolCatalog";
@@ -148,6 +149,8 @@ export const ChatAIPanel = ({
   const [picked, setPicked] = useState<Record<number, string[]>>({});
   /** The input is locked while the agent works — except when it is waiting on the user's answer. */
   const inputBusy = busy && !claudeAsking;
+  /** Phone width: short placeholder, fewer buttons, so the text box gets the room. */
+  const narrow = useIsMobile();
   const [draft, setDraft] = useState("");
   // 🎤 dictation: each finished phrase is appended to the draft (the user still reviews and presses Send).
   const dictation = useDictation((t) => { if (t) setDraft((d) => (d.trim() ? `${d.trimEnd()} ${t}` : t)); });
@@ -474,7 +477,8 @@ export const ChatAIPanel = ({
                     ref={inputRef}
                     className="max-h-28 min-h-[2.25rem] w-full resize-none rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-violet-400"
                     rows={1}
-                    placeholder={!configured ? "Set the Gemini key in Preferences first"
+                    placeholder={narrow ? (claudeAsking ? "Answer Claude…" : "Ask Claude…")
+                      : !configured ? "Set the Gemini key in Preferences first"
                       : claudeAsking ? "Answer Claude's question… (Enter to send)"
                       : runner === "flow" ? "Describe the flow to build… (Enter to send)"
                       : chatMode === "manual" ? "Type a command — e.g. “add a door on the north wall of bedroom 2”"
@@ -516,7 +520,7 @@ export const ChatAIPanel = ({
                   {inputBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
                 {onExport && (
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={onExport} title="Export the plan…" aria-label="Export">
+                  <Button variant="outline" size="icon" className="hidden h-9 w-9 shrink-0 md:inline-flex" onClick={onExport} title="Export the plan…" aria-label="Export">
                     <Download className="h-4 w-4" />
                   </Button>
                 )}
