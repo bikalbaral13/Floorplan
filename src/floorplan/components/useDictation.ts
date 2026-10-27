@@ -24,7 +24,10 @@ const Ctor = (): (new () => Rec) | undefined => {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 };
 
-export function useDictation(onText: (text: string) => void) {
+/** lang: a BCP-47 tag for recognition, e.g. "en-US" or "ne-NP" (Nepali); default = the browser's language. */
+export function useDictation(onText: (text: string) => void, lang?: string) {
+  const langRef = useRef(lang);
+  langRef.current = lang;
   const supported = !!Ctor() && (typeof window === "undefined" || window.isSecureContext);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
@@ -43,7 +46,7 @@ export function useDictation(onText: (text: string) => void) {
     if (!C) return;
     setError(null);
     const r = new C();
-    r.lang = navigator.language || "en-US";
+    r.lang = langRef.current || navigator.language || "en-US";
     r.continuous = true;
     r.interimResults = true;
     r.onresult = (e) => {

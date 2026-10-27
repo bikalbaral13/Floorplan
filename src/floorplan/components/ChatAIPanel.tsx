@@ -29,6 +29,19 @@ export interface ChatMessage {
   via?: string;
 }
 
+/** Languages for voice mode. Nepali recognition works in Chrome / Edge (Google speech); read-aloud uses a
+ *  Nepali voice when the device has one, else a Hindi one (same Devanagari script), else the default. */
+const VOICE_LANGS = [
+  { id: "en-US", label: "🎙 English" },
+  { id: "ne-NP", label: "🎙 नेपाली" },
+];
+function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return undefined;
+  const voices = window.speechSynthesis.getVoices();
+  const base = lang.split("-")[0];
+  return voices.find((v) => v.lang === lang) ?? voices.find((v) => v.lang.startsWith(base))
+    ?? (base === "ne" ? voices.find((v) => v.lang.startsWith("hi")) : undefined);
+}
 /** Voice mode sends what you said after this much silence. */
 const VOICE_PAUSE_MS = 1500;
 /** Text fit for reading aloud: no markdown symbols, URLs or long paths. */
@@ -166,6 +179,9 @@ export const ChatAIPanel = ({
   // 🎤 VOICE MODE — a hands-free conversation. Tapping the mic turns it on until tapped again: it keeps
   // listening, sends what you said by itself after a short pause (no Send button), pauses while Claude
   // works, reads Claude's answers aloud (mic paused meanwhile so it never hears itself), then listens again.
+  // Voice language (recognition + read-aloud), remembered per browser.
+  const [voiceLang, setVoiceLang] = useState<string>(() => { try { return localStorage.getItem("bp.voiceLang") || "en-US"; } catch { return "en-US"; } });
+  const changeVoiceLang = (l: string) => { setVoiceLang(l); try { localStorage.setItem("bp.voiceLang", l); } catch { /* storage blocked */ } };
   const [voiceMode, setVoiceMode] = useState(false);
   const voiceModeRef = useRef(false);
   voiceModeRef.current = voiceMode;
@@ -193,7 +209,9 @@ export const ChatAIPanel = ({
       setDraft(voiceBuf.current);
       armVoiceTimer();
     } else setDraft((d) => (d.trim() ? `${d.trimEnd()} ${t}` : t));
-  });
+  }, voiceLang);
+  // Switching language while listening: restart recognition in the new language (voice mode restarts it).
+  useEffect(() => { if (dictation.listening) dictation.stop(); }, [voiceLang]); // eslint-disable-line react-hooks/exhaustive-deps
   // Still talking (words not final yet) → hold the send.
   useEffect(() => { if (voiceMode && dictation.interim) armVoiceTimer(); }, [voiceMode, dictation.interim]); // eslint-disable-line react-hooks/exhaustive-deps
   // Listen only when it is the user's turn: voice mode on, Claude not working (or waiting on an answer), not speaking.
@@ -211,7 +229,9 @@ export const ChatAIPanel = ({
     const say = fresh.filter((m) => m.role === "ai" || m.role === "ask" || m.role === "error").map((m) => speakable(m.text)).filter(Boolean).join(". ");
     if (!say) return;
     const u = new SpeechSynthesisUtterance(say);
-    u.lang = navigator.language || "en-US";
+    u.lang = voiceLang;
+    const v = pickVoice(voiceLang);
+    if (v) u.voice = v;
     u.onend = u.onerror = () => setSpeaking(false);
     setSpeaking(true);
     window.speechSynthesis.cancel();
@@ -430,7 +450,7 @@ export const ChatAIPanel = ({
           </>
         )}
         {/* What the agent will read — the navigator's ticked Library items — and the conversation fold. */}
-        {(selection.length > 0 || onEngineChange || onChatModeChange || onClaudeModelChange || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
+        {(selection.length > 0 || onEngineChange || onChatModeChange || onClaudeModelChange || dictation.supported || messages.length > 0) && <div className="flex items-center gap-1.5 px-2 pt-2">
           {selection.length > 0 && <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {selGroups.map((g) => (
@@ -450,6 +470,13 @@ export const ChatAIPanel = ({
                 </button>
               ))}
             </div>
+          )}
+          {dictation.supported && (
+            <select value={voiceLang} onChange={(e) => changeVoiceLang(e.target.value)}
+              aria-label="Voice language" title="Language you speak in voice mode (and Claude's spoken answers)"
+              className="shrink-0 cursor-pointer rounded-md border-0 bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 outline-none hover:bg-slate-200">
+              {VOICE_LANGS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+            </select>
           )}
           {onClaudeModelChange && (
             <select value={claudeModel} onChange={(e) => onClaudeModelChange(e.target.value as ClaudeModel)}
