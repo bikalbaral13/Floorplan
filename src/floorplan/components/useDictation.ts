@@ -33,9 +33,12 @@ export function useDictation(onText: (text: string) => void) {
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
 
-  const stop = useCallback(() => rec.current?.stop(), []);
+  /** keepAlive: restart by itself when the browser ends recognition after a silence (voice mode). */
+  const keepAlive = useRef(false);
+  const stop = useCallback(() => { keepAlive.current = false; rec.current?.stop(); }, []);
 
-  const start = useCallback(() => {
+  const start = useCallback((opts?: { keepAlive?: boolean }) => {
+    keepAlive.current = !!opts?.keepAlive;
     const C = Ctor();
     if (!C) return;
     setError(null);
@@ -52,14 +55,20 @@ export function useDictation(onText: (text: string) => void) {
       }
       setInterim(live);
     };
-    r.onerror = (e) => setError(e.error === "not-allowed" ? "Microphone blocked — allow it for this site (needs https)" : e.error === "no-speech" ? null : `Speech error: ${e.error}`);
-    r.onend = () => { setListening(false); setInterim(""); rec.current = null; };
+    r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") keepAlive.current = false; setError(e.error === "not-allowed" ? "Microphone blocked — allow it for this site (needs https)" : e.error === "no-speech" || e.error === "aborted" ? null : `Speech error: ${e.error}`); };
+    r.onend = () => {
+      setListening(false); setInterim(""); rec.current = null;
+      // Chrome ends a session after a pause even with continuous=true; voice mode just carries on.
+      if (keepAlive.current) window.setTimeout(() => { if (keepAlive.current && !rec.current) startRef.current?.({ keepAlive: true }); }, 250);
+    };
     rec.current = r;
     r.start();
     setListening(true);
   }, []);
 
-  useEffect(() => () => rec.current?.stop(), []);
+  const startRef = useRef(start);
+  startRef.current = start;
+  useEffect(() => () => { keepAlive.current = false; rec.current?.stop(); }, []);
 
   return { supported, listening, interim, error, start, stop, toggle: () => (rec.current ? stop() : start()) };
 }

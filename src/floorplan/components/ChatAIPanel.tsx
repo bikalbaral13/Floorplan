@@ -29,6 +29,17 @@ export interface ChatMessage {
   via?: string;
 }
 
+/** Voice mode sends what you said after this much silence. */
+const VOICE_PAUSE_MS = 1500;
+/** Text fit for reading aloud: no markdown symbols, URLs or long paths. */
+const speakable = (t: string) => t
+  .replace(/```[\s\S]*?```/g, " ")
+  .replace(/https?:\/\/\S+/g, "a link")
+  .replace(/[*_`#>|]/g, "")
+  .replace(/\s+/g, " ")
+  .trim()
+  .slice(0, 600);
+
 /** Who reads the chat: Claude (AI), the local Command Engine (Manual), or the engine first then Claude. */
 export type ChatMode = "ai" | "manual" | "auto";
 
@@ -152,8 +163,74 @@ export const ChatAIPanel = ({
   /** Phone width: short placeholder, fewer buttons, so the text box gets the room. */
   const narrow = useIsMobile();
   const [draft, setDraft] = useState("");
-  // 🎤 dictation: each finished phrase is appended to the draft (the user still reviews and presses Send).
-  const dictation = useDictation((t) => { if (t) setDraft((d) => (d.trim() ? `${d.trimEnd()} ${t}` : t)); });
+  // 🎤 VOICE MODE — a hands-free conversation. Tapping the mic turns it on until tapped again: it keeps
+  // listening, sends what you said by itself after a short pause (no Send button), pauses while Claude
+  // works, reads Claude's answers aloud (mic paused meanwhile so it never hears itself), then listens again.
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceModeRef = useRef(false);
+  voiceModeRef.current = voiceMode;
+  const [speaking, setSpeaking] = useState(false);
+  const voiceBuf = useRef("");
+  const voiceTimer = useRef<number | null>(null);
+  const onSendRef = useRef(onSend);
+  onSendRef.current = onSend;
+  const flushVoice = () => {
+    if (voiceTimer.current) { window.clearTimeout(voiceTimer.current); voiceTimer.current = null; }
+    const text = voiceBuf.current.trim();
+    voiceBuf.current = "";
+    setDraft("");
+    if (text) onSendRef.current(text);
+  };
+  const armVoiceTimer = () => {
+    if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
+    voiceTimer.current = window.setTimeout(flushVoice, VOICE_PAUSE_MS);
+  };
+  // Outside voice mode each finished phrase is appended to the draft (review, then Send) — as before.
+  const dictation = useDictation((t) => {
+    if (!t) return;
+    if (voiceModeRef.current) {
+      voiceBuf.current = voiceBuf.current ? `${voiceBuf.current} ${t}` : t;
+      setDraft(voiceBuf.current);
+      armVoiceTimer();
+    } else setDraft((d) => (d.trim() ? `${d.trimEnd()} ${t}` : t));
+  });
+  // Still talking (words not final yet) → hold the send.
+  useEffect(() => { if (voiceMode && dictation.interim) armVoiceTimer(); }, [voiceMode, dictation.interim]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Listen only when it is the user's turn: voice mode on, Claude not working (or waiting on an answer), not speaking.
+  const wantListen = voiceMode && !(busy && !claudeAsking) && !speaking;
+  useEffect(() => {
+    if (wantListen && !dictation.listening) dictation.start({ keepAlive: true });
+    else if (!wantListen && dictation.listening) dictation.stop();
+  }, [wantListen, dictation.listening]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Read each new answer / question from Claude aloud while voice mode is on.
+  const spokenCount = useRef(messages.length);
+  useEffect(() => {
+    const fresh = messages.slice(spokenCount.current);
+    spokenCount.current = messages.length;
+    if (!voiceMode || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const say = fresh.filter((m) => m.role === "ai" || m.role === "ask" || m.role === "error").map((m) => speakable(m.text)).filter(Boolean).join(". ");
+    if (!say) return;
+    const u = new SpeechSynthesisUtterance(say);
+    u.lang = navigator.language || "en-US";
+    u.onend = u.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }, [messages, voiceMode]);
+  const toggleVoiceMode = () => {
+    if (voiceMode) {
+      setVoiceMode(false);
+      dictation.stop();
+      if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
+      voiceBuf.current = "";
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      setSpeaking(false);
+    } else {
+      spokenCount.current = messages.length;   // never read out the old conversation
+      setVoiceMode(true);
+    }
+  };
+  useEffect(() => () => { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel(); }, []);
   const selection = useLibrarySelection();
   const selGroups = KIND_ORDER.map((k) => ({ kind: k, list: selection.filter((i) => i.kind === k) })).filter((g) => g.list.length);
   const [file, setFile] = useState<File | null>(null);
@@ -411,9 +488,13 @@ export const ChatAIPanel = ({
                   </button>
                 </div>
               )}
-              {(dictation.listening || dictation.error) && (
+              {(voiceMode || dictation.listening || dictation.error) && (
                 <div className={`mb-1.5 truncate rounded-md px-2 py-1 text-[11px] ${dictation.error ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-500"}`}>
-                  {dictation.error ?? (dictation.interim ? `🎤 ${dictation.interim}` : "🎤 Listening… speak, then tap the mic to stop")}
+                  {dictation.error ?? (!voiceMode ? (dictation.interim ? `🎤 ${dictation.interim}` : "🎤 Listening… speak, then tap the mic to stop")
+                    : speaking ? "🔊 Claude is speaking… (tap the mic to end voice mode)"
+                    : busy && !claudeAsking ? "🎙️ Voice mode — Claude is working, I'll listen again when it's done"
+                    : dictation.interim ? `🎙️ ${dictation.interim}`
+                    : "🎙️ Voice mode — just talk; I send after a short pause. Tap the mic to end.")}
                 </div>
               )}
               <div className="flex items-end gap-2">
@@ -506,15 +587,15 @@ export const ChatAIPanel = ({
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`h-9 w-9 shrink-0 ${dictation.listening ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : ""}`}
-                  disabled={!dictation.supported || !configured || inputBusy}
-                  onClick={() => { if (dictation.listening) inputRef.current?.focus(); dictation.toggle(); }}
+                  className={`h-9 w-9 shrink-0 ${voiceMode ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : ""}`}
+                  disabled={!dictation.supported || !configured}
+                  onClick={toggleVoiceMode}
                   title={!dictation.supported ? "Voice input needs Chrome, Edge or Safari on a secure page (https or localhost)"
-                    : dictation.listening ? "Stop listening" : "Speak your prompt"}
-                  aria-label={dictation.listening ? "Stop voice input" : "Voice input"}
-                  aria-pressed={dictation.listening}
+                    : voiceMode ? "End voice mode" : "Voice mode — talk to Claude hands-free"}
+                  aria-label={voiceMode ? "End voice mode" : "Voice mode"}
+                  aria-pressed={voiceMode}
                 >
-                  {dictation.listening ? <MicOff className="h-4 w-4 animate-pulse" /> : <Mic className="h-4 w-4" />}
+                  {voiceMode ? <MicOff className={`h-4 w-4 ${dictation.listening ? "animate-pulse" : ""}`} /> : <Mic className="h-4 w-4" />}
                 </Button>
                 <Button size="sm" className="h-9 gap-1.5 px-3 shrink-0" disabled={!configured || inputBusy || (!draft.trim() && !file)} onClick={submit}>
                   {inputBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
